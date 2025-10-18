@@ -1,0 +1,57 @@
+/* styles.css */
+
+/* --- Settings Tab Styles --- */
+.beancount-test-results {
+	font-size: var(--font-ui-small);
+	padding: 10px;
+	border-radius: 6px;
+	margin: 0 10px; /* Align with setting inputs */
+}
+
+.beancount-test-success {
+	background-color: var(--background-secondary-alt);
+	color: var(--text-success);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.beancount-test-error {
+	background-color: var(--background-secondary-alt);
+	color: var(--text-error);
+	border: 1px solid var(--background-modifier-border);
+	/* Make it easier to read long error messages */
+	word-break: break-all;
+	white-space: pre-wrap; 
+}
+
+/* --- Status Container Styles --- */
+.beancount-status-container {
+	padding: 10px 12px;
+	background-color: var(--background-secondary);
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-bottom: 15px;
+}
+
+.beancount-status-container.status-ok span {
+	color: var(--text-success);
+	font-weight: 600;
+}
+
+.beancount-status-container.status-error span {
+	color: var(--text-error);
+	font-weight: 600;
+}
+
+/* The <pre> tag for error messages */
+.beancount-status-container pre {
+	color: var(--text-error);
+	background-color: var(--background-secondary-alt);
+	white-space: pre-wrap; /* Wrap long lines */
+	word-break: break-all;
+	padding: 8px;
+	border-radius: 4px;
+	font-size: 0.9em; /* Make it a bit smaller */
+	margin-top: 8px;
+}

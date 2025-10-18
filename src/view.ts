@@ -20,9 +20,10 @@ export class BeancountView extends ItemView {
 		netWorth: "0.00 USD",
 		kpiError: null as string | null,
 		reportError: null as string | null,
-		// 'reportHtml' is gone
-		reportHeaders: [] as string[], // <-- NEW
-		reportRows: [] as string[][]    // <-- NEW
+		reportHeaders: [] as string[],
+		reportRows: [] as string[][],
+		fileStatus: "checking" as "checking" | "ok" | "error", // <-- ADD THIS
+		fileStatusMessage: "" as string | null                  // <-- ADD THIS
 	};
 	// ------------------------------
 
@@ -87,19 +88,19 @@ export class BeancountView extends ItemView {
 				kpiError: null
 			});
 
-			await this.renderReport('assets');
+		// We'll run the report render and the bean-check at the same time
+			await Promise.all([
+				this.renderReport('assets'),
+				this.runBeanCheck()
+			]);
 
 		} catch (error) {
-			console.error("Error updating view:", error);
-			this.updateProps({ kpiError: error.message, reportHeaders: [], reportRows: [] });
+		// ...
 		} finally {
 			this.updateProps({ isLoading: false });
 		}
 	}
 
-// src/view.ts -> Replace this function
-// src/view.ts -> Replace this function
-// src/view.ts -> Replace this function
 
 	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
@@ -164,7 +165,44 @@ export class BeancountView extends ItemView {
 		}
 	}
 // -------------------------------
+// src/view.ts -> Add this new method
 
+	async runBeanCheck() {
+		this.updateProps({ fileStatus: "checking", fileStatusMessage: null });
+
+		const filePath = this.plugin.settings.beancountFilePath;
+		let commandName = this.plugin.settings.beancountCommand;
+
+		if (!filePath) {
+			this.updateProps({ fileStatus: "error", fileStatusMessage: "File path not set." });
+			return;
+		}
+		if (!commandName) {
+			this.updateProps({ fileStatus: "error", fileStatusMessage: "Command not set." });
+			return;
+		}
+
+		// Construct the bean-check command. We assume it's in the same
+		// place as bean-query and just replace the executable name.
+		commandName = commandName.replace(/bean-query(.exe)?$/, 'bean-check$1');
+		const command = `${commandName} "${filePath}"`;
+
+		return new Promise<void>((resolve) => {
+			exec(command, (error, stdout, stderr) => {
+				// bean-check is weird. It prints errors to STDOUT, not STDERR.
+				// And a successful check prints nothing.
+				if (error || stdout) {
+					// If 'error' exists (e.g., command not found) or stdout has data (an error message)
+					const errorMessage = error ? error.message : stdout;
+					this.updateProps({ fileStatus: "error", fileStatusMessage: errorMessage });
+				} else {
+					// No error, no stdout means a clean check
+					this.updateProps({ fileStatus: "ok", fileStatusMessage: "File OK" });
+				}
+				resolve(); // Always resolve so we don't block the UI
+			});
+		});
+	}
 	runQuery(query: string): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const filePath = this.plugin.settings.beancountFilePath;
