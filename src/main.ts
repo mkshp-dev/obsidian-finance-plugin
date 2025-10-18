@@ -2,7 +2,8 @@
 
 import { Plugin } from 'obsidian';
 
-import { BeancountSettingTab, BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
+import { BeancountSettingTab, DEFAULT_SETTINGS } from './settings';
+import type { BeancountPluginSettings } from './settings';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './view';
 import { TransactionModal } from './transaction-modal';
 
