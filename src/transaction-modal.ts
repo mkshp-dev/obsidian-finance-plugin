@@ -46,6 +46,7 @@ export class TransactionModal extends Modal {
         }
 
         const filePath = this.plugin.settings.beancountFilePath;
+        const commandName = this.plugin.settings.beancountCommand;
         if (!filePath) {
             new Notice('Beancount file path is not set in settings.');
             return;
@@ -57,12 +58,15 @@ export class TransactionModal extends Modal {
 `;
 
         try {
-            // 2. THE KEY CHANGE:
-            // First, translate the path from WSL to Windows, as before.
-            const windowsPath = this.plugin.convertWslPathToWindows(filePath);
+            let finalPath = filePath;
+            // --- THIS IS THE KEY LOGIC ---
+            // Only translate the path if we are in a WSL setup
+            if (commandName.startsWith('wsl')) {
+                finalPath = this.plugin.convertWslPathToWindows(filePath);
+            }
             
             // Second, use the 'fs' module to append to the absolute path.
-            fs.appendFileSync(windowsPath, transactionString);
+            fs.appendFileSync(finalPath, transactionString);
             
             new Notice('Transaction successfully added!');
             this.close();

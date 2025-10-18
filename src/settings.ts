@@ -8,14 +8,17 @@ import BeancountPlugin from './main';
 
 export interface BeancountPluginSettings {
     beancountFilePath: string;
+    beancountCommand: string;
 }
 
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
-    beancountFilePath: ''
+    beancountFilePath: '',
+    beancountCommand: ''
 }
 
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
+   
 
     constructor(app: App, plugin: BeancountPlugin) {
         super(app, plugin);
@@ -34,6 +37,16 @@ export class BeancountSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.beancountFilePath)
                 .onChange(async (value) => {
                     this.plugin.settings.beancountFilePath = value;
+                    await this.plugin.saveSettings();
+                }));
+        new Setting(containerEl)
+            .setName('Beancount command')
+            .setDesc('How to run bean-query. (e.g., "bean-query", "wsl bean-query", or a full path)')
+            .addText(text => text
+                .setPlaceholder('bean-query')
+                .setValue(this.plugin.settings.beancountCommand)
+                .onChange(async (value) => {
+                    this.plugin.settings.beancountCommand = value;
                     await this.plugin.saveSettings();
                 }));
     }

@@ -139,28 +139,22 @@ export class BeancountView extends ItemView {
 	}
 
 // src/view.ts -> Replace ONLY this function
-
+// src/view.ts -> runQuery()
 	runQuery(query: string): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const filePath = this.plugin.settings.beancountFilePath;
-			if (!filePath) {
-				return reject(new Error('Beancount file path is not set.'));
-			}
-			const command = `wsl bean-query -f csv "${filePath}" "${query}"`;
+			const commandName = this.plugin.settings.beancountCommand; // <-- GET SETTING
+
+			if (!filePath) return reject(new Error('Beancount file path is not set.'));
+			if (!commandName) return reject(new Error('Beancount command is not set.'));
+
+			// Use the setting to build the command
+			const command = `${commandName} -f csv "${filePath}" "${query}"`; 
 			
 			exec(command, (error, stdout, stderr) => {
-				// This handles hard failures, like wsl.exe not being found.
-				if (error) {
-					return reject(error);
-				}
-
-				// THE KEY CHANGE: Treat any message in stderr as a failure.
-				// Beancount errors (like file not found) are printed here.
-				if (stderr) {
-					return reject(new Error(stderr));
-				}
-
-				// If there's no error and no stderr, it's a success.
+				// ... rest of the function is unchanged
+				if (error) return reject(error);
+				if (stderr) return reject(new Error(stderr));
 				resolve(stdout);
 			});
 		});
