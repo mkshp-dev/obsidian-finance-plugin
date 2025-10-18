@@ -106,11 +106,12 @@ export class BeancountView extends ItemView {
         }
 	}
 
+// src/view.ts -> Replace this function
+
 	async renderReport(reportType: 'balance' | 'income' | 'expenses') {
-        this.setLoading(true); // Disable buttons
+		this.setLoading(true);
 		this.reportContainer.setText(`Loading ${reportType} report...`);
 		let query = '';
-		// ... (switch case is unchanged)
 		switch (reportType) {
 			case 'balance':
 				query = `SELECT account, sum(position) GROUP BY account`;
@@ -125,7 +126,15 @@ export class BeancountView extends ItemView {
 
 		try {
 			const result = await this.runQuery(query);
-			const records = parse(result, { columns: true, skip_empty_lines: true });
+            
+            // --- THIS IS THE FIX ---
+			const records = parse(result, { 
+				columns: true, 
+				skip_empty_lines: true,
+				relax_column_count: true // <-- ADD THIS LINE
+			});
+            // -----------------------
+
 			const markdown = this.plugin.formatDataAsMarkdown(records);
 
 			this.reportContainer.empty();
@@ -134,10 +143,9 @@ export class BeancountView extends ItemView {
 			console.error(`Error rendering ${reportType} report:`, error);
 			this.renderError(this.reportContainer, error);
 		} finally {
-            this.setLoading(false); // ALWAYS re-enable buttons
+            this.setLoading(false);
         }
 	}
-
 // src/view.ts -> Replace ONLY this function
 // src/view.ts -> runQuery()
 	runQuery(query: string): Promise<string> {
