@@ -99,6 +99,7 @@ export class BeancountView extends ItemView {
 
 // src/view.ts -> Replace this function
 // src/view.ts -> Replace this function
+// src/view.ts -> Replace this function
 
 	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
@@ -118,46 +119,40 @@ export class BeancountView extends ItemView {
 			const records: string[][] = parse(cleanStdout, { columns: false, skip_empty_lines: true });
 
 			if (records.length === 0) {
-				// If no data, send empty arrays
 				this.updateProps({ reportHeaders: [], reportRows: [] });
 				return;
 			}
 			
+			// --- THIS IS THE CHANGED LOGIC ---
 			const firstRowIsHeader = records[0][1].includes('sum(position)'); 
-			let headers: string[] = [];
+			
+			// We set our desired headers regardless of the input.
+			const headers = ['Account', 'Amount']; 
 			let rows: string[][] = [];
 
 			if (firstRowIsHeader) {
-				headers = records[0];
+				// If the CSV has a header, we skip it.
 				rows = records.slice(1);
 			} else {
-				headers = ['account', 'balance']; // Use default headers
+				// If no header, all records are data.
 				rows = records;
 			}
+			// -------------------------------
 
-			// --- THIS IS THE NEW LOGIC ---
-			// Map over the rows to format the account names
 			const formattedRows = rows.map(row => {
-				// Defensive check for safety
 				if (row.length === 0) return row;
-
 				const accountName = row[0];
 				const lastColonIndex = accountName.lastIndexOf(':');
-				
-				// Find the last ':' and get the substring after it.
-				// If no ':' is found, use the original name.
 				const trimmedName = lastColonIndex > -1
 					? accountName.substring(lastColonIndex + 1)
 					: accountName;
 				
-				// Return a new row array with the trimmed name
 				return [trimmedName, ...row.slice(1)];
 			});
-			// -------------------------------
 
 			this.updateProps({
-				reportHeaders: headers,
-				reportRows: formattedRows, // <-- Pass the newly formatted rows
+				reportHeaders: headers, // Pass our clean headers
+				reportRows: formattedRows,
 				reportError: null
 			});
 			

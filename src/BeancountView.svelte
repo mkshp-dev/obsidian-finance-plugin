@@ -168,10 +168,4 @@
 	.beancount-table tbody tr:nth-child(even) {
 		background-color: var(--background-secondary);
 	}
-
-	/* Utility class to align text to the right */
-	.class_right {
-		text-align: right;
-		font-family: var(--font-monospace); /* Monospace font for numbers */
-	}
 </style>
