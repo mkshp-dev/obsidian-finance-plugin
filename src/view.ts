@@ -75,6 +75,7 @@ export class BeancountView extends ItemView {
         this.setLoading(true); // Disable buttons
 		this.kpiContainer.setText("Loading...");
 		this.reportContainer.setText("Loading...");
+// src/view.ts -> Replace the 'try' block in updateView
 
 		try {
 			const assetsQuery = `SELECT sum(position) WHERE account ~ '^Assets'`;
@@ -90,19 +91,33 @@ export class BeancountView extends ItemView {
 			const netWorth = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
 			const currency = assets.split(" ")[1] || "USD";
 
+			// --- THIS IS THE NEW HTML STRUCTURE ---
 			this.kpiContainer.empty();
-			this.kpiContainer.createEl('p', { text: `Assets: ${assets}` });
-			this.kpiContainer.createEl('p', { text: `Liabilities: ${liabilities}` });
-			this.kpiContainer.createEl('strong', { text: `Net Worth: ${netWorth.toFixed(2)} ${currency}` });
 
-			await this.renderReport('balance'); // Render default report
+			// Net Worth (The "Hero" Metric)
+			const netWorthEl = this.kpiContainer.createEl('div', { cls: 'kpi-metric' });
+			netWorthEl.createEl('span', { text: 'Net Worth', cls: 'kpi-label' });
+			netWorthEl.createEl('span', { text: `${netWorth.toFixed(2)} ${currency}`, cls: 'kpi-value net-worth' });
+
+			// Assets
+			const assetsEl = this.kpiContainer.createEl('div', { cls: 'kpi-metric' });
+			assetsEl.createEl('span', { text: 'Assets', cls: 'kpi-label' });
+			assetsEl.createEl('span', { text: assets, cls: 'kpi-value' });
+
+			// Liabilities
+			const liabilitiesEl = this.kpiContainer.createEl('div', { cls: 'kpi-metric' });
+			liabilitiesEl.createEl('span', { text: 'Liabilities', cls: 'kpi-label' });
+			liabilitiesEl.createEl('span', { text: liabilities, cls: 'kpi-value' });
+			// ----------------------------------------
+
+			await this.renderReport('balance');
 
 		} catch (error) {
 			console.error("Error updating view:", error);
 			this.renderError(this.kpiContainer, error);
-            this.reportContainer.empty(); // Clear report area on major error
+            this.reportContainer.empty();
 		} finally {
-            this.setLoading(false); // ALWAYS re-enable buttons
+            this.setLoading(false);
         }
 	}
 
@@ -168,9 +183,8 @@ export class BeancountView extends ItemView {
             this.setLoading(false);
         }
 	}
-
-	// src/view.ts -> Replace ONLY this function
-	// src/view.ts -> runQuery()
+// src/view.ts -> Replace ONLY this function
+// src/view.ts -> runQuery()
 	runQuery(query: string): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const filePath = this.plugin.settings.beancountFilePath;
