@@ -107,38 +107,60 @@ export class BeancountView extends ItemView {
 	}
 
 // src/view.ts -> Replace this function
+// src/view.ts -> Replace this function
 
 	async renderReport(reportType: 'balance' | 'income' | 'expenses') {
 		this.setLoading(true);
 		this.reportContainer.setText(`Loading ${reportType} report...`);
 		let query = '';
+        
 		switch (reportType) {
-			case 'balance':
-				query = `SELECT account, sum(position) GROUP BY account`;
-				break;
-			case 'income':
-				query = `SELECT account, sum(position) WHERE account ~ '^Income' GROUP BY account`;
-				break;
-			case 'expenses':
-				query = `SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account`;
-				break;
+			case 'balance': query = `SELECT account, sum(position) GROUP BY account`; break;
+			case 'income': query = `SELECT account, sum(position) WHERE account ~ '^Income' GROUP BY account`; break;
+			case 'expenses': query = `SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account`; break;
 		}
 
 		try {
 			const result = await this.runQuery(query);
-			const cleanStdout = result.trim();
-            
+            // Clean the whole output string of \r characters, then trim
+            const cleanStdout = result.replace(/\r/g, "").trim();
+
             // --- THIS IS THE FIX ---
-			const records = parse(cleanStdout, { 
-				columns: true, 
+			const records: string[][] = parse(cleanStdout, { 
+				columns: false, // Parse into simple arrays
 				skip_empty_lines: true
 			});
             // -----------------------
 
-			const markdown = this.plugin.formatDataAsMarkdown(records);
+			if (records.length === 0) {
+				this.reportContainer.setText("No data returned.");
+                this.setLoading(false); // Make sure to re-enable buttons
+				return;
+			}
+            
+            // Check if the first row is a header
+            const firstRowIsHeader = records[0][1].includes('sum(position)'); 
+            
+            let table = "";
+            let dataRows: string[][] = [];
+
+            if (firstRowIsHeader) {
+                // Use the headers from the file
+                table += `| ${records[0][0]} | ${records[0][1]} |\n`;
+                table += `| --- | --- |\n`;
+                dataRows = records.slice(1); // Data is everything after
+            } else {
+                // No header was found, so we create our own
+                table += `| account | balance |\n`;
+                table += `| --- | --- |\n`;
+                dataRows = records; // All records are data
+            }
+
+            // Build the rest of the table from the data rows
+            table += dataRows.map(row => `| ${row[0]} | ${row[1]} |`).join('\n');
 
 			this.reportContainer.empty();
-			MarkdownRenderer.render(this.app, markdown, this.reportContainer, '', this.plugin);
+			MarkdownRenderer.render(this.app, table, this.reportContainer, '', this.plugin);
 		} catch (error) {
 			console.error(`Error rendering ${reportType} report:`, error);
 			this.renderError(this.reportContainer, error);
@@ -146,8 +168,9 @@ export class BeancountView extends ItemView {
             this.setLoading(false);
         }
 	}
-// src/view.ts -> Replace ONLY this function
-// src/view.ts -> runQuery()
+
+	// src/view.ts -> Replace ONLY this function
+	// src/view.ts -> runQuery()
 	runQuery(query: string): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const filePath = this.plugin.settings.beancountFilePath;
