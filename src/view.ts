@@ -12,7 +12,7 @@ export class BeancountView extends ItemView {
 	plugin: BeancountPlugin;
 	private component: BeancountViewComponent;
 
-	// The "source of truth" for our UI state
+	// --- STATE HAS BEEN UPDATED ---
 	private state = {
 		isLoading: true,
 		assets: "0 USD",
@@ -20,8 +20,11 @@ export class BeancountView extends ItemView {
 		netWorth: "0.00 USD",
 		kpiError: null as string | null,
 		reportError: null as string | null,
-		reportHtml: "Loading..."
+		// 'reportHtml' is gone
+		reportHeaders: [] as string[], // <-- NEW
+		reportRows: [] as string[][]    // <-- NEW
 	};
+	// ------------------------------
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
 		super(leaf);
@@ -30,21 +33,19 @@ export class BeancountView extends ItemView {
 
 	getViewType() { return BEANCOUNT_VIEW_TYPE; }
 	getDisplayText() { return "Beancount"; }
-
+	getIcon() { return "landmark"; }
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
 		
 		this.component = new BeancountViewComponent({
 			target: container,
-			props: this.state // Pass the initial state
+			props: this.state
 		});
 
-		// Listen for events dispatched from the Svelte component
 		this.component.$on('refresh', () => this.updateView());
 		this.component.$on('renderReport', (e) => this.renderReport(e.detail));
 
-		// Use setTimeout to run the initial load on the next tick
 		setTimeout(() => this.updateView(), 0);
 	}
 
@@ -54,7 +55,6 @@ export class BeancountView extends ItemView {
 		}
 	}
 
-	// Our custom function (renamed to avoid conflicts)
 	private updateProps(newState: Partial<typeof this.state>) {
 		this.state = { ...this.state, ...newState };
 		if (this.component) {
@@ -62,10 +62,8 @@ export class BeancountView extends ItemView {
 		}
 	}
 
-	// --- All Data Logic Lives Here ---
-
 	async updateView() {
-		this.updateProps({ isLoading: true, kpiError: null, reportError: null, reportHtml: "Loading..." });
+		this.updateProps({ isLoading: true, kpiError: null, reportError: null, reportHeaders: [], reportRows: [] });
 		new Notice('Refreshing financial data...');
 
 		try {
@@ -89,22 +87,27 @@ export class BeancountView extends ItemView {
 				kpiError: null
 			});
 
-			await this.renderReport('balance');
+			await this.renderReport('assets');
 
 		} catch (error) {
 			console.error("Error updating view:", error);
-			this.updateProps({ kpiError: error.message, reportHtml: "" });
+			this.updateProps({ kpiError: error.message, reportHeaders: [], reportRows: [] });
 		} finally {
 			this.updateProps({ isLoading: false });
 		}
 	}
 
-	async renderReport(reportType: 'balance' | 'income' | 'expenses') {
-		this.updateProps({ isLoading: true, reportError: null, reportHtml: `Loading ${reportType} report...` });
+// src/view.ts -> Replace this function
+// src/view.ts -> Replace this function
+
+	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
+		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
 		let query = '';
 		
 		switch (reportType) {
-			case 'balance': query = `SELECT account, sum(position) GROUP BY account`; break;
+			case 'assets': query = `SELECT account, sum(position) WHERE account ~ '^Assets' GROUP BY account`; break;
+			case 'liabilities': query = `SELECT account, sum(position) WHERE account ~ '^Liabilities' GROUP BY account`; break;
+			case 'equity': query = `SELECT account, sum(position) WHERE account ~ '^Equity' GROUP BY account`; break;
 			case 'income': query = `SELECT account, sum(position) WHERE account ~ '^Income' GROUP BY account`; break;
 			case 'expenses': query = `SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account`; break;
 		}
@@ -115,34 +118,57 @@ export class BeancountView extends ItemView {
 			const records: string[][] = parse(cleanStdout, { columns: false, skip_empty_lines: true });
 
 			if (records.length === 0) {
-				this.updateProps({ reportHtml: "No data returned." });
+				// If no data, send empty arrays
+				this.updateProps({ reportHeaders: [], reportRows: [] });
 				return;
 			}
 			
 			const firstRowIsHeader = records[0][1].includes('sum(position)'); 
-			let table = "";
-			let dataRows: string[][] = [];
+			let headers: string[] = [];
+			let rows: string[][] = [];
 
 			if (firstRowIsHeader) {
-				table += `| ${records[0][0]} | ${records[0][1]} |\n| --- | --- |\n`;
-				dataRows = records.slice(1);
+				headers = records[0];
+				rows = records.slice(1);
 			} else {
-				table += `| account | balance |\n| --- | --- |\n`;
-				dataRows = records;
+				headers = ['account', 'balance']; // Use default headers
+				rows = records;
 			}
-			table += dataRows.map(row => `| ${row[0]} | ${row[1]} |`).join('\n');
 
-			const tempDiv = document.createElement('div');
-			MarkdownRenderer.render(this.app, table, tempDiv, '', this.plugin);
-			this.updateProps({ reportHtml: tempDiv.innerHTML, reportError: null });
+			// --- THIS IS THE NEW LOGIC ---
+			// Map over the rows to format the account names
+			const formattedRows = rows.map(row => {
+				// Defensive check for safety
+				if (row.length === 0) return row;
+
+				const accountName = row[0];
+				const lastColonIndex = accountName.lastIndexOf(':');
+				
+				// Find the last ':' and get the substring after it.
+				// If no ':' is found, use the original name.
+				const trimmedName = lastColonIndex > -1
+					? accountName.substring(lastColonIndex + 1)
+					: accountName;
+				
+				// Return a new row array with the trimmed name
+				return [trimmedName, ...row.slice(1)];
+			});
+			// -------------------------------
+
+			this.updateProps({
+				reportHeaders: headers,
+				reportRows: formattedRows, // <-- Pass the newly formatted rows
+				reportError: null
+			});
 			
 		} catch (error) {
 			console.error(`Error rendering ${reportType} report:`, error);
-			this.updateProps({ reportError: error.message, reportHtml: "" });
+			this.updateProps({ reportError: error.message, reportHeaders: [], reportRows: [] });
 		} finally {
 			this.updateProps({ isLoading: false });
 		}
 	}
+// -------------------------------
 
 	runQuery(query: string): Promise<string> {
 		return new Promise((resolve, reject) => {

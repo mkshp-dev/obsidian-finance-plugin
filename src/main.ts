@@ -40,16 +40,6 @@ export default class BeancountPlugin extends Plugin {
             this.app.workspace.revealLeaf(leaf);
         }
     }
-
-    // This helper function is used by the view, so it stays in the main plugin class
-    formatDataAsMarkdown(records: any[]): string {
-        if (records.length === 0) { return "No data returned from Beancount."; }
-        const headers = Object.keys(records[0]);
-        const headerRow = `| ${headers.join(' | ')} |`;
-        const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
-        const dataRows = records.map(record => `| ${headers.map(header => record[header]).join(' | ')} |`).join('\n');
-        return `${headerRow}\n${separatorRow}\n${dataRows}`;
-    }
     convertWslPathToWindows(wslPath: string): string {
         // This regex finds "/mnt/c/" and captures the "c"
         const match = wslPath.match(/^\/mnt\/([a-zA-Z])\//);
