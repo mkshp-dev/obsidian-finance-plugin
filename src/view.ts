@@ -126,12 +126,12 @@ export class BeancountView extends ItemView {
 
 		try {
 			const result = await this.runQuery(query);
+			const cleanStdout = result.trim();
             
             // --- THIS IS THE FIX ---
-			const records = parse(result, { 
+			const records = parse(cleanStdout, { 
 				columns: true, 
-				skip_empty_lines: true,
-				relax_column_count: true // <-- ADD THIS LINE
+				skip_empty_lines: true
 			});
             // -----------------------
 
