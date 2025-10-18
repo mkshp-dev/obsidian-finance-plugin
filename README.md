@@ -1,94 +1,53 @@
-# Obsidian Sample Plugin
+# Obsidian Beancount Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A plugin for [Obsidian.md](https://obsidian.md) to integrate your [Beancount](https://beancount.github.io/docs/) plain-text accounting ledger directly into your vault. View financial snapshots and add new transactions without leaving your notes.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
 
-## First time developing plugins?
+---
 
-Quick starting guide for new plugin devs:
+## Features
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+* **Sidebar Dashboard:** Get a quick financial snapshot with key metrics like Assets, Liabilities, and Net Worth.
+* **Interactive Reports:** Instantly switch between Balance Sheet, Income, and Expenses reports directly in the sidebar.
+* **Quick Transaction Entry:** Use a simple command and modal form to add new transactions to your Beancount file.
+* **External Tool Powered:** Leverages the full power and accuracy of your existing Beancount installation.
 
-## Releasing new releases
+---
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+##  Requirements
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+This plugin acts as a user interface for the Beancount command-line tools. You **must** have the following installed on your system:
 
-## Adding your plugin to the community plugin list
+1.  **Python 3**
+2.  **Beancount (v3 or higher):** The plugin relies on the `bean-query` command. The recommended installation is via pip: `pip install beancount`.
+3.  **(For Windows Users)** If you are running Beancount within WSL, this plugin will work by prefixing commands with `wsl.exe`.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+---
 
-## How to use
+## Installation & Configuration
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+1.  Download the latest release from the GitHub releases page (or build it yourself).
+2.  Copy the `main.js`, `styles.css`, and `manifest.json` files to your vault's plugin folder: `<YourVault>/.obsidian/plugins/<your-plugin-name>/`.
+3.  Enable the plugin in Obsidian's community plugin settings.
+4.  Go to the plugin's settings page.
+5.  In the "Path to beancount file" field, enter the **absolute path** to your main Beancount ledger file.
+    * **Important:** If using WSL, this must be the Linux-style path (e.g., `/mnt/c/Users/YourUser/Documents/finances.beancount`).
 
-## Manually installing the plugin
+---
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Usage
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint ./src/`
+### Viewing Reports
 
-## Funding URL
+1.  Click the **dollar sign icon (`$`)** in the left-hand ribbon to open the Beancount Snapshot sidebar.
+2.  The sidebar will automatically load your key metrics and a default balance sheet.
+3.  Use the **[Balance]**, **[Income]**, and **[Expenses]** buttons to switch between reports.
+4.  Click the **[Refresh]** button to reload all data from your ledger file.
 
-You can include funding URLs where people who use your plugin can financially support it.
+### Adding a Transaction
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+1.  Open the command palette (`Ctrl/Cmd + P`).
+2.  Search for and run the command **"Add Beancount Transaction"**.
+3.  A modal form will appear. Fill in the transaction details.
+4.  Click **"Add Transaction"**. The new entry will be appended to the bottom of your configured Beancount file.

@@ -7,124 +7,164 @@ import BeancountPlugin from './main';
 
 export const BEANCOUNT_VIEW_TYPE = "beancount-view";
 
+// src/view.ts -> Replace the BeancountView class
+
 export class BeancountView extends ItemView {
-    plugin: BeancountPlugin;
-    private kpiContainer: HTMLDivElement;
+	plugin: BeancountPlugin;
+	private kpiContainer: HTMLDivElement;
     private reportContainer: HTMLDivElement;
+    // Add references to our buttons to disable/enable them
+    private refreshButton: HTMLButtonElement;
+    private navContainer: HTMLDivElement;
 
-    constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
-        super(leaf);
-        this.plugin = plugin;
-    }
+	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
 
-    getViewType() { return BEANCOUNT_VIEW_TYPE; }
-    getDisplayText() { return "Beancount"; }
+	getViewType() { return BEANCOUNT_VIEW_TYPE; }
+	getDisplayText() { return "Beancount"; }
 
-    async onOpen() {
-        const container = this.containerEl.children[1];
-        container.empty();
+	async onOpen() {
+		const container = this.containerEl.children[1];
+		container.empty();
 
-        const headerEl = container.createEl("div", { cls: "beancount-header" });
-        headerEl.createEl("h2", { text: "Snapshot" });
-        const refreshButton = headerEl.createEl("button", { text: "Refresh" });
-        refreshButton.onClickEvent(() => this.updateView());
-
+		const headerEl = container.createEl("div", { cls: "beancount-header" });
+		headerEl.createEl("h2", { text: "Snapshot" });
+		this.refreshButton = headerEl.createEl("button", { text: "Refresh" });
+		
         container.createEl("h4", { text: "Key Metrics" });
         this.kpiContainer = container.createEl("div", { cls: "beancount-kpi-container" });
+        
+        this.navContainer = container.createEl("div", { cls: "beancount-nav" });
+        const balanceBtn = this.navContainer.createEl("button", { text: "Balance" });
+        const incomeBtn = this.navContainer.createEl("button", { text: "Income" });
+        const expensesBtn = this.navContainer.createEl("button", { text: "Expenses" });
 
-        const navContainer = container.createEl("div", { cls: "beancount-nav" });
-        const balanceBtn = navContainer.createEl("button", { text: "Balance" });
-        const incomeBtn = navContainer.createEl("button", { text: "Income" });
-        const expensesBtn = navContainer.createEl("button", { text: "Expenses" });
-
-        balanceBtn.onClickEvent(() => this.renderReport('balance'));
-        incomeBtn.onClickEvent(() => this.renderReport('income'));
-        expensesBtn.onClickEvent(() => this.renderReport('expenses'));
-
+        // Add event listeners
+        this.refreshButton.onClickEvent(() => this.updateView());
+		balanceBtn.onClickEvent(() => this.renderReport('balance'));
+		incomeBtn.onClickEvent(() => this.renderReport('income'));
+		expensesBtn.onClickEvent(() => this.renderReport('expenses'));
+		
         this.reportContainer = container.createEl("div", { cls: "beancount-report-container" });
-        this.updateView();
-    }
+		this.updateView();
+	}
 
-    async updateView() {
-        new Notice('Refreshing financial data...');
-        this.kpiContainer.setText("Loading...");
-        this.reportContainer.setText("Loading...");
-
-        try {
-            const assetsQuery = `SELECT sum(position) WHERE account ~ '^Assets'`;
-            const liabilitiesQuery = `SELECT sum(position) WHERE account ~ '^Liabilities'`;
-
-            const [assetsResult, liabilitiesResult] = await Promise.all([
-                this.runQuery(assetsQuery),
-                this.runQuery(liabilitiesQuery)
-            ]);
-
-            const assets = this.parseSingleValue(assetsResult) || "0 USD";
-            const liabilities = this.parseSingleValue(liabilitiesResult) || "0 USD";
-            const netWorth = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
-            const currency = assets.split(" ")[1] || "USD";
-
-            this.kpiContainer.empty();
-            this.kpiContainer.createEl('p', { text: `Assets: ${assets}` });
-            this.kpiContainer.createEl('p', { text: `Liabilities: ${liabilities}` });
-            this.kpiContainer.createEl('strong', { text: `Net Worth: ${netWorth.toFixed(2)} ${currency}` });
-
-            this.renderReport('balance');
-
-        } catch (error) {
-            console.error("Error updating view:", error);
-            new Notice("Failed to refresh data. Check console.");
-            this.kpiContainer.setText("Error loading data.");
-            this.reportContainer.setText("");
+    // --- NEW: Helper to toggle button states ---
+    private setLoading(isLoading: boolean) {
+        this.refreshButton.disabled = isLoading;
+        this.navContainer.querySelectorAll('button').forEach(button => button.disabled = isLoading);
+        if (isLoading) {
+            this.refreshButton.setText("Refreshing...");
+        } else {
+            this.refreshButton.setText("Refresh");
         }
     }
-
-    async renderReport(reportType: 'balance' | 'income' | 'expenses') {
-        this.reportContainer.setText(`Loading ${reportType} report...`);
-        let query = '';
-        switch (reportType) {
-            case 'balance':
-                query = `SELECT account, sum(position) GROUP BY account`;
-                break;
-            case 'income':
-                query = `SELECT account, sum(position) WHERE account ~ '^Income' GROUP BY account`;
-                break;
-            case 'expenses':
-                query = `SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account`;
-                break;
-        }
-
-        try {
-            const result = await this.runQuery(query);
-            const records = parse(result, { columns: true, skip_empty_lines: true });
-            const markdown = this.plugin.formatDataAsMarkdown(records);
-
-            this.reportContainer.empty();
-            MarkdownRenderer.render(this.app, markdown, this.reportContainer, '', this.plugin);
-        } catch (error) {
-            console.error(`Error rendering ${reportType} report:`, error);
-            this.reportContainer.setText(`Failed to load ${reportType} report.`);
-        }
-    }
-
-    runQuery(query: string): Promise<string> {
-        return new Promise((resolve, reject) => {
-            const filePath = this.plugin.settings.beancountFilePath;
-            if (!filePath) {
-                return reject(new Error('Beancount file path is not set.'));
-            }
-            const command = `wsl bean-query -f csv "${filePath}" "${query}"`;
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    return reject(error);
-                }
-                if (stderr) {
-                    console.warn("Beancount stderr:", stderr);
-                }
-                resolve(stdout);
-            });
+    
+    // --- NEW: Helper to display errors ---
+    private renderError(container: HTMLElement, error: Error) {
+        container.empty();
+        container.createEl('div', { 
+            text: `Error: ${error.message}`, 
+            cls: 'beancount-error-message' 
         });
     }
+
+	async updateView() {
+        this.setLoading(true); // Disable buttons
+		this.kpiContainer.setText("Loading...");
+		this.reportContainer.setText("Loading...");
+
+		try {
+			const assetsQuery = `SELECT sum(position) WHERE account ~ '^Assets'`;
+			const liabilitiesQuery = `SELECT sum(position) WHERE account ~ '^Liabilities'`;
+			
+			const [assetsResult, liabilitiesResult] = await Promise.all([
+				this.runQuery(assetsQuery),
+				this.runQuery(liabilitiesQuery)
+			]);
+
+			const assets = this.parseSingleValue(assetsResult) || "0 USD";
+			const liabilities = this.parseSingleValue(liabilitiesResult) || "0 USD";
+			const netWorth = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
+			const currency = assets.split(" ")[1] || "USD";
+
+			this.kpiContainer.empty();
+			this.kpiContainer.createEl('p', { text: `Assets: ${assets}` });
+			this.kpiContainer.createEl('p', { text: `Liabilities: ${liabilities}` });
+			this.kpiContainer.createEl('strong', { text: `Net Worth: ${netWorth.toFixed(2)} ${currency}` });
+
+			await this.renderReport('balance'); // Render default report
+
+		} catch (error) {
+			console.error("Error updating view:", error);
+			this.renderError(this.kpiContainer, error);
+            this.reportContainer.empty(); // Clear report area on major error
+		} finally {
+            this.setLoading(false); // ALWAYS re-enable buttons
+        }
+	}
+
+	async renderReport(reportType: 'balance' | 'income' | 'expenses') {
+        this.setLoading(true); // Disable buttons
+		this.reportContainer.setText(`Loading ${reportType} report...`);
+		let query = '';
+		// ... (switch case is unchanged)
+		switch (reportType) {
+			case 'balance':
+				query = `SELECT account, sum(position) GROUP BY account`;
+				break;
+			case 'income':
+				query = `SELECT account, sum(position) WHERE account ~ '^Income' GROUP BY account`;
+				break;
+			case 'expenses':
+				query = `SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account`;
+				break;
+		}
+
+		try {
+			const result = await this.runQuery(query);
+			const records = parse(result, { columns: true, skip_empty_lines: true });
+			const markdown = this.plugin.formatDataAsMarkdown(records);
+
+			this.reportContainer.empty();
+			MarkdownRenderer.render(this.app, markdown, this.reportContainer, '', this.plugin);
+		} catch (error) {
+			console.error(`Error rendering ${reportType} report:`, error);
+			this.renderError(this.reportContainer, error);
+		} finally {
+            this.setLoading(false); // ALWAYS re-enable buttons
+        }
+	}
+
+// src/view.ts -> Replace ONLY this function
+
+	runQuery(query: string): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const filePath = this.plugin.settings.beancountFilePath;
+			if (!filePath) {
+				return reject(new Error('Beancount file path is not set.'));
+			}
+			const command = `wsl bean-query -f csv "${filePath}" "${query}"`;
+			
+			exec(command, (error, stdout, stderr) => {
+				// This handles hard failures, like wsl.exe not being found.
+				if (error) {
+					return reject(error);
+				}
+
+				// THE KEY CHANGE: Treat any message in stderr as a failure.
+				// Beancount errors (like file not found) are printed here.
+				if (stderr) {
+					return reject(new Error(stderr));
+				}
+
+				// If there's no error and no stderr, it's a success.
+				resolve(stdout);
+			});
+		});
+	}
 
     parseSingleValue(csv: string): string | null {
         try {
