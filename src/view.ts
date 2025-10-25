@@ -1,10 +1,11 @@
 // src/view.ts
 
-import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer, TFile } from 'obsidian';
 import BeancountPlugin from './main';
 import BeancountViewComponent from './BeancountView.svelte';
 import { exec } from 'child_process';
 import { parse } from 'csv-parse/sync';
+import * as path from 'path';
 
 export const BEANCOUNT_VIEW_TYPE = "beancount-view";
 
@@ -35,21 +36,82 @@ export class BeancountView extends ItemView {
 	getViewType() { return BEANCOUNT_VIEW_TYPE; }
 	getDisplayText() { return "Beancount"; }
 	getIcon() { return "landmark"; }
+
+// src/view.ts -> onOpen()
+
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
-		
+
 		this.component = new BeancountViewComponent({
 			target: container,
 			props: this.state
 		});
 
+		// Listen for events
 		this.component.$on('refresh', () => this.updateView());
 		this.component.$on('renderReport', (e) => this.renderReport(e.detail));
+
+		// --- NEW: Listen for the editFile event ---
+		this.component.$on('editFile', () => this.openLedgerFile());
+		// ----------------------------------------
 
 		setTimeout(() => this.updateView(), 0);
 	}
 
+// src/view.ts -> Replace this method
+
+// src/view.ts -> Replace this method
+
+	async openLedgerFile() {
+		const absoluteFilePath = this.plugin.settings.beancountFilePath;
+		if (!absoluteFilePath) {
+			new Notice("Beancount file path not set in settings.");
+			return;
+		}
+
+		// --- Determine the OS-specific path ---
+		const commandName = this.plugin.settings.beancountCommand;
+		let osSpecificPath = absoluteFilePath; // Assume non-WSL first
+		if (commandName.startsWith('wsl')) {
+			osSpecificPath = this.plugin.convertWslPathToWindows(absoluteFilePath);
+		}
+		// Use forward slashes for comparisons and Obsidian path functions
+		const normalizedOsPath = osSpecificPath.replace(/\\/g, '/');
+		// ------------------------------------
+
+		// --- Get Vault Path ---
+		// @ts-ignore - Using internal adapter property
+		const vaultPath = this.app.vault.adapter.getBasePath().replace(/\\/g, '/');
+		// ----------------------
+
+		// --- Check if file is INSIDE the vault path ---
+		if (normalizedOsPath.startsWith(vaultPath)) {
+			// Calculate the path relative to the vault root
+			const relativePath = normalizedOsPath.substring(vaultPath.length).replace(/^\//, ''); // Remove leading slash if present
+
+			const file = this.app.vault.getAbstractFileByPath(relativePath);
+
+			if (file && file instanceof TFile) {
+				// --- File found by relative path ---
+				const leaf = this.app.workspace.getLeaf(true);
+				await leaf.openFile(file);
+			} else {
+				// --- File is inside vault path, but maybe not indexed ---
+				console.warn("File seems to be in vault path but wasn't found by Obsidian API. Trying direct URI:", relativePath);
+				// Construct an obsidian:// URI
+				const vaultName = this.app.vault.getName();
+				const fileUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
+				// Use openLinkText to ask Obsidian to open its own URI
+				this.app.workspace.openLinkText(fileUri, '/', false);
+			}
+		} else {
+			// --- File is OUTSIDE the vault ---
+			console.warn("Ledger file is outside the vault:", osSpecificPath);
+			await navigator.clipboard.writeText(osSpecificPath);
+			new Notice(`Ledger file appears to be outside the vault. Path copied to clipboard:\n${osSpecificPath}`);
+		}
+	}
 	async onClose() {
 		if (this.component) {
 			this.component.$destroy();
@@ -63,44 +125,57 @@ export class BeancountView extends ItemView {
 		}
 	}
 
+// src/view.ts -> Replace this method
+
 	async updateView() {
-		this.updateProps({ isLoading: true, kpiError: null, reportError: null, reportHeaders: [], reportRows: [] });
+		// Set initial loading/checking state
+		this.updateProps({ isLoading: true, kpiError: null, reportError: null, fileStatus: "checking", fileStatusMessage: null, reportHeaders: [], reportRows: [] });
 		new Notice('Refreshing financial data...');
 
 		try {
+			// Define queries
 			const assetsQuery = `SELECT sum(position) WHERE account ~ '^Assets'`;
 			const liabilitiesQuery = `SELECT sum(position) WHERE account ~ '^Liabilities'`;
-			
-			const [assetsResult, liabilitiesResult] = await Promise.all([
-				this.runQuery(assetsQuery),
-				this.runQuery(liabilitiesQuery)
+
+			// Run KPI queries, the default report render, AND the bean check concurrently
+			const [
+				kpiResults,    // Array from Promise.all for KPIs
+				_reportResult, // We don't need the report result directly
+				checkResult    // Result object from runBeanCheck
+			] = await Promise.all([
+				Promise.all([this.runQuery(assetsQuery), this.runQuery(liabilitiesQuery)]),
+				this.renderReport('assets'), // This updates its own props now
+				this.runBeanCheck()          // This returns the check result
 			]);
 
+			// Destructure KPI results
+			const [assetsResult, liabilitiesResult] = kpiResults;
+
+			// Process KPIs
 			const assets = this.parseSingleValue(assetsResult) || "0 USD";
 			const liabilities = this.parseSingleValue(liabilitiesResult) || "0 USD";
 			const netWorthNum = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
 			const currency = assets.split(" ")[1] || "USD";
-			
+
+			// Update props with KPI results AND the bean-check result
 			this.updateProps({
 				assets,
 				liabilities,
 				netWorth: `${netWorthNum.toFixed(2)} ${currency}`,
-				kpiError: null
+				kpiError: null,
+				fileStatus: checkResult.status,
+				fileStatusMessage: checkResult.message
 			});
 
-		// We'll run the report render and the bean-check at the same time
-			await Promise.all([
-				this.renderReport('assets'),
-				this.runBeanCheck()
-			]);
-
-		} catch (error) {
-		// ...
+		} catch (error) { // Catch errors primarily from runQuery
+			console.error("Error updating view:", error);
+			// If anything fails, show errors and set fileStatus to error too
+			this.updateProps({ kpiError: error.message, reportHeaders: [], reportRows: [], fileStatus: "error", fileStatusMessage: "Failed during refresh." });
 		} finally {
+			// Only update isLoading in the finally block
 			this.updateProps({ isLoading: false });
 		}
 	}
-
 
 	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
@@ -166,40 +241,28 @@ export class BeancountView extends ItemView {
 	}
 // -------------------------------
 // src/view.ts -> Add this new method
+// src/view.ts -> Replace this method
+// src/view.ts -> Replace this method
 
-	async runBeanCheck() {
-		this.updateProps({ fileStatus: "checking", fileStatusMessage: null });
-
+	// Now returns the status result
+	async runBeanCheck(): Promise<{ status: "ok" | "error"; message: string | null }> {
 		const filePath = this.plugin.settings.beancountFilePath;
 		let commandName = this.plugin.settings.beancountCommand;
 
-		if (!filePath) {
-			this.updateProps({ fileStatus: "error", fileStatusMessage: "File path not set." });
-			return;
-		}
-		if (!commandName) {
-			this.updateProps({ fileStatus: "error", fileStatusMessage: "Command not set." });
-			return;
-		}
+		if (!filePath) return { status: "error", message: "File path not set." };
+		if (!commandName) return { status: "error", message: "Command not set." };
 
-		// Construct the bean-check command. We assume it's in the same
-		// place as bean-query and just replace the executable name.
 		commandName = commandName.replace(/bean-query(.exe)?$/, 'bean-check$1');
 		const command = `${commandName} "${filePath}"`;
 
-		return new Promise<void>((resolve) => {
+		return new Promise((resolve) => {
 			exec(command, (error, stdout, stderr) => {
-				// bean-check is weird. It prints errors to STDOUT, not STDERR.
-				// And a successful check prints nothing.
 				if (error || stdout) {
-					// If 'error' exists (e.g., command not found) or stdout has data (an error message)
 					const errorMessage = error ? error.message : stdout;
-					this.updateProps({ fileStatus: "error", fileStatusMessage: errorMessage });
+					resolve({ status: "error", message: errorMessage });
 				} else {
-					// No error, no stdout means a clean check
-					this.updateProps({ fileStatus: "ok", fileStatusMessage: "File OK" });
+					resolve({ status: "ok", message: "File OK" });
 				}
-				resolve(); // Always resolve so we don't block the UI
 			});
 		});
 	}
