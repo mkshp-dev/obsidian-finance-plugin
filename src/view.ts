@@ -13,7 +13,6 @@ export class BeancountView extends ItemView {
 	plugin: BeancountPlugin;
 	private component: BeancountViewComponent;
 
-	// --- STATE HAS BEEN UPDATED ---
 	private state = {
 		isLoading: true,
 		assets: "0 USD",
@@ -23,10 +22,9 @@ export class BeancountView extends ItemView {
 		reportError: null as string | null,
 		reportHeaders: [] as string[],
 		reportRows: [] as string[][],
-		fileStatus: "checking" as "checking" | "ok" | "error", // <-- ADD THIS
-		fileStatusMessage: "" as string | null                  // <-- ADD THIS
+		fileStatus: "checking" as "checking" | "ok" | "error",
+		fileStatusMessage: "" as string | null
 	};
-	// ------------------------------
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
 		super(leaf);
@@ -36,8 +34,6 @@ export class BeancountView extends ItemView {
 	getViewType() { return BEANCOUNT_VIEW_TYPE; }
 	getDisplayText() { return "Beancount"; }
 	getIcon() { return "landmark"; }
-
-// src/view.ts -> onOpen()
 
 	async onOpen() {
 		const container = this.containerEl.children[1];
@@ -51,67 +47,14 @@ export class BeancountView extends ItemView {
 		// Listen for events
 		this.component.$on('refresh', () => this.updateView());
 		this.component.$on('renderReport', (e) => this.renderReport(e.detail));
-
-		// --- NEW: Listen for the editFile event ---
 		this.component.$on('editFile', () => this.openLedgerFile());
-		// ----------------------------------------
+		// --- ADDED: Listen for openJournal event ---
+		this.component.$on('openJournal', () => this.openJournalView());
+		// ------------------------------------------
 
 		setTimeout(() => this.updateView(), 0);
 	}
 
-// src/view.ts -> Replace this method
-
-// src/view.ts -> Replace this method
-
-	async openLedgerFile() {
-		const absoluteFilePath = this.plugin.settings.beancountFilePath;
-		if (!absoluteFilePath) {
-			new Notice("Beancount file path not set in settings.");
-			return;
-		}
-
-		// --- Determine the OS-specific path ---
-		const commandName = this.plugin.settings.beancountCommand;
-		let osSpecificPath = absoluteFilePath; // Assume non-WSL first
-		if (commandName.startsWith('wsl')) {
-			osSpecificPath = this.plugin.convertWslPathToWindows(absoluteFilePath);
-		}
-		// Use forward slashes for comparisons and Obsidian path functions
-		const normalizedOsPath = osSpecificPath.replace(/\\/g, '/');
-		// ------------------------------------
-
-		// --- Get Vault Path ---
-		// @ts-ignore - Using internal adapter property
-		const vaultPath = this.app.vault.adapter.getBasePath().replace(/\\/g, '/');
-		// ----------------------
-
-		// --- Check if file is INSIDE the vault path ---
-		if (normalizedOsPath.startsWith(vaultPath)) {
-			// Calculate the path relative to the vault root
-			const relativePath = normalizedOsPath.substring(vaultPath.length).replace(/^\//, ''); // Remove leading slash if present
-
-			const file = this.app.vault.getAbstractFileByPath(relativePath);
-
-			if (file && file instanceof TFile) {
-				// --- File found by relative path ---
-				const leaf = this.app.workspace.getLeaf(true);
-				await leaf.openFile(file);
-			} else {
-				// --- File is inside vault path, but maybe not indexed ---
-				console.warn("File seems to be in vault path but wasn't found by Obsidian API. Trying direct URI:", relativePath);
-				// Construct an obsidian:// URI
-				const vaultName = this.app.vault.getName();
-				const fileUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
-				// Use openLinkText to ask Obsidian to open its own URI
-				this.app.workspace.openLinkText(fileUri, '/', false);
-			}
-		} else {
-			// --- File is OUTSIDE the vault ---
-			console.warn("Ledger file is outside the vault:", osSpecificPath);
-			await navigator.clipboard.writeText(osSpecificPath);
-			new Notice(`Ledger file appears to be outside the vault. Path copied to clipboard:\n${osSpecificPath}`);
-		}
-	}
 	async onClose() {
 		if (this.component) {
 			this.component.$destroy();
@@ -125,62 +68,52 @@ export class BeancountView extends ItemView {
 		}
 	}
 
-// src/view.ts -> Replace this method
-
 	async updateView() {
-		// Set initial loading/checking state
 		this.updateProps({ isLoading: true, kpiError: null, reportError: null, fileStatus: "checking", fileStatusMessage: null, reportHeaders: [], reportRows: [] });
 		new Notice('Refreshing financial data...');
 
 		try {
-			// Define queries
 			const assetsQuery = `SELECT sum(position) WHERE account ~ '^Assets'`;
 			const liabilitiesQuery = `SELECT sum(position) WHERE account ~ '^Liabilities'`;
 
-			// Run KPI queries, the default report render, AND the bean check concurrently
 			const [
-				kpiResults,    // Array from Promise.all for KPIs
-				_reportResult, // We don't need the report result directly
-				checkResult    // Result object from runBeanCheck
+				kpiResults,
+				_reportResult, // RenderReport updates props itself now
+				checkResult
 			] = await Promise.all([
-				Promise.all([this.runQuery(assetsQuery), this.runQuery(liabilitiesQuery)]),
-				this.renderReport('assets'), // This updates its own props now
-				this.runBeanCheck()          // This returns the check result
+				Promise.all([this.plugin.runQuery(assetsQuery), this.plugin.runQuery(liabilitiesQuery)]),
+				this.renderReport('assets'), // Render default report
+				this.runBeanCheck()
 			]);
 
-			// Destructure KPI results
 			const [assetsResult, liabilitiesResult] = kpiResults;
-
-			// Process KPIs
 			const assets = this.parseSingleValue(assetsResult) || "0 USD";
 			const liabilities = this.parseSingleValue(liabilitiesResult) || "0 USD";
 			const netWorthNum = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
 			const currency = assets.split(" ")[1] || "USD";
 
-			// Update props with KPI results AND the bean-check result
 			this.updateProps({
-				assets,
-				liabilities,
-				netWorth: `${netWorthNum.toFixed(2)} ${currency}`,
-				kpiError: null,
-				fileStatus: checkResult.status,
-				fileStatusMessage: checkResult.message
+				assets, liabilities, netWorth: `${netWorthNum.toFixed(2)} ${currency}`,
+				kpiError: null, fileStatus: checkResult.status, fileStatusMessage: checkResult.message
 			});
 
-		} catch (error) { // Catch errors primarily from runQuery
+		} catch (error) {
 			console.error("Error updating view:", error);
-			// If anything fails, show errors and set fileStatus to error too
 			this.updateProps({ kpiError: error.message, reportHeaders: [], reportRows: [], fileStatus: "error", fileStatusMessage: "Failed during refresh." });
 		} finally {
-			// Only update isLoading in the finally block
-			this.updateProps({ isLoading: false });
+			// isLoading is managed within renderReport and runBeanCheck calls implicitly
+			// but we ensure it's false if the top-level try/catch fails
+			if(this.state.isLoading) this.updateProps({ isLoading: false });
 		}
 	}
+
+// src/view.ts -> Replace this function
 
 	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
 		let query = '';
-		
+		const headers = ['Account', 'Amount']; // Use clean headers
+
 		switch (reportType) {
 			case 'assets': query = `SELECT account, sum(position) WHERE account ~ '^Assets' GROUP BY account`; break;
 			case 'liabilities': query = `SELECT account, sum(position) WHERE account ~ '^Liabilities' GROUP BY account`; break;
@@ -190,48 +123,49 @@ export class BeancountView extends ItemView {
 		}
 
 		try {
-			const result = await this.runQuery(query);
+			const result = await this.plugin.runQuery(query);
 			const cleanStdout = result.replace(/\r/g, "").trim();
 			const records: string[][] = parse(cleanStdout, { columns: false, skip_empty_lines: true });
 
 			if (records.length === 0) {
-				this.updateProps({ reportHeaders: [], reportRows: [] });
-				return;
+				this.updateProps({ reportHeaders: [], reportRows: [] }); return;
 			}
-			
-			// --- THIS IS THE CHANGED LOGIC ---
-			const firstRowIsHeader = records[0][1].includes('sum(position)'); 
-			
-			// We set our desired headers regardless of the input.
-			const headers = ['Account', 'Amount']; 
-			let rows: string[][] = [];
 
-			if (firstRowIsHeader) {
-				// If the CSV has a header, we skip it.
-				rows = records.slice(1);
-			} else {
-				// If no header, all records are data.
-				rows = records;
-			}
-			// -------------------------------
+			const firstRowIsHeader = records[0][1]?.includes('sum(position)');
+			let rows: string[][] = firstRowIsHeader ? records.slice(1) : records;
+
+			let total = 0;
+			let currency = ''; // Assume single currency for simplicity for now
 
 			const formattedRows = rows.map(row => {
 				if (row.length === 0) return row;
 				const accountName = row[0];
+				const amountStr = row[1] || ''; // Second column is amount
+
+				// --- Calculate Total ---
+				const amountMatch = amountStr.match(/(-?[\d,]+\.?\d*)\s*(\S+)/); // Extract number and currency
+				if (amountMatch) {
+					total += parseFloat(amountMatch[1].replace(/,/g, '')); // Sum the numbers
+					if (!currency) currency = amountMatch[2]; // Grab the currency symbol
+				}
+				// ---------------------
+
 				const lastColonIndex = accountName.lastIndexOf(':');
-				const trimmedName = lastColonIndex > -1
-					? accountName.substring(lastColonIndex + 1)
-					: accountName;
-				
-				return [trimmedName, ...row.slice(1)];
+				const trimmedName = lastColonIndex > -1 ? accountName.substring(lastColonIndex + 1) : accountName;
+				return [trimmedName, amountStr]; // Pass original amount string
 			});
 
+			// --- Add the Total Row ---
+			if (formattedRows.length > 0) {
+				const totalRow = ['Total', `${total.toFixed(2)} ${currency}`];
+				formattedRows.push(totalRow);
+			}
+			// -------------------------
+
 			this.updateProps({
-				reportHeaders: headers, // Pass our clean headers
-				reportRows: formattedRows,
-				reportError: null
+				reportHeaders: headers, reportRows: formattedRows, reportError: null
 			});
-			
+
 		} catch (error) {
 			console.error(`Error rendering ${reportType} report:`, error);
 			this.updateProps({ reportError: error.message, reportHeaders: [], reportRows: [] });
@@ -239,59 +173,124 @@ export class BeancountView extends ItemView {
 			this.updateProps({ isLoading: false });
 		}
 	}
-// -------------------------------
-// src/view.ts -> Add this new method
+	// ----------------------------------------------
+
+	// --- NEW: Method to open the Journal View ---
+// src/view.ts -> Replace this method
 // src/view.ts -> Replace this method
 // src/view.ts -> Replace this method
 
-	// Now returns the status result
+	async openJournalView() {
+		new Notice('Generating grouped journal...');
+		this.updateProps({ isLoading: true });
+
+		// --- ADD THE WARNING COMMENT HERE ---
+		let markdownString = `\n\n# Beancount Journal (Grouped)\n\n`;
+		// ------------------------------------
+
+		try {
+			const query = `SELECT date, payee, narration, tags, links, id, account, position ORDER BY date DESC, id`;
+			const result = await this.plugin.runQuery(query);
+			const cleanStdout = result.replace(/\r/g, "").trim();
+			const records: string[][] = parse(cleanStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
+
+			if (records.length === 0) {
+				markdownString += "No journal entries found.";
+			} else {
+				const defaultHeaders = ['date', 'payee', 'narration', 'tags', 'links', 'id', 'account', 'position'];
+				const firstRowIsHeader = records[0][0]?.toLowerCase().includes('date') && records[0][5]?.toLowerCase().includes('id') && records[0][6]?.toLowerCase().includes('account');
+				let rows = firstRowIsHeader ? records.slice(1) : records;
+				let currentTxnId = "";
+
+				for (let i = 0; i < rows.length; i++) {
+					const row = rows[i];
+					while(row.length < defaultHeaders.length) row.push('');
+					const [date, payee, narration, tagsStr, linksStr, txnId, account, position] = row;
+					const txnKey = txnId; // Group by ID
+
+					if (txnKey !== currentTxnId) {
+						currentTxnId = txnKey;
+						if (i > 0) markdownString += '\n---\n\n';
+						const payeeStr = payee ? `"${payee}"` : '""';
+						const narrationStr = narration ? `"${narration}"` : '""';
+						const tags = tagsStr ? tagsStr.split(',').map(t => `#${t.trim()}`).join(' ') : '';
+						const links = linksStr ? linksStr.split(',').map(l => `^${l.trim()}`).join(' ') : '';
+						const extras = [tags, links].filter(Boolean).join(' ');
+						markdownString += `### ${date} * ${payeeStr} ${narrationStr} ${extras}\n\n`;
+						markdownString += `| Account | Amount |\n|---|---|\n`;
+					}
+					const lastColonIndex = account.lastIndexOf(':');
+					const trimmedAccount = lastColonIndex > -1 ? account.substring(lastColonIndex + 1) : account;
+					markdownString += `| ${trimmedAccount} | ${position} |\n`;
+				}
+			}
+
+			const tempFileName = `beancount-grouped-journal-${Date.now()}.md`;
+			const tempFile = await this.app.vault.create(tempFileName, markdownString);
+
+			if (tempFile instanceof TFile) {
+				const leaf = this.app.workspace.getLeaf(true);
+				await leaf.openFile(tempFile);
+			} else {
+				throw new Error("Failed to create temporary journal file.");
+			}
+
+		} catch (error) {
+			console.error("Error generating grouped journal:", error);
+			new Notice(`Failed to generate journal: ${error.message}`, 0);
+		} finally {
+			this.updateProps({ isLoading: false });
+		}
+	}
+// ---------------------------------------
+
 	async runBeanCheck(): Promise<{ status: "ok" | "error"; message: string | null }> {
 		const filePath = this.plugin.settings.beancountFilePath;
 		let commandName = this.plugin.settings.beancountCommand;
-
 		if (!filePath) return { status: "error", message: "File path not set." };
 		if (!commandName) return { status: "error", message: "Command not set." };
-
 		commandName = commandName.replace(/bean-query(.exe)?$/, 'bean-check$1');
 		const command = `${commandName} "${filePath}"`;
-
 		return new Promise((resolve) => {
 			exec(command, (error, stdout, stderr) => {
-				if (error || stdout) {
-					const errorMessage = error ? error.message : stdout;
-					resolve({ status: "error", message: errorMessage });
-				} else {
-					resolve({ status: "ok", message: "File OK" });
-				}
+				if (error || stdout) { const errorMessage = error ? error.message : stdout; resolve({ status: "error", message: errorMessage }); }
+				else { resolve({ status: "ok", message: "File OK" }); }
 			});
 		});
 	}
-	runQuery(query: string): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const filePath = this.plugin.settings.beancountFilePath;
-			const commandName = this.plugin.settings.beancountCommand;
 
-			if (!filePath) return reject(new Error('Beancount file path is not set.'));
-			if (!commandName) return reject(new Error('Beancount command is not set.'));
-
-			const command = `${commandName} -f csv "${filePath}" "${query}"`;
-			exec(command, (error, stdout, stderr) => {
-				if (error) return reject(error);
-				if (stderr) return reject(new Error(stderr));
-				resolve(stdout);
-			});
-		});
+	async openLedgerFile() {
+		const absoluteFilePath = this.plugin.settings.beancountFilePath;
+		if (!absoluteFilePath) { new Notice("File path not set."); return; }
+		const commandName = this.plugin.settings.beancountCommand;
+		let osSpecificPath = absoluteFilePath;
+		if (commandName.startsWith('wsl')) { osSpecificPath = this.plugin.convertWslPathToWindows(absoluteFilePath); }
+		const normalizedOsPath = osSpecificPath.replace(/\\/g, '/');
+		// @ts-ignore
+		const vaultPath = this.app.vault.adapter.getBasePath().replace(/\\/g, '/');
+		if (normalizedOsPath.startsWith(vaultPath)) {
+			const relativePath = normalizedOsPath.substring(vaultPath.length).replace(/^\//, '');
+			const file = this.app.vault.getAbstractFileByPath(relativePath);
+			if (file && file instanceof TFile) {
+				const leaf = this.app.workspace.getLeaf(true); await leaf.openFile(file);
+			} else {
+				console.warn("File in vault path not found by API:", relativePath);
+				const vaultName = this.app.vault.getName();
+				const fileUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
+				this.app.workspace.openLinkText(fileUri, '/', false);
+			}
+		} else {
+			console.warn("Ledger file outside vault:", osSpecificPath);
+			await navigator.clipboard.writeText(osSpecificPath);
+			new Notice(`Ledger file outside vault. Path copied:\n${osSpecificPath}`);
+		}
 	}
 
 	parseSingleValue(csv: string): string | null {
 		try {
 			const records = parse(csv, { columns: false, skip_empty_lines: true });
-			if (records.length > 1 && records[1].length > 0) {
-				return records[1][0].trim();
-			}
+			if (records.length > 1 && records[1].length > 0) return records[1][0].trim();
 			return null;
-		} catch (e) {
-			return null;
-		}
+		} catch (e) { return null; }
 	}
 }

@@ -1,7 +1,7 @@
 // src/main.ts
 
 import { Plugin } from 'obsidian';
-// Import 'exec' here, as runQuery needs it
+import { DashboardView, DASHBOARD_VIEW_TYPE } from './dashboard-view';
 import { exec } from 'child_process'; 
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './view';
@@ -17,7 +17,10 @@ export default class BeancountPlugin extends Plugin {
 			BEANCOUNT_VIEW_TYPE,
 			(leaf) => new BeancountView(leaf, this)
 		);
-
+		this.registerView(
+			DASHBOARD_VIEW_TYPE,
+			(leaf) => new DashboardView(leaf, this)
+		);
 		this.addRibbonIcon('dollar-sign', 'Open Beancount View', () => {
 			this.activateView();
 		});
@@ -29,7 +32,13 @@ export default class BeancountPlugin extends Plugin {
 				new TransactionModal(this.app, this).open();
 			}
 		});
-
+		this.addCommand({
+			id: 'open-beancount-dashboard', // New ID
+			name: 'Open Beancount Dashboard', // New Name
+			callback: () => {
+				this.activateDashboardView(); // Call renamed helper
+			}
+		});
 		this.addSettingTab(new BeancountSettingTab(this.app, this));
 	}
 
@@ -69,7 +78,19 @@ export default class BeancountPlugin extends Plugin {
 		}
 		return wslPath;
 	}
-
+	async activateDashboardView() { // Renamed from activateAccountView
+		const existingLeaves = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE);
+		if (existingLeaves.length > 0) {
+			this.app.workspace.revealLeaf(existingLeaves[0]);
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf('tab');
+		await leaf.setViewState({
+			type: DASHBOARD_VIEW_TYPE,
+			active: true,
+		});
+		this.app.workspace.revealLeaf(leaf);
+	}
 	onunload() {}
 	async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
 	async saveSettings() { await this.saveData(this.settings); }

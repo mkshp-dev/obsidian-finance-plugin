@@ -19,50 +19,63 @@
 		dispatch('refresh');
 	}
 
+	// --- REMOVED 'journal' from this type ---
 	function handleReport(type: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		dispatch('renderReport', type);
 	}
 
-	// --- NEW: Click handler for the status button ---
 	function handleStatusClick() {
 		if (fileStatus === 'error' && fileStatusMessage) {
 			new Notice(fileStatusMessage, 0); // Show persistent notice
 		}
 	}
 	function handleEditFile() {
-			dispatch('editFile');
-		}
+		dispatch('editFile');
+	}
+	// --- NEW: Dispatch openJournal event ---
+	function handleOpenJournal() {
+		dispatch('openJournal');
+	}
+	// --------------------------------------
 
 </script>
 
 <div class="beancount-header">
 	<h2>Snapshot</h2>
 
-	<button
-		type="button" class="beancount-status-button" class:status-ok={fileStatus === 'ok'}
-		class:status-error={fileStatus === 'error'}
-		on:click={handleStatusClick}
-		title={fileStatus === 'error' ? 'Click to see error details' : ''}
-		disabled={fileStatus === 'checking'} >
-		{#if fileStatus === 'checking'}
-			<span>Checking...</span>
-		{:else if fileStatus === 'ok'}
-			<span>✅ OK</span>
-		{:else if fileStatus === 'error'}
-			<span>❌ Error</span>
-		{/if}
-	</button>
-	<button
-		class="clickable-icon"
-		aria-label="Edit Ledger File"
-		title="Edit Ledger File"
-		on:click={handleEditFile}
-	>
-		<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-	</button>
-	<button on:click={handleRefresh} disabled={isLoading}>
-		{isLoading ? "Refreshing..." : "Refresh"}
-	</button>
+	<div class="header-controls">
+		<button
+			type="button" class="beancount-status-button" class:status-ok={fileStatus === 'ok'}
+			class:status-error={fileStatus === 'error'}
+			on:click={handleStatusClick}
+			title={fileStatus === 'error' ? 'Click to see error details' : 'File Status'}
+			disabled={fileStatus === 'checking'} >
+			{#if fileStatus === 'checking'}
+				<span>Checking...</span>
+			{:else if fileStatus === 'ok'}
+				<span>✅ OK</span>
+			{:else if fileStatus === 'error'}
+				<span>❌ Error</span>
+			{/if}
+		</button>
+
+		<button
+			class="clickable-icon" aria-label="Open Journal View" title="Open Journal View"
+			on:click={handleOpenJournal} disabled={isLoading}
+		>
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open-text"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/><path d="M6 8h2"/><path d="M6 12h2"/><path d="M16 8h2"/><path d="M16 12h2"/></svg>
+		</button>
+		<button
+			class="clickable-icon" aria-label="Edit Ledger File" title="Edit Ledger File"
+			on:click={handleEditFile}
+		>
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+		</button>
+
+		<button on:click={handleRefresh} disabled={isLoading}>
+			{isLoading ? "Refreshing..." : "Refresh"}
+		</button>
+	</div>
 </div>
 
 <h4>Key Metrics</h4>
@@ -92,7 +105,6 @@
 	<button on:click={() => handleReport('income')} disabled={isLoading}>Income</button>
 	<button on:click={() => handleReport('expenses')} disabled={isLoading}>Expenses</button>
 </div>
-
 <div class="beancount-report-container">
 	{#if reportError}
 		<div class="beancount-error-message">{reportError}</div>
@@ -121,63 +133,54 @@
 </div>
 
 <style>
+	/* Styles adjusted slightly */
 	.beancount-header {
 		display: flex;
-		justify-content: flex-start;
+		justify-content: space-between; /* Space title and controls */
 		align-items: center;
 		padding-bottom: 10px;
 		gap: 10px;
 	}
 	.beancount-header h2 {
-		margin-right: 0;
+		margin-right: 0; /* Let controls push right */
 	}
-	.header-controls {
+	.header-controls { /* Wrapper for right-aligned controls */
 		display: flex;
 		align-items: center;
-		gap: 8px; /* Space between controls */
+		gap: 8px; /* Consistent gap */
 	}
-	.clickable-icon {
-		padding: 4px; /* Adjust as needed */
-		cursor: pointer;
-	}
-	.clickable-icon svg { /* Ensure icon size is consistent */
-		width: var(--icon-xs);
-		height: var(--icon-xs);
-	}
-	/* --- NEW: Style the status button to look like text --- */
+
 	.beancount-status-button {
-		font-size: inherit; /* Match surrounding text size */
-		padding: var(--size-4-1) var(--size-4-3); /* Match button padding */
-		line-height: var(--line-height-normal); /* Match button line height */
+		font-size: inherit;
+		padding: var(--size-4-1) var(--size-4-3);
+		line-height: var(--line-height-normal);
 		background-color: transparent;
 		border: none;
 		color: var(--text-muted);
 		white-space: nowrap;
 		display: inline-flex;
 		align-items: center;
-		cursor: default; /* Looks like text */
+		cursor: default;
 	}
-	/* Add cursor only when it's an error */
-	.beancount-status-button.status-error {
-		cursor: pointer;
-	}
-	/* Don't change background on hover unless it's an error */
-	.beancount-status-button:not(.status-error):hover {
-		background-color: transparent;
-	}
-	/* Keep color styles for spans */
-	.beancount-status-button span {
-		font-weight: 500;
-	}
-	.beancount-status-button.status-ok span {
-		color: var(--text-success);
-	}
-	.beancount-status-button.status-error span {
-		color: var(--text-error);
-	}
-	/* REMOVED: .beancount-status-container pre rule */
+	.beancount-status-button.status-error { cursor: pointer; }
+	.beancount-status-button:not(.status-error):hover { background-color: transparent; }
+	.beancount-status-button span { font-weight: 500; }
+	.beancount-status-button.status-ok span { color: var(--text-success); }
+	.beancount-status-button.status-error span { color: var(--text-error); }
 
-	/* --- Other styles --- */
+	.clickable-icon { /* Style for icon buttons */
+		padding: 4px;
+		cursor: pointer;
+		background: none;
+		border: none;
+		color: var(--icon-color);
+		display: inline-flex; /* Helps alignment */
+		align-items: center;
+	}
+	.clickable-icon:hover { color: var(--icon-color-hover); }
+	.clickable-icon svg { width: var(--icon-xs); height: var(--icon-xs); vertical-align: middle; }
+
+	/* --- Other styles remain the same --- */
 	.beancount-kpi-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
 	.kpi-metric { display: flex; flex-direction: column; padding: 10px 12px; background-color: var(--background-secondary); border-radius: 6px; border: 1px solid var(--background-modifier-border); }
 	.kpi-label { font-size: var(--font-ui-small); color: var(--text-muted); margin-bottom: 4px; }
@@ -190,7 +193,19 @@
 	.beancount-table th { text-align: left; font-size: var(--font-ui-small); font-weight: 600; color: var(--text-muted); padding: 8px 6px; border-bottom: 1px solid var(--background-modifier-border); text-transform: capitalize; }
 	.beancount-table td { padding: 6px; border-bottom: 1px solid var(--background-secondary); }
 	.beancount-table tbody tr:nth-child(even) { background-color: var(--background-secondary); }
-	/* CHANGE: Renamed .class_right to .align-right */
 	.align-right { text-align: right; font-family: var(--font-monospace); }
 	.beancount-error-message { color: var(--text-error); font-size: var(--font-ui-small); padding: 10px; background-color: var(--background-secondary-alt); border-radius: 6px; border: 1px solid var(--background-modifier-border); grid-column: 1 / -1; word-break: break-all; white-space: pre-wrap; }
+	/* Add these styles inside the <style> block */
+
+	/* Target the last row in the table body */
+	.beancount-table tbody tr:last-child {
+		font-weight: 600; /* Make text bold */
+		border-top: 2px solid var(--background-modifier-border); /* Add a top border */
+		background-color: var(--background-secondary); /* Ensure background matches zebra striping */
+	}
+
+	/* Optional: Style the 'Total' label cell differently */
+	.beancount-table tbody tr:last-child td:first-child {
+		color: var(--text-muted);
+	}
 </style>
