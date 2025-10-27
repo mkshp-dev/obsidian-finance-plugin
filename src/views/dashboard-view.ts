@@ -3,8 +3,6 @@
 import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import type BeancountPlugin from '../main';
 import DashboardComponent from './DashboardView.svelte';
-// Import utils and query functions
-import { runQuery, parseAmount } from '../utils/index'; // Assuming parseAmount moved here too
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 

@@ -104,3 +104,9 @@ export function getBeanCheckCommand(filePath: string, commandBase: string): stri
 	const checkCommandBase = commandBase.replace(/bean-query(.exe)?$/, 'bean-check$1');
 	return `${checkCommandBase} "${filePath}"`;
 }
+/** Gets historical net worth data */
+export function getHistoricalNetWorthDataQuery(interval: string = 'month'): string {
+	// Select the grouping interval (e.g., month) and the SUM of positions
+	// We also need the account type to separate assets and liabilities later
+	return `SELECT ${interval}, account, SUM(position) WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
+}
