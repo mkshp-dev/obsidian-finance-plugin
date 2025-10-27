@@ -1,6 +1,6 @@
+// src/views/overview-view.ts
 import { ItemView, WorkspaceLeaf } from 'obsidian';
-import type BeancountPlugin from './main';
-// We will create this Svelte component next
+import type BeancountPlugin from '../main';
 import OverviewComponent from './OverviewView.svelte';
 
 export const OVERVIEW_VIEW_TYPE = "beancount-overview-view";

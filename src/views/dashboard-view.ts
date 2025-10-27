@@ -1,7 +1,6 @@
-
+// src/views/dashboard-view.ts
 import { ItemView, WorkspaceLeaf } from 'obsidian';
-import type BeancountPlugin from './main';
-// We will create this Svelte component next
+import type BeancountPlugin from '../main';
 import DashboardComponent from './DashboardView.svelte'; 
 
 export const DASHBOARD_VIEW_TYPE = "beancount-dashboard-view";

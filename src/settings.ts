@@ -2,8 +2,7 @@
 
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian'; // Added Notice for potential errors
 import type BeancountPlugin from './main';
-// --- ADD Import for query function ---
-import { getTestConnectionQuery } from './queries';
+import { getTestConnectionQuery } from './queries/index';
 // ------------------------------------
 
 export interface BeancountPluginSettings {

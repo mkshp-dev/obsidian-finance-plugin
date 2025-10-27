@@ -1,4 +1,4 @@
-// src/queries.ts
+// src/queries/index.ts
 
 // --- Types for Filters (Optional but helpful) ---
 export interface TransactionFilters {

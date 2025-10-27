@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Notice } from 'obsidian';
-	import CardComponent from './CardComponent.svelte';
-	// --- ADD IMPORTS ---
-	import * as queries from './queries';
-	import { parseAmount } from './utils'; // Import parseAmount
+	import CardComponent from '../components/CardComponent.svelte';
+	import * as queries from '../queries/index';
+	import { parseAmount } from '../utils/index'; 
 
 	export let runQuery: (query: string) => Promise<string>;
 	export let parseSingleValue: (csv: string) => string;

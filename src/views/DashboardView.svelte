@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { parse } from 'csv-parse/sync';
-	import HierarchicalDropdown from './HierarchicalDropdown.svelte';
-	import { buildAccountTree, debounce } from './utils'; // Removed runQuery
+	import HierarchicalDropdown from '../components/HierarchicalDropdown.svelte';
+	import { buildAccountTree, debounce } from '../utils/index'; // Removed runQuery
 	export let runQuery: (query: string) => Promise<string>;
 
 	// Component State

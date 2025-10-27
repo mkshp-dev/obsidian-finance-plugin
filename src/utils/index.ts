@@ -1,7 +1,7 @@
-// src/utils.ts
+// src/utils/index.ts
 import { exec } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
-import type BeancountPlugin from './main'; // Needed for settings type
+import type BeancountPlugin from '../main'; // Needed for settings type
 
 // --- QUERY RUNNER ---
 // Pass the plugin instance to access settings

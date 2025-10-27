@@ -2,15 +2,11 @@
 
 import { App, Modal, Notice } from 'obsidian';
 import * as fs from 'fs';
-import type BeancountPlugin from './main';
-// --- Removed parse import ---
+import type BeancountPlugin from '../main';
 import TransactionFormComponent from './TransactionForm.svelte';
-// --- ADD IMPORTS ---
-import { runQuery, convertWslPathToWindows } from './utils'; // Import utils
-import { getAllAccountsQuery } from './queries'; // Import query function
-// Need parse for processing account list
+import { runQuery, convertWslPathToWindows } from '../utils/index'; 
+import { getAllAccountsQuery } from '../queries/index'; 
 import { parse as parseCsv } from 'csv-parse/sync';
-// -----------------
 
 export class TransactionModal extends Modal {
 	plugin: BeancountPlugin;
@@ -31,7 +27,7 @@ export class TransactionModal extends Modal {
 			// --- Use imported query function ---
 			const query = getAllAccountsQuery();
 			// --- Use imported runQuery (via plugin instance) ---
-			const result = await this.plugin.runQuery(query);
+			const result = await runQuery(this.plugin, query);
 			const cleanStdout = result.replace(/\r/g, "").trim();
 			// --- Use imported parseCsv ---
 			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true });

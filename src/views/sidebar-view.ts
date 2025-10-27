@@ -1,13 +1,10 @@
-// src/view.ts
-
+// src/views/sidebar-view.ts
 import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer, TFile } from 'obsidian';
-// --- ADD missing imports ---
 import { exec } from 'child_process';
-import * as path from 'path'; // Keep path import
-import type BeancountPlugin from './main';
-import BeancountViewComponent from './BeancountView.svelte'; // Assuming this is the correct Svelte component for the sidebar
-import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils';
-import * as queries from './queries';
+import type BeancountPlugin from '../main';
+import BeancountViewComponent from './SidebarView.svelte'; // Assuming this is the correct Svelte component for the sidebar
+import { runQuery, parseSingleValue, convertWslPathToWindows } from '../utils/index';
+import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 // ----------------------------------------
 

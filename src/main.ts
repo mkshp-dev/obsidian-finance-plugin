@@ -1,14 +1,12 @@
 // src/main.ts
 
 import { Plugin } from 'obsidian';
-// --- Removed exec, parseCsv imports as they are now in utils ---
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
-import { BeancountView, BEANCOUNT_VIEW_TYPE } from './view'; // Sidebar view
-import { TransactionModal } from './transaction-modal';
-import { DashboardView, DASHBOARD_VIEW_TYPE } from './dashboard-view';
-import { OverviewView, OVERVIEW_VIEW_TYPE } from './overview-view';
-// --- ADD: Import necessary functions from utils ---
-import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils';
+import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view'; 
+import { TransactionModal } from './components/transaction-modal';
+import { DashboardView, DASHBOARD_VIEW_TYPE } from './views/dashboard-view';
+import { OverviewView, OVERVIEW_VIEW_TYPE } from './views/overview-view';
+import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
 // --------------------------------------------------
 
 export default class BeancountPlugin extends Plugin {
