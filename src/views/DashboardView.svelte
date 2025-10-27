@@ -31,9 +31,6 @@
 	// AccountNode Interface (can stay here or move to types/index.ts)
 	interface AccountNode { name: string; fullName: string | null; children: AccountNode[]; }
 
-	// --- REMOVED buildAccountTree function definition ---
-	// --- REMOVED debounce function definition ---
-
 	// Debounce handlers (use imported debounce)
 	const updateDebouncedPayee = debounce((value: string) => { debouncedPayeeFilter = value; }, 1000);
 	const updateDebouncedTag = debounce((value: string) => { debouncedTagFilter = value; }, 1000);
@@ -69,9 +66,6 @@
 		} catch (e) { console.error("DashboardView: ERROR in onMount:", e); error = `Failed to load accounts or tags: ${e.message}`;
 		} finally { isLoadingAccounts = false; }
 	});
-
-	// --- REMOVE fetchTransactions function ---
-	// This logic will be moved to the parent dashboard-view.ts
 
 	// --- Sorting logic remains in Svelte component for now ---
 	function sortTransactions() {
