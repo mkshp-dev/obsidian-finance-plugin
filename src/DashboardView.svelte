@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { parse } from 'csv-parse/sync';
 	import HierarchicalDropdown from './HierarchicalDropdown.svelte';
-
+	import { buildAccountTree, debounce } from './utils'; // Removed runQuery
 	export let runQuery: (query: string) => Promise<string>;
 
 	// Component State
@@ -29,35 +29,6 @@
 
 	// Tree Parsing Utility
 	interface AccountNode { name: string; fullName: string | null; children: AccountNode[]; }
-	function buildAccountTree(accounts: string[]): AccountNode[] {
-		const root: AccountNode = { name: 'Root', fullName: '', children: [] };
-		accounts.sort();
-		for (const account of accounts) {
-			if (!account) continue;
-			const parts = account.split(':'); let currentNode = root;
-			for (let i = 0; i < parts.length; i++) {
-				const part = parts[i]; const fullName = parts.slice(0, i + 1).join(':');
-				let childNode = currentNode.children.find(child => child.name === part);
-				if (!childNode) { childNode = { name: part, fullName: fullName, children: [] }; currentNode.children.push(childNode); }
-				currentNode = childNode;
-			}
-		}
-		return root.children;
-	}
-// --- Debounce Utility ---
-	function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-		let timeout: ReturnType<typeof setTimeout> | null = null;
-		return function executedFunction(...args: Parameters<T>) {
-			const later = () => {
-				timeout = null;
-				func(...args);
-			};
-			if (timeout !== null) {
-				clearTimeout(timeout);
-			}
-			timeout = setTimeout(later, wait);
-		};
-	}
 
 // --- Add this Debounced update function ---
 	const updateDebouncedPayee = debounce((value: string) => {
@@ -120,7 +91,7 @@
 			console.log("DashboardView: onMount finished.");
 		}
 	});
-	async function fetchTransactions(account: string | null, start: string | null, end: string | null, payee: string | null) {
+	async function fetchTransactions(account: string | null, start: string | null, end: string | null, payee: string | null, tag: string | null) {
 		if (account === undefined) return;
 		isLoadingTransactions = true; transactions = []; error = null;
 		try {
@@ -133,12 +104,12 @@
 			if (start) { whereClauses.push(`date >= ${start}`); }
 			if (end) { whereClauses.push(`date <= ${end}`); }
 			if (payee && payee.trim() !== '') { whereClauses.push(`payee ~ '${payee.replace(/'/g, "''")}'`); }
-			if (tagFilter && tagFilter.trim() !== '') {
+			if (tag && tag.trim() !== '') { // <-- Use 'tag' parameter
 				// Remove leading '#' if present, trim whitespace, escape quotes
-				const tagName = tagFilter.replace(/^#/, '').trim().replace(/'/g, "''");
+				const tagName = tag.replace(/^#/, '').trim().replace(/'/g, "''"); // <-- Use 'tag' parameter
 				// Only add the clause if the tag name isn't empty after trimming
 				if (tagName) {
-					whereClauses.push(`('${tagName}') IN tags`); // Use BQL's HAS_TAG function
+					whereClauses.push(`'${tagName}' IN tags`); // Use BQL's HAS_TAG function
 				}
 			}
 			if (whereClauses.length > 0) { query = `${selectPart} WHERE ${whereClauses.join(' AND ')} ${orderByPart}`; }
@@ -242,7 +213,7 @@
 	//    The check for selectedAccount !== undefined prevents running before onMount.
 	$: if (selectedAccount !== undefined && filterKey) { // <-- ADD filterKey check here
 		console.log(`FETCH TRIGGERED by key change: ${filterKey}`);
-		fetchTransactions(selectedAccount, startDate, endDate, debouncedPayeeFilter);
+		fetchTransactions(selectedAccount, startDate, endDate, debouncedPayeeFilter, debouncedTagFilter); // <-- Add debouncedTagFilter here
 	}
 
 	// 4. SORT TRIGGERS remain separate
