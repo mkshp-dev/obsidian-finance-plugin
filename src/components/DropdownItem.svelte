@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AccountNode } from './DashboardView.svelte'; // Import the type
+	import type { AccountNode } from '../views/DashboardView.svelte'; // Import the type
 	import { createEventDispatcher } from 'svelte';
 
 	// Props for this item

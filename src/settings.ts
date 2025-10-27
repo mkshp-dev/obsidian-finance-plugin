@@ -1,8 +1,9 @@
 // src/settings.ts
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
-// We need to import the main plugin type to call runQuery
-import type BeancountPlugin from './main'; 
+import { App, PluginSettingTab, Setting, Notice } from 'obsidian'; // Added Notice for potential errors
+import type BeancountPlugin from './main';
+import { getTestConnectionQuery } from './queries/index';
+// ------------------------------------
 
 export interface BeancountPluginSettings {
     beancountFilePath: string;
@@ -42,7 +43,7 @@ export class BeancountSettingTab extends PluginSettingTab {
                     this.plugin.settings.beancountCommand = value;
                     await this.plugin.saveSettings();
                 }));
-        
+
         new Setting(containerEl)
             .setName('Path to beancount file')
             .setDesc('Enter the absolute path to your main .beancount file.')
@@ -54,9 +55,7 @@ export class BeancountSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // --- NEW: Test Connection Button ---
-        
-        // This div will hold our status messages
+        // --- Test Connection Button ---
         const testResultEl = containerEl.createEl('div', { cls: 'beancount-test-results' });
 
         new Setting(containerEl)
@@ -71,25 +70,36 @@ export class BeancountSettingTab extends PluginSettingTab {
                     testResultEl.removeClass('beancount-test-success');
                     testResultEl.removeClass('beancount-test-error');
 
-                    // 2. Run the test
+                    // 2. Check if settings are configured
+                    if (!this.plugin.settings.beancountCommand || !this.plugin.settings.beancountFilePath) {
+                        testResultEl.setText(`❌ Failed: Please configure both Beancount command and file path.`);
+                        testResultEl.addClass('beancount-test-error');
+                        return;
+                    }
+
+                    // 3. Run the test using imported query function
                     try {
-                        // We use a simple, safe query that requires both the
-                        // command to work AND the file to be readable.
-                        await this.plugin.runQuery('SELECT account LIMIT 1');
-                        // 3. Handle Success
+                        // --- Use imported query function ---
+                        const query = getTestConnectionQuery();
+                        await this.plugin.runQuery(query); // Calls runQuery from main.ts
+                        // -----------------------------------
+
+                        // 4. Handle Success
                         testResultEl.setText('✅ Success! Your command and file path are correct.');
                         testResultEl.addClass('beancount-test-success');
 
                     } catch (error) {
-                        // 4. Handle Failure
+                        // 5. Handle Failure
                         testResultEl.setText(`❌ Failed: ${error.message}`);
                         testResultEl.addClass('beancount-test-error');
+                        // Optional: Log full error for debugging
+                        console.error("Beancount connection test failed:", error);
                     }
                 }));
 
         // --- Transaction Form Settings ---
         containerEl.createEl('h3', { text: 'Transaction Form' });
-        
+
         new Setting(containerEl)
             .setName('Default currency')
             .setDesc('The default currency to use in the transaction form.')

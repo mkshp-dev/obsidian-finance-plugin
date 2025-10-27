@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AccountNode } from './DashboardView.svelte';
+	import type { AccountNode } from '../views/DashboardView.svelte'; // Import the type
 	import DropdownItem from './DropdownItem.svelte'; // Import the item component
 	import { createEventDispatcher } from 'svelte';
     

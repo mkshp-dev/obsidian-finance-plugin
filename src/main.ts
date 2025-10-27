@@ -1,141 +1,127 @@
-import { OverviewView, OVERVIEW_VIEW_TYPE } from './overview-view'; // Add this
+// src/main.ts
+
 import { Plugin } from 'obsidian';
-import { DashboardView, DASHBOARD_VIEW_TYPE } from './dashboard-view';
-import { exec } from 'child_process'; 
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
-import { BeancountView, BEANCOUNT_VIEW_TYPE } from './view';
-import { TransactionModal } from './transaction-modal';
-import { parse } from 'path/win32';
-import { parse as parseCsv } from 'csv-parse/sync'; // <-- Import and alias it
-import * as path from 'path';
+import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view'; 
+import { TransactionModal } from './components/transaction-modal';
+import { DashboardView, DASHBOARD_VIEW_TYPE } from './views/dashboard-view';
+import { OverviewView, OVERVIEW_VIEW_TYPE } from './views/overview-view';
+import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
+// --------------------------------------------------
+
 export default class BeancountPlugin extends Plugin {
 	settings: BeancountPluginSettings;
+
 	async onload() {
 		await this.loadSettings();
+
+		// Register Views
 		this.registerView(
 			OVERVIEW_VIEW_TYPE,
 			(leaf) => new OverviewView(leaf, this)
 		);
 		this.registerView(
-			BEANCOUNT_VIEW_TYPE,
+			BEANCOUNT_VIEW_TYPE, // Sidebar Snapshot
 			(leaf) => new BeancountView(leaf, this)
 		);
 		this.registerView(
-			DASHBOARD_VIEW_TYPE,
+			DASHBOARD_VIEW_TYPE, // Main Dashboard (Transactions)
 			(leaf) => new DashboardView(leaf, this)
 		);
-		this.addRibbonIcon('dollar-sign', 'Open Beancount View', () => {
-			this.activateView();
+
+		// Add Ribbon Icons
+		this.addRibbonIcon('dollar-sign', 'Open Beancount Snapshot', () => {
+			this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); // Specify type and location
 		});
 		this.addRibbonIcon('pie-chart', 'Open Beancount Overview', () => {
-			this.activateOverviewView();
+			this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); // Specify type and location
 		});
+		// Consider adding one for the main Dashboard too
+		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
+			this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); // Specify type and location
+		});
+
+		// Add Commands
 		this.addCommand({
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount Transaction',
-			callback: () => {
-				new TransactionModal(this.app, this).open();
-			}
+			callback: () => { new TransactionModal(this.app, this).open(); }
 		});
 		this.addCommand({
-			id: 'open-beancount-dashboard', // New ID
-			name: 'Open Beancount Dashboard', // New Name
-			callback: () => {
-				this.activateDashboardView(); // Call renamed helper
-			}
+			id: 'open-beancount-dashboard',
+			name: 'Open Beancount Dashboard',
+			callback: () => { this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); }
 		});
-		// ... (after other commands)
 		this.addCommand({
 			id: 'open-beancount-overview',
 			name: 'Open Beancount Overview',
-			callback: () => {
-				this.activateOverviewView();
-			}
+			callback: () => { this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); }
 		});
+		// Consider adding command for Snapshot view?
+		this.addCommand({
+			id: 'open-beancount-snapshot',
+			name: 'Open Beancount Snapshot',
+			callback: () => { this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); }
+		});
+
+
 		this.addSettingTab(new BeancountSettingTab(this.app, this));
 	}
 
-	async activateView() {
-		this.app.workspace.detachLeavesOfType(BEANCOUNT_VIEW_TYPE);
-		const leaf = this.app.workspace.getRightLeaf(false);
-		if (leaf) {
-			await leaf.setViewState({ type: BEANCOUNT_VIEW_TYPE, active: true });
-			this.app.workspace.revealLeaf(leaf);
-		}
-	}
+	// --- REFACTORED: Generic activateView function ---
+	async activateView(viewType: string, location: 'tab' | 'right' | 'left' = 'tab') {
+		// Detach existing leaves of this type first to avoid duplicates
+		this.app.workspace.detachLeavesOfType(viewType);
 
-	// src/main.ts -> Add this method to BeancountPlugin class
-	async activateOverviewView() {
-		this.app.workspace.detachLeavesOfType(OVERVIEW_VIEW_TYPE); // Close existing first
-		const leaf = this.app.workspace.getLeaf('tab'); // Open in main area
-		await leaf.setViewState({
-			type: OVERVIEW_VIEW_TYPE,
-			active: true,
-		});
-		this.app.workspace.revealLeaf(leaf);
-	}
-	// --- THIS IS THE FUNCTION THAT WAS MOVED ---
-	// It must be PUBLIC and INSIDE the BeancountPlugin class
-	public runQuery(query: string): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const filePath = this.settings.beancountFilePath;
-			const commandName = this.settings.beancountCommand;
-
-			if (!filePath) return reject(new Error('Beancount file path is not set.'));
-			if (!commandName) return reject(new Error('Beancount command is not set.'));
-
-			const command = `${commandName} -f csv "${filePath}" "${query}"`;
-			exec(command, (error, stdout, stderr) => {
-				if (error) return reject(error);
-				if (stderr) return reject(new Error(stderr));
-				resolve(stdout);
-			});
-		});
-	}
-
-// src/main.ts -> Inside BeancountPlugin class
-
-// src/main.ts -> Inside BeancountPlugin class
-
-	public parseSingleValue(csv: string): string { // Changed return type to always be string
-		try {
-			// Use the aliased import 'parseCsv'
-			const records: string[][] = parseCsv(csv, { columns: false, skip_empty_lines: true });
-			// Check if the expected row and cell exist and are not empty
-			if (records.length > 1 && records[1].length > 0 && records[1][0] && records[1][0].trim() !== '') {
-				return records[1][0].trim(); // Return the found value
+		let leaf;
+		if (location === 'right') {
+			leaf = this.app.workspace.getRightLeaf(false);
+			// If right leaf doesn't exist, create it
+			if (!leaf) {
+				leaf = this.app.workspace.getLeaf('split', 'vertical');
 			}
-			// If not found or empty, return a default zero value
-			console.warn("parseSingleValue: No valid data found in CSV, returning '0 USD'. CSV:", csv);
-			return '0 USD'; // Default value
-		} catch (e) {
-            console.error("Error parsing single value CSV:", e, "CSV:", csv); // Add error logging
-            return '0 USD'; // Default value on error
-        }
+		} else if (location === 'left') {
+			leaf = this.app.workspace.getLeftLeaf(false);
+			// If left leaf doesn't exist, create it
+			if (!leaf) {
+				leaf = this.app.workspace.getLeaf('split', 'horizontal');
+			}
+		}
+		 else { // Default to 'tab'
+			leaf = this.app.workspace.getLeaf('tab');
+		}
+
+		if (leaf) {
+			await leaf.setViewState({
+				type: viewType,
+				active: true,
+			});
+			this.app.workspace.revealLeaf(leaf); // Focus the view
+		} else {
+			console.error(`Could not get leaf for location: ${location}`);
+		}
+	}
+	// --- REMOVED: Old activateView, activateDashboardView, activateOverviewView ---
+
+	// --- MOVED TO UTILS: runQuery ---
+	// Make runQuery available publicly for view components
+	public runQuery = (query: string): Promise<string> => {
+		// Call the imported utility function, passing 'this' (the plugin instance)
+		return runQuery(this, query);
 	}
 
+	// --- MOVED TO UTILS: parseSingleValue ---
+	// Make parseSingleValue available publicly
+	public parseSingleValue = (csv: string): string => {
+		return parseSingleValue(csv);
+	}
 
-	public convertWslPathToWindows(wslPath: string): string {
-		const match = wslPath.match(/^\/mnt\/([a-zA-Z])\//);
-		if (match) {
-			const driveLetter = match[1].toUpperCase();
-			return wslPath.replace(/^\/mnt\/[a-zA-Z]\//, `${driveLetter}:\\`).replace(/\//g, '\\');
-		}
-		return wslPath;
+	// --- MOVED TO UTILS: convertWslPathToWindows ---
+	// Make convertWslPathToWindows available publicly
+	public convertWslPathToWindows = (wslPath: string): string => {
+		return convertWslPathToWindows(wslPath);
 	}
-	async activateDashboardView() { // Renamed from activateAccountView
-		const existingLeaves = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE);
-		if (existingLeaves.length > 0) {
-			this.app.workspace.revealLeaf(existingLeaves[0]);
-			return;
-		}
-		const leaf = this.app.workspace.getLeaf('tab');
-		await leaf.setViewState({
-			type: DASHBOARD_VIEW_TYPE,
-			active: true,
-		});
-		this.app.workspace.revealLeaf(leaf);
-	}
+
 	onunload() {}
 	async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
 	async saveSettings() { await this.saveData(this.settings); }
