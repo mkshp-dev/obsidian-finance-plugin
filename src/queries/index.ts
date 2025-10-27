@@ -76,7 +76,7 @@ export function getTransactionsQuery(filters: TransactionFilters): string {
 	if (filters.tag && filters.tag.trim() !== '') {
 		const tagName = filters.tag.replace(/^#/, '').trim().replace(/'/g, "''");
 		if (tagName) {
-			whereClauses.push(`HAS_TAG('${tagName}')`);
+			whereClauses.push(`'${tagName}' IN tags`); // Check tag presence
 		}
 	}
 

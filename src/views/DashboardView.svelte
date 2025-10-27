@@ -1,228 +1,141 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { parse } from 'csv-parse/sync';
+	import { parse } from 'csv-parse/sync'; // Keep parse for onMount processing
 	import HierarchicalDropdown from '../components/HierarchicalDropdown.svelte';
-	import { buildAccountTree, debounce } from '../utils/index'; // Removed runQuery
+	import { buildAccountTree, debounce } from '../utils/index';
+
 	export let runQuery: (query: string) => Promise<string>;
 
-	// Component State
+	// Component State (remains largely the same)
 	let allAccounts: string[] = [];
 	let accountTree: AccountNode[] = [];
 	let selectedAccount: string | null = null;
-	let transactions: string[][] = []; // Original fetched transactions
-	let sortedTransactions: string[][] = []; // Transactions to display
+	let transactions: string[][] = []; // Raw data from parent (if we move fetching)
+	let sortedTransactions: string[][] = []; // Display data
 	let isLoadingAccounts = true;
 	let isLoadingTransactions = false;
 	let error: string | null = null;
 	let startDate: string | null = null;
 	let endDate: string | null = null;
 	let payeeFilter: string = '';
-	let debouncedPayeeFilter: string = ''; // Add this line
-	let allTags: string[] = []; // Add this near other state variables
-	let tagFilter: string = ''; // Input value <<--- HERE IT IS
-	let debouncedTagFilter: string = ''; // Debounced value for query
-	// -----------------------------
+	let debouncedPayeeFilter: string = '';
+	let allTags: string[] = [];
+	let tagFilter: string = '';
+	let debouncedTagFilter: string = '';
+
 	// Sorting State
 	type SortColumn = 'date' | 'payee' | 'narration' | 'amount';
 	let sortColumn: SortColumn = 'date';
 	let sortDirection: 'asc' | 'desc' = 'desc';
 
-	// Tree Parsing Utility
+	// AccountNode Interface (can stay here or move to types/index.ts)
 	interface AccountNode { name: string; fullName: string | null; children: AccountNode[]; }
 
-// --- Add this Debounced update function ---
-	const updateDebouncedPayee = debounce((value: string) => {
-		debouncedPayeeFilter = value;
-	}, 1000); // Wait 1000ms after user stops typing
+	// --- REMOVED buildAccountTree function definition ---
+	// --- REMOVED debounce function definition ---
 
-	const updateDebouncedTag = debounce((value: string) => {
-		debouncedTagFilter = value;
-	}, 1000); // Wait 1000ms after user stops typing
+	// Debounce handlers (use imported debounce)
+	const updateDebouncedPayee = debounce((value: string) => { debouncedPayeeFilter = value; }, 1000);
+	const updateDebouncedTag = debounce((value: string) => { debouncedTagFilter = value; }, 1000);
 
+	// onMount still fetches initial dropdown data (accounts, tags)
 	onMount(async () => {
-		console.log("DashboardView: onMount started");
 		isLoadingAccounts = true; error = null;
 		try {
-			console.log("DashboardView: Fetching accounts and tags...");
-			// --- FETCH BOTH ACCOUNTS AND TAGS ---
+			// Use runQuery prop passed from parent
 			const [accountResult, tagResult] = await Promise.all([
 				runQuery('SELECT account'),
-				runQuery('SELECT tags') // Query for unique tags
+				runQuery('SELECT tags')
 			]);
-			// ------------------------------------
 
-			// --- Process Accounts (unchanged) ---
-			console.log("DashboardView: Processing accounts...");
+			// Process Accounts (Use imported buildAccountTree)
 			const cleanAccountStdout = accountResult.replace(/\r/g, "").trim();
 			const accountRecords: string[][] = parse(cleanAccountStdout, { columns: false, skip_empty_lines: true });
 			const firstAccountRowIsHeader = accountRecords[0]?.[0]?.toLowerCase() === 'account';
 			const accountDataRows = firstAccountRowIsHeader ? accountRecords.slice(1) : accountRecords;
 			allAccounts = [...new Set(accountDataRows.map(row => row?.[0]).filter(Boolean))];
-			const builtTree = buildAccountTree(allAccounts);
+			const builtTree = buildAccountTree(allAccounts); // Use imported function
 			const allNode: AccountNode = { name: 'All Accounts', fullName: null, children: [] };
 			accountTree = [allNode, ...builtTree];
-			selectedAccount = null;
-			console.log("DashboardView: Account tree built.");
-			// ----------------------------------
+			selectedAccount = null; // Default selection triggers initial fetch via reactivity
 
-			// --- Process Tags ---
-			console.log("DashboardView: Processing tags...");
+			// Process Tags (unchanged logic)
 			const cleanTagStdout = tagResult.replace(/\r/g, "").trim();
-			// Tags might be comma-separated if multiple on one txn, or single column
 			const tagRecords: string[][] = parse(cleanTagStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
 			const firstTagRowIsHeader = tagRecords[0]?.[0]?.toLowerCase() === 'tags';
 			const tagDataRows = firstTagRowIsHeader ? tagRecords.slice(1) : tagRecords;
+			allTags = [...new Set(tagDataRows.flat().flatMap(tagStr => tagStr ? tagStr.split(',') : []).map(tag => tag.trim()).filter(tag => tag !== ''))];
 
-            // Flatten, split comma-separated, trim, filter empty, create Set, spread to array
-			allTags = [...new Set(
-			    tagDataRows.flat() // Flatten array of arrays
-			        .flatMap(tagStr => tagStr ? tagStr.split(',') : []) // Split comma-separated tags
-			        .map(tag => tag.trim()) // Trim whitespace
-			        .filter(tag => tag !== '') // Remove empty strings
-            )];
-			console.log("DashboardView: Tags processed:", allTags);
-			// --------------------
-
-		} catch (e) {
-			console.error("DashboardView: ERROR in onMount:", e);
-			error = `Failed to load accounts or tags: ${e.message}`;
-		} finally {
-			isLoadingAccounts = false;
-			console.log("DashboardView: onMount finished.");
-		}
+		} catch (e) { console.error("DashboardView: ERROR in onMount:", e); error = `Failed to load accounts or tags: ${e.message}`;
+		} finally { isLoadingAccounts = false; }
 	});
-	async function fetchTransactions(account: string | null, start: string | null, end: string | null, payee: string | null, tag: string | null) {
-		if (account === undefined) return;
-		isLoadingTransactions = true; transactions = []; error = null;
-		try {
-			let query = '';
-			const selectPart = `SELECT date, payee, narration, position`;
-			const whereClauses: string[] = [];
-			const orderByPart = `ORDER BY date DESC`;
 
-			if (account !== null) { whereClauses.push(`account ~ '^${account}'`); }
-			if (start) { whereClauses.push(`date >= ${start}`); }
-			if (end) { whereClauses.push(`date <= ${end}`); }
-			if (payee && payee.trim() !== '') { whereClauses.push(`payee ~ '${payee.replace(/'/g, "''")}'`); }
-			if (tag && tag.trim() !== '') { // <-- Use 'tag' parameter
-				// Remove leading '#' if present, trim whitespace, escape quotes
-				const tagName = tag.replace(/^#/, '').trim().replace(/'/g, "''"); // <-- Use 'tag' parameter
-				// Only add the clause if the tag name isn't empty after trimming
-				if (tagName) {
-					whereClauses.push(`'${tagName}' IN tags`); // Use BQL's HAS_TAG function
-				}
-			}
-			if (whereClauses.length > 0) { query = `${selectPart} WHERE ${whereClauses.join(' AND ')} ${orderByPart}`; }
-			else { query = `${selectPart} ${orderByPart}`; }
+	// --- REMOVE fetchTransactions function ---
+	// This logic will be moved to the parent dashboard-view.ts
 
-			// console.log("DashboardView: Running Query:", query);
-			const result = await runQuery(query);
-			// console.log("DashboardView: Raw Query Result:", result);
-
-			const cleanStdout = result.replace(/\r/g, "").trim();
-			// console.log("DashboardView: Cleaned Query Result:", cleanStdout);
-
-			const records: string[][] = parse(cleanStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
-			// console.log("DashboardView: Parsed Records:", records);
-
-			const defaultHeaders = ['date', 'payee', 'narration', 'position'];
-			const firstRowIsHeader = records[0]?.[0]?.toLowerCase().includes('date');
-			const dataRows = firstRowIsHeader ? records.slice(1) : records;
-
-			transactions = dataRows.map(row => {
-				const completeRow = [...row];
-				while(completeRow.length < defaultHeaders.length) completeRow.push('');
-				return completeRow;
-			});
-			// console.log("DashboardView: 'transactions' state updated:", transactions);
-
-			sortTransactions(); // Explicitly trigger sort
-
-		} catch (e) {
-			const targetAccount = account ?? 'All Accounts';
-			// console.error(`Failed to fetch transactions for ${targetAccount}:`, e);
-			error = `Failed to load transactions: ${e.message}`;
-		} finally {
-			isLoadingTransactions = false;
-			// console.log("DashboardView: fetchTransactions finished.");
-		}
-	}
-
-	// --- COMPLETE sortTransactions FUNCTION ---
+	// --- Sorting logic remains in Svelte component for now ---
 	function sortTransactions() {
-		// console.log("DashboardView: sortTransactions running..."); // Debug Log 3
 		const headers = ['date', 'payee', 'narration', 'amount'];
 		const columnIndex = headers.indexOf(sortColumn);
-		if (columnIndex === -1) {
-			// console.log("DashboardView: sortTransactions - Invalid column index.");
-			return;
-		}
-
-		// Use the raw 'transactions' array for sorting
-		sortedTransactions = [...transactions].sort((a, b) => {
+		if (columnIndex === -1) return;
+		sortedTransactions = [...transactions].sort((a, b) => { // Sorts the 'transactions' prop
 			const valA = a.length > columnIndex ? a[columnIndex] : '';
 			const valB = b.length > columnIndex ? b[columnIndex] : '';
-
 			if (sortColumn === 'amount') {
-				const numRegex = /(-?[\d,]+(?:\.\d+)?)/;
-				const matchA = valA.match(numRegex);
-				const matchB = valB.match(numRegex);
-				const numA = matchA ? parseFloat(matchA[1].replace(/,/g, '')) : 0;
-				const numB = matchB ? parseFloat(matchB[1].replace(/,/g, '')) : 0;
+				const numRegex = /(-?[\d,]+(?:\.\d+)?)/; const matchA = valA.match(numRegex); const matchB = valB.match(numRegex);
+				const numA = matchA ? parseFloat(matchA[1].replace(/,/g, '')) : 0; const numB = matchB ? parseFloat(matchB[1].replace(/,/g, '')) : 0;
 				return sortDirection === 'asc' ? numA - numB : numB - numA;
 			}
-
-			// Default string comparison
-			const comparison = valA.toLowerCase().localeCompare(valB.toLowerCase());
-			return sortDirection === 'asc' ? comparison : -comparison;
+			const comparison = valA.toLowerCase().localeCompare(valB.toLowerCase()); return sortDirection === 'asc' ? comparison : -comparison;
 		});
-		// console.log("DashboardView: 'sortedTransactions' state updated:", sortedTransactions); // Debug Log 4
 	}
-	// ----------------------------------------
-
-	// --- COMPLETE handleSort FUNCTION ---
 	function handleSort(column: SortColumn) {
-		if (sortColumn === column) {
-			// Toggle direction if clicking the same column
-			sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-		} else {
-			// Default to descending for new column
-			sortColumn = column;
-			sortDirection = 'desc';
-		}
-		// Sorting happens automatically via reactive statement below
+		if (sortColumn === column) { sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; }
+		else { sortColumn = column; sortDirection = 'desc'; }
+		// Sort triggers reactively below
 	}
-	// ---------------------------------
-// src/DashboardView.svelte -> Replace this block at the end of <script>
+	// ---------------------------------------------------------
 
-	// --- CORRECTED REACTIVE LOGIC ---
-// Reactive statements
-
-// Reactive statements
-
-// Reactive statements
-
-	// 1. Update debounced value whenever payeeFilter (the input) changes
+	// --- Reactive Statements ---
+	// Update debounced filters
 	$: updateDebouncedPayee(payeeFilter);
 	$: updateDebouncedTag(tagFilter);
 
-	// 2. Create a combined key representing all filter states
-	$: filterKey = `${selectedAccount ?? 'null'}-${startDate ?? 'null'}-${endDate ?? 'null'}-${debouncedPayeeFilter}-${debouncedTagFilter}`;
+	// --- Dispatch filter changes to parent ---
+	// We no longer fetch directly. We tell the parent the filters changed.
+	import { createEventDispatcher } from 'svelte'; // Add this import if not present
+	const dispatch = createEventDispatcher();
 
-	// 3. SINGLE FETCH TRIGGER based on the combined key changing.
-	//    The check for selectedAccount !== undefined prevents running before onMount.
-	$: if (selectedAccount !== undefined && filterKey) { // <-- ADD filterKey check here
-		console.log(`FETCH TRIGGERED by key change: ${filterKey}`);
-		fetchTransactions(selectedAccount, startDate, endDate, debouncedPayeeFilter, debouncedTagFilter); // <-- Add debouncedTagFilter here
+	$: filterState = { // Create an object of all filter values
+		account: selectedAccount,
+		startDate: startDate,
+		endDate: endDate,
+		payee: debouncedPayeeFilter,
+		tag: debouncedTagFilter
+	};
+	$: console.log("Filters Changed:", filterState); // Debug log
+
+	// Dispatch 'filtersChange' event whenever filterState changes AFTER mount
+	let hasMounted = false;
+	onMount(() => { hasMounted = true; });
+	$: if (hasMounted && filterState) {
+		dispatch('filtersChange', filterState);
 	}
+	// ----------------------------------------
 
-	// 4. SORT TRIGGERS remain separate
-	$: if (transactions) { sortTransactions(); }
+	// --- Update: Receive transactions as a prop ---
+	export let incomingTransactions: string[][] = []; // New prop for raw transactions
+	// When the prop changes, update local state and sort
+	$: if (incomingTransactions) {
+		transactions = incomingTransactions;
+		sortTransactions();
+	}
+	// ----------------------------------------------
+
+	// Sorting triggers (unchanged)
 	$: if (sortColumn || sortDirection) { sortTransactions(); }
-	// --------------------------------
 
 </script>
-
 <div class="account-transactions-view">
 	<datalist id="beancount-tags">
 		{#each allTags as tag}
