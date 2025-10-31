@@ -9,12 +9,14 @@ export interface BeancountPluginSettings {
     beancountFilePath: string;
     beancountCommand: string;
     defaultCurrency: string;
+    reportingCurrency: string;
 }
 
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
-    defaultCurrency: 'USD'
+    defaultCurrency: 'USD',
+    reportingCurrency: 'INR'
 }
 
 export class BeancountSettingTab extends PluginSettingTab {
@@ -108,6 +110,16 @@ export class BeancountSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.defaultCurrency)
                 .onChange(async (value) => {
                     this.plugin.settings.defaultCurrency = value;
+                    await this.plugin.saveSettings();
+                }));
+        new Setting(containerEl)
+            .setName('Reporting Currency')
+            .setDesc('The currency to consolidate all totals into (e.g., USD, INR). You must have "price" entries for this to work.')
+            .addText(text => text
+                .setPlaceholder('USD')
+                .setValue(this.plugin.settings.reportingCurrency)
+                .onChange(async (value) => {
+                    this.plugin.settings.reportingCurrency = value;
                     await this.plugin.saveSettings();
                 }));
     }

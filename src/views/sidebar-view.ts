@@ -72,7 +72,11 @@ export class BeancountView extends ItemView {
 	async updateView() {
 		this.updateProps({ isLoading: true, kpiError: null, reportError: null, fileStatus: "checking", fileStatusMessage: null, reportHeaders: [], reportRows: [] });
 		new Notice('Refreshing snapshot...');
-
+		const reportingCurrency = this.plugin.settings.reportingCurrency;
+        if (!reportingCurrency) {
+            this.updateProps({ kpiError: "Reporting Currency is not set in settings.", isLoading: false });
+            return;
+        }
 		try {
 			// Run KPI queries and bean check concurrently
 			const [
@@ -82,8 +86,8 @@ export class BeancountView extends ItemView {
 			] = await Promise.all([
 				Promise.all([
 					// --- Use imported runQuery and query functions ---
-					runQuery(this.plugin, queries.getTotalAssetsQuery()),
-					runQuery(this.plugin, queries.getTotalLiabilitiesQuery())
+					runQuery(this.plugin, queries.getTotalAssetsCostQuery(reportingCurrency)),
+					runQuery(this.plugin, queries.getTotalLiabilitiesCostQuery(reportingCurrency))
 				]),
 				this.renderReport('assets'), // Render default report
 				this.runBeanCheck()
