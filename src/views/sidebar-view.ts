@@ -214,15 +214,17 @@ export class BeancountView extends ItemView {
 		// --- Use imported query function ---
 		const command = queries.getBeanCheckCommand(filePath, commandBase);
 
-		console.log("Running bean-check:", command);
+		// console.log("Running bean-check:", command);
 		return new Promise((resolve) => {
 			// --- Need exec import from child_process ---
 			exec(command, (error, stdout, stderr) => {
 				if (error || stdout || stderr) {
 					const errorMessage = stdout || stderr || (error ? error.message : "Unknown check error.");
-					console.error("bean-check failed:", errorMessage); resolve({ status: "error", message: errorMessage });
+					// console.error("bean-check failed:", errorMessage); 
+					resolve({ status: "error", message: errorMessage });
 				} else {
-					console.log("bean-check successful"); resolve({ status: "ok", message: "File OK" });
+					// console.log("bean-check successful"); 
+					resolve({ status: "ok", message: "File OK" });
 				}
 			});
 			// ------------------------------------------
