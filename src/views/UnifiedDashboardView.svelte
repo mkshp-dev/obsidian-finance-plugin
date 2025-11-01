@@ -4,14 +4,21 @@
 	import TransactionsTab from '../components/tabs/TransactionsTab.svelte';
 	import BalanceSheetTab from '../components/tabs/BalanceSheetTab.svelte';
 	import { createEventDispatcher } from 'svelte';
+	
+	// --- Import Controller Types ---
+	import type { OverviewController } from '../controllers/OverviewController';
+	import type { TransactionController } from '../controllers/TransactionController';
+	import type { BalanceSheetController } from '../controllers/BalanceSheetController';
 
+	// --- Receive Controllers as props ---
 	export let plugin: BeancountPlugin;
-	// Receive the state objects as props
-	export let transactionState: any = {};
-	export let overviewState: any = {};
+	export let overviewController: OverviewController;
+	export let transactionController: TransactionController;
+	export let balanceSheetController: BalanceSheetController;
+	// --- REMOVED transactionState prop ---
 
 	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet';
-	let activeTab: Tab = 'Overview';
+	let activeTab: Tab = 'Overview'; // Default to Overview
 
 	const dispatch = createEventDispatcher();
 	function forwardFiltersChange(event: any) {
@@ -28,25 +35,16 @@
 
 	<div class="tab-content">
 		{#if activeTab === 'Overview'}
-			<OverviewTab
-				isLoading={overviewState.isLoading}
-				error={overviewState.error}
-				netWorth={overviewState.netWorth}
-				monthlyIncome={overviewState.monthlyIncome}
-				monthlyExpenses={overviewState.monthlyExpenses}
-				savingsRate={overviewState.savingsRate}
-				chartConfig={overviewState.chartConfig}
-				chartError={overviewState.chartError}
-			/>
+			<OverviewTab controller={overviewController} />
+
 		{:else if activeTab === 'Transactions'}
 			<TransactionsTab
-				{plugin} isLoading={transactionState.isLoading}
-				error={transactionState.error}
-				incomingTransactions={transactionState.currentTransactions}
+				controller={transactionController}
 				on:filtersChange={forwardFiltersChange}
 			/>
+
 		{:else if activeTab === 'Balance Sheet'}
-			<BalanceSheetTab {plugin} />
+			<BalanceSheetTab controller={balanceSheetController} />
 		{/if}
 	</div>
 </div>

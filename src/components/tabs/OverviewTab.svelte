@@ -1,42 +1,58 @@
 <script lang="ts">
-	// This component is now "dumb". It just receives props.
 	import CardComponent from '../CardComponent.svelte';
 	import ChartComponent from '../ChartComponent.svelte';
+	import type { OverviewController } from '../../controllers/OverviewController';
 	import type { ChartConfiguration } from 'chart.js/auto';
+	import { writable, type Writable } from 'svelte/store'; // Import writable
+	import type { OverviewState } from '../../controllers/OverviewController'; // Import the State type
 
-	// Props received from the parent view
-	export let isLoading: boolean = true;
-	export let error: string | null = null;
-	export let netWorth: string = '0.00 USD';
-	export let monthlyIncome: string = '0.00 USD';
-	export let monthlyExpenses: string = '0.00 USD';
-	export let savingsRate: string = '0%';
-	export let chartConfig: ChartConfiguration | null = null;
-	export let chartError: string | null = null;
+	// --- Receive the controller ---
+	export let controller: OverviewController;
 
-	// All onMount, runQuery, and helper functions are GONE.
+	// --- THIS IS THE FIX ---
+	// 1. Create a local, placeholder store with default values.
+	//    This ensures $stateStore is always a valid store.
+	const placeholderState: Writable<OverviewState> = writable({
+		isLoading: true,
+		error: null,
+		netWorth: '0.00 USD',
+		monthlyIncome: '0.00 USD',
+		monthlyExpenses: '0.00 USD',
+		savingsRate: '0%',
+		chartConfig: null,
+		chartError: null,
+		currency: 'USD',
+	});
+
+	// 2. Use a reactive statement ($:) to update the local store variable
+	//    *after* the 'controller' prop is passed in.
+	$: stateStore = controller ? controller.state : placeholderState;
+	
+	// 3. Now, '$stateStore' will safely subscribe, starting with the
+	//    placeholder and then automatically switching to the real store.
+	$: state = $stateStore;
+	// -----------------------
 </script>
-
 <div class="beancount-overview">
-	{#if isLoading}
+	{#if state.isLoading}
 		<p>Loading overview data...</p>
-	{:else if error}
-		<p class="error-message">Error: {error}</p>
+	{:else if state.error}
+		<p class="error-message">Error: {state.error}</p>
 	{:else}
 		<div class="kpi-grid">
-			<CardComponent label="Total Balance" value={netWorth} />
-			<CardComponent label="Monthly Income" value={monthlyIncome} />
-			<CardComponent label="Monthly Expenses" value={monthlyExpenses} />
-			<CardComponent label="Savings Rate" value={savingsRate} />
+			<CardComponent label="Total Balance" value={state.netWorth} />
+			<CardComponent label="Monthly Income" value={state.monthlyIncome} />
+			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} />
+			<CardComponent label="Savings Rate" value={state.savingsRate} />
 		</div>
-
+		
 		<div class="chart-container">
-			{#if chartError}
-				<p class="error-message">Chart Error: {chartError}</p>
-			{:else if chartConfig}
+			{#if state.chartError}
+				<p class="error-message">Chart Error: {state.chartError}</p>
+			{:else if state.chartConfig}
 				<h4>Net Worth Over Time</h4>
-				<ChartComponent config={chartConfig} height="300px"/>
-			{:else if !isLoading}
+				<ChartComponent config={state.chartConfig} height="300px"/>
+			{:else if !state.isLoading}
 				<p>Not enough data to display chart.</p>
 			{/if}
 		</div>
@@ -44,6 +60,7 @@
 </div>
 
 <style>
+	/* Styles remain unchanged */
 	.beancount-overview { padding: var(--size-4-4); }
 	.kpi-grid {
 		display: grid;
