@@ -82,33 +82,51 @@ export function debounce<T extends (...args: any[]) => any>(func: T, wait: numbe
 	};
 }
 
-// src/utils.ts
-// ... (other functions)
+// src/utils/index.ts
+// ... (at the end of the file, after the debounce function)
 
-// --- AMOUNT PARSER HELPER ---
-export function parseAmount(amountString: string): { amount: number; currency: string } {
-    // Default values
-    const defaultValue = { amount: 0, currency: 'USD' }; // Or determine default currency elsewhere
-
-    if (!amountString || typeof amountString !== 'string') {
-        return defaultValue;
-    }
-
-    // Regex to capture number (with optional sign, commas) and currency symbol
-    const match = amountString.match(/(-?[\d,]+(?:\.\d+)?)\s*(\S+)/);
-    if (match) {
-        try {
-            const amount = parseFloat(match[1].replace(/,/g, ''));
-            const currency = match[2];
-            return { amount: isNaN(amount) ? 0 : amount, currency: currency || 'USD' };
-        } catch (e) {
-            console.error("Error parsing amount:", e, "String:", amountString);
-            return defaultValue; // Return default on parsing error
-        }
-    }
-    console.warn("Could not parse amount string:", amountString);
-    return defaultValue; // Return default if regex doesn't match
+// --- DATE HELPER ---
+export function getCurrentMonthRange(): { start: string, end: string } {
+	const now = new Date();
+	const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+	const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+	const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+	return { start: formatDate(startOfMonth), end: formatDate(endOfMonth) };
 }
-// ----------------------------
 
-// ... (rest of utils.ts)
+export function parseAmount(amountString: string): { amount: number; currency: string } {
+	// Default values
+	const defaultValue = { amount: 0, currency: 'USD' };
+	if (!amountString || typeof amountString !== 'string') {
+		return defaultValue;
+	}
+
+	const match = amountString.match(/(-?[\d,]+(?:\.\d+)?)\s*(\S+)/);
+	if (match) {
+		try {
+			const amount = parseFloat(match[1].replace(/,/g, ''));
+			const currency = match[2];
+			return { amount: isNaN(amount) ? 0 : amount, currency: currency || 'USD' };
+		} catch (e) {
+			console.error("Error parsing amount:", e, "String:", amountString);
+			return defaultValue;
+		}
+	}
+	console.warn("Could not parse amount string:", amountString);
+	return defaultValue;
+}
+
+export function extractConvertedAmount(inventoryString: string, targetCurrency: string): string {
+	// Regex to find the number associated with the *specific* target currency
+	const regex = new RegExp(`(-?[\\d,]+\\.?\\d*)\\s*${targetCurrency}`);
+	const match = inventoryString.match(regex);
+
+	if (match) {
+		// Found it, return the number and currency
+		return `${match[1]} ${targetCurrency}`;
+	}
+	// If currency not found, it means the total was 0
+	return `0.00 ${targetCurrency}`;
+}
+
+// ----------------------------

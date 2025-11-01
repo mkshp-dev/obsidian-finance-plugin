@@ -21,24 +21,32 @@ export function getAllTagsQuery(): string {
 	return `SELECT tags`; // Post-processing needed for unique list
 }
 
-/** Gets sum for Asset accounts */
-export function getTotalAssetsQuery(): string {
-	return `SELECT sum(position) WHERE account ~ '^Assets'`;
+// src/queries/index.ts
+
+// ... (other query functions)
+
+/** Gets unconverted inventory of all Asset accounts */
+export function getTotalAssetsInventoryQuery(): string { // <-- Renamed
+  return `SELECT sum(position) WHERE account ~ '^Assets'`;
 }
 
-/** Gets sum for Liability accounts */
-export function getTotalLiabilitiesQuery(): string {
-	return `SELECT sum(position) WHERE account ~ '^Liabilities'`;
+/** Gets converted cost of all Asset accounts */
+export function getTotalAssetsCostQuery(currency: string): string { // <-- NEW
+  return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Assets'`;
 }
 
-/** Gets sum for Income accounts within a date range */
-export function getMonthlyIncomeQuery(startDate: string, endDate: string): string {
-	return `SELECT sum(position) WHERE account ~ '^Income' AND date >= ${startDate} AND date <= ${endDate}`;
+/** Gets unconverted inventory of all Liability accounts */
+export function getTotalLiabilitiesInventoryQuery(): string { // <-- Renamed
+  return `SELECT sum(position) WHERE account ~ '^Liabilities'`;
 }
 
-/** Gets sum for Expense accounts within a date range */
-export function getMonthlyExpensesQuery(startDate: string, endDate: string): string {
-	return `SELECT sum(position) WHERE account ~ '^Expenses' AND date >= ${startDate} AND date <= ${endDate}`;
+/** Gets converted cost of all Liability accounts */
+export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- NEW
+   return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Liabilities'`;
+}
+
+export function getBalanceSheetQuery(currency: string): string {
+	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
 }
 
 /** Gets balances for different account types */
@@ -62,6 +70,7 @@ export function getTransactionsQuery(filters: TransactionFilters): string {
 
 	// Build WHERE clauses based on provided filters
 	if (filters.account) {
+
 		whereClauses.push(`account ~ '^${filters.account}'`);
 	}
 	if (filters.startDate) {
@@ -104,9 +113,15 @@ export function getBeanCheckCommand(filePath: string, commandBase: string): stri
 	const checkCommandBase = commandBase.replace(/bean-query(.exe)?$/, 'bean-check$1');
 	return `${checkCommandBase} "${filePath}"`;
 }
-/** Gets historical net worth data */
-export function getHistoricalNetWorthDataQuery(interval: string = 'month'): string {
-	// Select the grouping interval (e.g., month) and the SUM of positions
-	// We also need the account type to separate assets and liabilities later
-	return `SELECT ${interval}, account, SUM(position) WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
+
+export function getMonthlyIncomeQuery(startDate: string, endDate: string, currency: string): string { // Must accept 3 args
+	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Income' AND date >= ${startDate} AND date <= ${endDate}`;
+}
+
+export function getMonthlyExpensesQuery(startDate: string, endDate: string, currency: string): string { // Must accept 3 args
+	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Expenses' AND date >= ${startDate} AND date <= ${endDate}`;
+}
+
+export function getHistoricalNetWorthDataQuery(interval: string = 'month', currency: string): string { // Must accept 2 args
+	return `SELECT ${interval}, account, convert(SUM(position), '${currency}') WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
 }

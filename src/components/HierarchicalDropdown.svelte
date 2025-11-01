@@ -64,7 +64,7 @@
 
     {#if isOpen}
         <div class="dropdown-menu">
-            {console.log("HierarchicalDropdown: Rendering menu. treeData:", treeData)}
+            <!-- {console.log("HierarchicalDropdown: Rendering menu. treeData:", treeData)} -->
             {#if isLoading}
                 <div class="dropdown-empty">Loading...</div>
             {:else if treeData && treeData.length > 0}

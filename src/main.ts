@@ -4,9 +4,8 @@ import { Plugin } from 'obsidian';
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view'; 
 import { TransactionModal } from './components/transaction-modal';
-import { DashboardView, DASHBOARD_VIEW_TYPE } from './views/dashboard-view';
-import { OverviewView, OVERVIEW_VIEW_TYPE } from './views/overview-view';
 import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
+import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './views/unified-dashboard-view';
 // --------------------------------------------------
 
 export default class BeancountPlugin extends Plugin {
@@ -16,30 +15,33 @@ export default class BeancountPlugin extends Plugin {
 		await this.loadSettings();
 
 		// Register Views
-		this.registerView(
-			OVERVIEW_VIEW_TYPE,
-			(leaf) => new OverviewView(leaf, this)
-		);
+		// this.registerView(
+		// 	OVERVIEW_VIEW_TYPE,
+		// 	(leaf) => new OverviewView(leaf, this)
+		// );
 		this.registerView(
 			BEANCOUNT_VIEW_TYPE, // Sidebar Snapshot
 			(leaf) => new BeancountView(leaf, this)
 		);
+		// this.registerView(
+		// 	DASHBOARD_VIEW_TYPE, // Main Dashboard (Transactions)
+		// 	(leaf) => new DashboardView(leaf, this)
+		// );
 		this.registerView(
-			DASHBOARD_VIEW_TYPE, // Main Dashboard (Transactions)
-			(leaf) => new DashboardView(leaf, this)
+			UNIFIED_DASHBOARD_VIEW_TYPE,
+			(leaf) => new UnifiedDashboardView(leaf, this)
 		);
-
 		// Add Ribbon Icons
 		this.addRibbonIcon('dollar-sign', 'Open Beancount Snapshot', () => {
 			this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); // Specify type and location
 		});
-		this.addRibbonIcon('pie-chart', 'Open Beancount Overview', () => {
-			this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); // Specify type and location
+		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
+			this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); // Open the NEW view
 		});
 		// Consider adding one for the main Dashboard too
-		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
-			this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); // Specify type and location
-		});
+		// this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
+		// 	this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); // Specify type and location
+		// });
 
 		// Add Commands
 		this.addCommand({
@@ -47,15 +49,20 @@ export default class BeancountPlugin extends Plugin {
 			name: 'Add Beancount Transaction',
 			callback: () => { new TransactionModal(this.app, this).open(); }
 		});
+		// this.addCommand({
+		// 	id: 'open-beancount-dashboard',
+		// 	name: 'Open Beancount Dashboard',
+		// 	callback: () => { this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); }
+		// });
+		// this.addCommand({
+		// 	id: 'open-beancount-overview',
+		// 	name: 'Open Beancount Overview',
+		// 	callback: () => { this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); }
+		// });
 		this.addCommand({
-			id: 'open-beancount-dashboard',
-			name: 'Open Beancount Dashboard',
-			callback: () => { this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); }
-		});
-		this.addCommand({
-			id: 'open-beancount-overview',
-			name: 'Open Beancount Overview',
-			callback: () => { this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); }
+			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view
+			name: 'Open Beancount Unified Dashboard',
+			callback: () => { this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); }
 		});
 		// Consider adding command for Snapshot view?
 		this.addCommand({
@@ -72,7 +79,9 @@ export default class BeancountPlugin extends Plugin {
 	async activateView(viewType: string, location: 'tab' | 'right' | 'left' = 'tab') {
 		// Detach existing leaves of this type first to avoid duplicates
 		this.app.workspace.detachLeavesOfType(viewType);
-
+		if (location === 'tab') {
+			this.app.workspace.detachLeavesOfType(viewType);
+		}
 		let leaf;
 		if (location === 'right') {
 			leaf = this.app.workspace.getRightLeaf(false);

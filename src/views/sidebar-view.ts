@@ -72,7 +72,11 @@ export class BeancountView extends ItemView {
 	async updateView() {
 		this.updateProps({ isLoading: true, kpiError: null, reportError: null, fileStatus: "checking", fileStatusMessage: null, reportHeaders: [], reportRows: [] });
 		new Notice('Refreshing snapshot...');
-
+		const reportingCurrency = this.plugin.settings.reportingCurrency;
+        if (!reportingCurrency) {
+            this.updateProps({ kpiError: "Reporting Currency is not set in settings.", isLoading: false });
+            return;
+        }
 		try {
 			// Run KPI queries and bean check concurrently
 			const [
@@ -82,8 +86,8 @@ export class BeancountView extends ItemView {
 			] = await Promise.all([
 				Promise.all([
 					// --- Use imported runQuery and query functions ---
-					runQuery(this.plugin, queries.getTotalAssetsQuery()),
-					runQuery(this.plugin, queries.getTotalLiabilitiesQuery())
+					runQuery(this.plugin, queries.getTotalAssetsCostQuery(reportingCurrency)),
+					runQuery(this.plugin, queries.getTotalLiabilitiesCostQuery(reportingCurrency))
 				]),
 				this.renderReport('assets'), // Render default report
 				this.runBeanCheck()
@@ -210,15 +214,17 @@ export class BeancountView extends ItemView {
 		// --- Use imported query function ---
 		const command = queries.getBeanCheckCommand(filePath, commandBase);
 
-		console.log("Running bean-check:", command);
+		// console.log("Running bean-check:", command);
 		return new Promise((resolve) => {
 			// --- Need exec import from child_process ---
 			exec(command, (error, stdout, stderr) => {
 				if (error || stdout || stderr) {
 					const errorMessage = stdout || stderr || (error ? error.message : "Unknown check error.");
-					console.error("bean-check failed:", errorMessage); resolve({ status: "error", message: errorMessage });
+					// console.error("bean-check failed:", errorMessage); 
+					resolve({ status: "error", message: errorMessage });
 				} else {
-					console.log("bean-check successful"); resolve({ status: "ok", message: "File OK" });
+					// console.log("bean-check successful"); 
+					resolve({ status: "ok", message: "File OK" });
 				}
 			});
 			// ------------------------------------------
