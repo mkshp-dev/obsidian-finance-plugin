@@ -50,7 +50,6 @@ export class BeancountView extends ItemView {
 		this.component.$on('refresh', () => this.updateView());
 		this.component.$on('renderReport', (e) => this.renderReport(e.detail));
 		this.component.$on('editFile', () => this.openLedgerFile());
-		this.component.$on('openJournal', () => this.openJournalView());
 
 		setTimeout(() => this.updateView(), 0);
 	}
@@ -161,44 +160,6 @@ export class BeancountView extends ItemView {
 		} catch (error) {
 			console.error(`Error rendering ${reportType} report:`, error);
 			this.updateProps({ reportError: error.message, reportHeaders: [], reportRows: [] });
-		} finally {
-			this.updateProps({ isLoading: false });
-		}
-	}
-
-	// --- Opens the journal in a new tab ---
-	async openJournalView() {
-		new Notice('Generating grouped journal...');
-		this.updateProps({ isLoading: true });
-		let markdownString = `\n\n# Beancount Journal (Grouped)\n\n`;
-		try {
-			// --- Use imported runQuery and query function ---
-			const query = queries.getJournalGroupedQuery();
-			const result = await runQuery(this.plugin, query);
-			const cleanStdout = result.replace(/\r/g, "").trim();
-			// --- Use imported parseCsv ---
-			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
-
-			if (records.length === 0) {
-				markdownString += "No journal entries found.";
-			} else {
-				// ... (Journal markdown formatting logic remains the same) ...
-				const defaultHeaders = ['date', 'payee', 'narration', 'tags', 'links', 'id', 'account', 'position'];
-				const firstRowIsHeader = records[0][0]?.toLowerCase().includes('date') && records[0][5]?.toLowerCase().includes('id');
-				let rows = firstRowIsHeader ? records.slice(1) : records;
-				let currentTxnId = "";
-				for (let i = 0; i < rows.length; i++) { /* ... formatting loop ... */ } // Assumed loop logic is correct
-			}
-
-			const tempFileName = `beancount-grouped-journal-${Date.now()}.md`;
-			const tempFile = await this.app.vault.create(tempFileName, markdownString);
-
-			if (tempFile instanceof TFile) {
-				const leaf = this.app.workspace.getLeaf(true); await leaf.openFile(tempFile);
-			} else { throw new Error("Failed to create temporary journal file."); }
-
-		} catch (error) {
-			console.error("Error generating journal:", error); new Notice(`Failed to generate journal: ${error.message}`, 0);
 		} finally {
 			this.updateProps({ isLoading: false });
 		}

@@ -19,7 +19,7 @@
 		dispatch('refresh');
 	}
 
-	// --- REMOVED 'journal' from this type ---
+	// Renders balance reports in the sidebar
 	function handleReport(type: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
 		dispatch('renderReport', type);
 	}
@@ -32,11 +32,6 @@
 	function handleEditFile() {
 		dispatch('editFile');
 	}
-	// --- NEW: Dispatch openJournal event ---
-	function handleOpenJournal() {
-		dispatch('openJournal');
-	}
-	// --------------------------------------
 
 </script>
 
@@ -60,20 +55,27 @@
 		</button>
 
 		<button
-			class="clickable-icon" aria-label="Open Journal View" title="Open Journal View"
-			on:click={handleOpenJournal} disabled={isLoading}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open-text"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/><path d="M6 8h2"/><path d="M6 12h2"/><path d="M16 8h2"/><path d="M16 12h2"/></svg>
-		</button>
-		<button
 			class="clickable-icon" aria-label="Edit Ledger File" title="Edit Ledger File"
 			on:click={handleEditFile}
 		>
 			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
 		</button>
 
-		<button on:click={handleRefresh} disabled={isLoading}>
-			{isLoading ? "Refreshing..." : "Refresh"}
+		<button on:click={handleRefresh} disabled={isLoading} class="refresh-button">
+			{#if isLoading}
+				<svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 12a9 9 0 11-6.219-8.56"/>
+				</svg>
+				Refreshing...
+			{:else}
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M3 12a9 9 0 013.5-7.1"/>
+					<path d="M20.5 5.5a9 9 0 01.5 6.5"/>
+					<path d="M3 12a9 9 0 016.5 8.1"/>
+					<path d="M20.5 18.5a9 9 0 01-6.5-5.5"/>
+				</svg>
+				Refresh
+			{/if}
 		</button>
 	</div>
 </div>
@@ -179,6 +181,20 @@
 	}
 	.clickable-icon:hover { color: var(--icon-color-hover); }
 	.clickable-icon svg { width: var(--icon-xs); height: var(--icon-xs); vertical-align: middle; }
+
+	/* Refresh button and loading spinner */
+	.refresh-button {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.loading-spinner {
+		animation: spin 1s linear infinite;
+	}
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
+	}
 
 	/* --- Other styles remain the same --- */
 	.beancount-kpi-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }

@@ -12,6 +12,26 @@
 	let narration: string = '';
 	let tag: string = '';
 
+	// Date validation
+	function validateDate(dateString: string): boolean {
+		const selectedDate = new Date(dateString);
+		const today = new Date();
+		const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+		const oneYearFromNow = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+		
+		return selectedDate >= oneYearAgo && selectedDate <= oneYearFromNow;
+	}
+
+	// Smart date suggestions
+	function getDateSuggestions() {
+		const today = new Date();
+		return {
+			today: today.toISOString().slice(0, 10),
+			yesterday: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+			lastWeek: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+		};
+	}
+
 	// --- NEW: Postings Array State ---
 	interface Posting {
 		account: string;
@@ -50,6 +70,12 @@
 	// ---------------------------------------
 
 	function handleSubmit() {
+		// Validate date before submission
+		if (!validateDate(date)) {
+			alert('Please select a date within the last year to next year range.');
+			return;
+		}
+
 		let data: any = { type: activeTab };
 
 		if (activeTab === 'transaction') {

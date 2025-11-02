@@ -3,21 +3,27 @@
 	import OverviewTab from '../components/tabs/OverviewTab.svelte';
 	import TransactionsTab from '../components/tabs/TransactionsTab.svelte';
 	import BalanceSheetTab from '../components/tabs/BalanceSheetTab.svelte';
+	import AccountsTab from '../components/tabs/AccountsTab.svelte';
+	import CommoditiesTab from '../components/tabs/CommoditiesTab.svelte';
 	import { createEventDispatcher } from 'svelte';
 	
 	// --- Import Controller Types ---
 	import type { OverviewController } from '../controllers/OverviewController';
 	import type { TransactionController } from '../controllers/TransactionController';
 	import type { BalanceSheetController } from '../controllers/BalanceSheetController';
+	import type { AccountsController } from '../controllers/AccountsController';
+	import type { CommoditiesController } from '../controllers/CommoditiesController';
 
 	// --- Receive Controllers as props ---
 	export let plugin: BeancountPlugin;
 	export let overviewController: OverviewController;
 	export let transactionController: TransactionController;
 	export let balanceSheetController: BalanceSheetController;
+	export let accountsController: AccountsController;
+	export let commoditiesController: CommoditiesController;
 	// --- REMOVED transactionState prop ---
 
-	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet';
+	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet' | 'Accounts' | 'Commodities';
 	let activeTab: Tab = 'Overview'; // Default to Overview
 
 	const dispatch = createEventDispatcher();
@@ -31,6 +37,8 @@
 		<button class:active={activeTab === 'Overview'} on:click={() => activeTab = 'Overview'}>Overview</button>
 		<button class:active={activeTab === 'Transactions'} on:click={() => activeTab = 'Transactions'}>Transactions</button>
 		<button class:active={activeTab === 'Balance Sheet'} on:click={() => activeTab = 'Balance Sheet'}>Balance Sheet</button>
+		<button class:active={activeTab === 'Accounts'} on:click={() => activeTab = 'Accounts'}>Accounts</button>
+		<button class:active={activeTab === 'Commodities'} on:click={() => activeTab = 'Commodities'}>Commodities</button>
 	</div>
 
 	<div class="tab-content">
@@ -45,6 +53,12 @@
 
 		{:else if activeTab === 'Balance Sheet'}
 			<BalanceSheetTab controller={balanceSheetController} />
+
+		{:else if activeTab === 'Accounts'}
+			<AccountsTab accountsController={accountsController} />
+
+		{:else if activeTab === 'Commodities'}
+			<CommoditiesTab controller={commoditiesController} />
 		{/if}
 	</div>
 </div>

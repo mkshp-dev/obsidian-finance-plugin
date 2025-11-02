@@ -4,10 +4,12 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type BeancountPlugin from '../main';
 import UnifiedDashboardComponent from './UnifiedDashboardView.svelte';
 
-// --- Import BOTH controllers ---
+// --- Import ALL controllers ---
 import { OverviewController } from '../controllers/OverviewController';
 import { TransactionController } from '../controllers/TransactionController';
 import { BalanceSheetController } from '../controllers/BalanceSheetController';
+import { AccountsController } from '../controllers/AccountsController';
+import { CommoditiesController } from '../controllers/CommoditiesController';
 // -----------------------------
 
 export const UNIFIED_DASHBOARD_VIEW_TYPE = "beancount-unified-dashboard";
@@ -20,6 +22,8 @@ export class UnifiedDashboardView extends ItemView {
 	overviewController: OverviewController;
 	transactionController: TransactionController;
 	balanceSheetController: BalanceSheetController;
+	accountsController: AccountsController;
+	commoditiesController: CommoditiesController;
 	// --- REMOVED all state properties ---
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
@@ -29,6 +33,8 @@ export class UnifiedDashboardView extends ItemView {
 		this.overviewController = new OverviewController(this.plugin);
 		this.transactionController = new TransactionController(this.plugin);
 		this.balanceSheetController = new BalanceSheetController(this.plugin);
+		this.accountsController = new AccountsController(this.plugin);
+		this.commoditiesController = new CommoditiesController(this.plugin);
 	}
 
 	getViewType(): string { return UNIFIED_DASHBOARD_VIEW_TYPE; }
@@ -46,7 +52,9 @@ export class UnifiedDashboardView extends ItemView {
 				// --- Pass controllers to Svelte ---
 				overviewController: this.overviewController,
 				transactionController: this.transactionController,
-				balanceSheetController: this.balanceSheetController
+				balanceSheetController: this.balanceSheetController,
+				accountsController: this.accountsController,
+				commoditiesController: this.commoditiesController
 			}
 		});
 
@@ -58,7 +66,8 @@ export class UnifiedDashboardView extends ItemView {
 		this.overviewController.loadData();
 		this.transactionController.loadFilterData(); // Load filter dropdown data
 		this.transactionController.handleFilterChange({}); // Load initial transactions
-		this.balanceSheetController.loadData()
+		this.balanceSheetController.loadData();
+		// Note: AccountsController loads data independently when its tab is accessed
 	}
 
 	async onClose() {

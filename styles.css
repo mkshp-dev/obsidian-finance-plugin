@@ -55,3 +55,35 @@
 	font-size: 0.9em; /* Make it a bit smaller */
 	margin-top: 8px;
 }
+
+/* --- Validation Message Styles --- */
+.beancount-validation-message {
+	margin-top: 5px !important;
+	font-size: 0.85em !important;
+	opacity: 0.9 !important;
+	font-weight: 500 !important;
+	padding: 2px 4px !important;
+	border-radius: 3px !important;
+	transition: all 0.2s ease !important;
+}
+
+/* Success validation */
+.beancount-validation-message[style*="color: rgb(76, 175, 80)"],
+.beancount-validation-message[style*="color:#4CAF50"] {
+	background-color: rgba(76, 175, 80, 0.1) !important;
+	border-left: 2px solid #4CAF50 !important;
+}
+
+/* Error validation */
+.beancount-validation-message[style*="color: rgb(244, 67, 54)"],
+.beancount-validation-message[style*="color:#f44336"] {
+	background-color: rgba(244, 67, 54, 0.1) !important;
+	border-left: 2px solid #f44336 !important;
+}
+
+/* Warning validation */
+.beancount-validation-message[style*="color: rgb(102, 102, 102)"],
+.beancount-validation-message[style*="color:#666"] {
+	background-color: rgba(102, 102, 102, 0.1) !important;
+	border-left: 2px solid #666 !important;
+}

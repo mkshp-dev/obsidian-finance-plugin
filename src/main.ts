@@ -47,27 +47,19 @@ export default class BeancountPlugin extends Plugin {
 		this.addCommand({
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount Transaction',
+			hotkeys: [{ modifiers: ['Mod'], key: 't' }],
 			callback: () => { new TransactionModal(this.app, this).open(); }
 		});
-		// this.addCommand({
-		// 	id: 'open-beancount-dashboard',
-		// 	name: 'Open Beancount Dashboard',
-		// 	callback: () => { this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); }
-		// });
-		// this.addCommand({
-		// 	id: 'open-beancount-overview',
-		// 	name: 'Open Beancount Overview',
-		// 	callback: () => { this.activateView(OVERVIEW_VIEW_TYPE, 'tab'); }
-		// });
 		this.addCommand({
 			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view
 			name: 'Open Beancount Unified Dashboard',
+			hotkeys: [{ modifiers: ['Mod'], key: 'd' }],
 			callback: () => { this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); }
 		});
-		// Consider adding command for Snapshot view?
 		this.addCommand({
 			id: 'open-beancount-snapshot',
 			name: 'Open Beancount Snapshot',
+			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 's' }],
 			callback: () => { this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); }
 		});
 

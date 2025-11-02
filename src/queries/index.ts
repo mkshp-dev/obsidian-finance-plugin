@@ -49,6 +49,11 @@ export function getBalanceSheetQuery(currency: string): string {
 	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
 }
 
+/** Gets balances for ALL account types (Assets, Liabilities, Equity, Income, Expenses) */
+export function getAllAccountBalancesQuery(currency: string): string {
+	return `SELECT account, convert(sum(position), '${currency}') GROUP BY account ORDER BY account`;
+}
+
 /** Gets balances for different account types */
 export function getBalanceReportQuery(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses'): string {
 	let accountPrefix = '';
@@ -97,11 +102,6 @@ export function getTransactionsQuery(filters: TransactionFilters): string {
 	}
 }
 
-/** Gets detailed postings for journal view (grouped) */
-export function getJournalGroupedQuery(): string {
-	return `SELECT date, payee, narration, tags, links, id, account, position ORDER BY date DESC, id`;
-}
-
 /** Simple query for connection testing */
 export function getTestConnectionQuery(): string {
 	return `SELECT account LIMIT 1`;
@@ -124,4 +124,19 @@ export function getMonthlyExpensesQuery(startDate: string, endDate: string, curr
 
 export function getHistoricalNetWorthDataQuery(interval: string = 'month', currency: string): string { // Must accept 2 args
 	return `SELECT ${interval}, account, convert(SUM(position), '${currency}') WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
+}
+
+/** Gets all commodities with their metadata from the #commodities table */
+export function getCommoditiesQuery(): string {
+	return `SELECT name, meta, meta('price'), getprice(name, 'INR') FROM #commodities`;
+}
+
+/** Gets specific commodity details by name */
+export function getCommodityDetailsQuery(commodity: string): string {
+	return `SELECT name, meta, meta('price'), getprice(name, 'INR') FROM #commodities WHERE name = '${commodity}'`;
+}
+
+/** Checks if any commodities exist in the ledger */
+export function getPriceDataAvailabilityQuery(): string {
+	return `SELECT COUNT(*) as commodity_count FROM #commodities`;
 }

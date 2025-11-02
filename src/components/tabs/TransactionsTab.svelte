@@ -33,9 +33,9 @@
 
 	const dispatch = createEventDispatcher();
 	
-	// --- Debounce handlers (unchanged) ---
-	const updateDebouncedPayee = debounce((value: string) => { debouncedPayeeFilter = value; }, 1000);
-	const updateDebouncedTag = debounce((value: string) => { debouncedTagFilter = value; }, 1000);
+	// --- Debounce handlers - Optimized for better UX ---
+	const updateDebouncedPayee = debounce((value: string) => { debouncedPayeeFilter = value; }, 300);
+	const updateDebouncedTag = debounce((value: string) => { debouncedTagFilter = value; }, 300);
 
 	// --- REMOVED onMount data fetching ---
 

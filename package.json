@@ -1,15 +1,15 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-finance-plugin",
+	"version": "0.0.1",
+	"description": "Personal Finance Plugin for Obsidian with Beancount integration",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["obsidian", "finance", "beancount", "accounting", "personal-finance"],
+	"author": "Mukund Shelake",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^16.11.6",
