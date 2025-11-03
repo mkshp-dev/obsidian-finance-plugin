@@ -2,6 +2,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import type { CommoditiesController, CommodityInfo } from '../../controllers/CommoditiesController';
+    import YahooFinanceSearchComponent from '../YahooFinanceSearchComponent.svelte';
 
     export let controller: CommoditiesController;
 
@@ -46,6 +47,36 @@
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             callback();
+        }
+    }
+
+    // Yahoo Finance Search Handlers
+    async function handleYahooFinanceApply(event: CustomEvent<{ symbol: string; metadata: string; price?: number }>) {
+        const { symbol: yahooSymbol, metadata } = event.detail;
+        
+        if ($selectedCommodityStore) {
+            try {
+                await controller.updatePriceMetadata($selectedCommodityStore.symbol, yahooSymbol);
+                console.log(`Applied Yahoo Finance source for ${$selectedCommodityStore.symbol}: ${metadata}`);
+            } catch (error) {
+                console.error('Failed to apply Yahoo Finance source:', error);
+            }
+        }
+    }
+
+    function handleYahooFinanceCancel() {
+        // Just log for now, no special handling needed
+        console.log('Yahoo Finance search cancelled');
+    }
+
+    async function handleRemovePriceMetadata() {
+        if ($selectedCommodityStore) {
+            try {
+                await controller.removePriceMetadata($selectedCommodityStore.symbol);
+                console.log(`Removed price metadata for ${$selectedCommodityStore.symbol}`);
+            } catch (error) {
+                console.error('Failed to remove price metadata:', error);
+            }
         }
     }
 
@@ -253,6 +284,27 @@
                         </div>
                     {/if}
                 </div>
+
+                <!-- Yahoo Finance Search Component -->
+                <YahooFinanceSearchComponent
+                    currentPriceMetadata={$selectedCommodityStore.priceMetadata || ''}
+                    disabled={$loadingStore}
+                    on:apply={handleYahooFinanceApply}
+                    on:cancel={handleYahooFinanceCancel}
+                />
+
+                <!-- Price Metadata Management -->
+                {#if $selectedCommodityStore.hasPriceMetadata}
+                    <div class="price-metadata-actions">
+                        <button 
+                            class="remove-metadata-button"
+                            on:click={handleRemovePriceMetadata}
+                            disabled={$loadingStore}
+                        >
+                            🗑️ Remove Price Metadata
+                        </button>
+                    </div>
+                {/if}
 
                 <!-- Full Metadata Display -->
                 {#if $selectedCommodityStore.fullMetadata && Object.keys($selectedCommodityStore.fullMetadata).length > 0}
@@ -782,5 +834,35 @@
             margin: 10px;
             max-height: 90vh;
         }
+    }
+
+    /* Price Metadata Actions */
+    .price-metadata-actions {
+        margin: var(--size-4-4) 0;
+        padding: var(--size-4-3);
+        background: var(--background-primary-alt);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: var(--radius-s);
+    }
+
+    .remove-metadata-button {
+        background: var(--color-red);
+        color: var(--text-on-accent);
+        border: none;
+        border-radius: var(--radius-s);
+        padding: var(--size-4-2) var(--size-4-3);
+        cursor: pointer;
+        font-size: 0.9em;
+        font-weight: 500;
+        transition: background-color 0.2s ease;
+    }
+
+    .remove-metadata-button:hover:not(:disabled) {
+        background: var(--color-red-hover);
+    }
+
+    .remove-metadata-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 </style>

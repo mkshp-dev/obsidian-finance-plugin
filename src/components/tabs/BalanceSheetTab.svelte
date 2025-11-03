@@ -9,7 +9,7 @@
 	// --- Set up a placeholder and subscribe to the store ---
 	const placeholderState: Writable<BalanceSheetState> = writable({
 		isLoading: true, error: null, assets: [], liabilities: [], equity: [],
-		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, totalLiabEquity: 0, currency: 'USD',
+		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, totalLiabEquity: 0, currency: 'INR',
 		hasUnconvertedCommodities: false, unconvertedWarning: null
 	});
 	$: stateStore = controller ? controller.state : placeholderState;

@@ -1,6 +1,6 @@
 // src/controllers/CommoditiesController.ts
 
-import { writable, type Writable } from 'svelte/store';
+import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import { 
     getCommoditiesQuery, 
@@ -346,5 +346,126 @@ export class CommoditiesController {
         }
         
         return null;
+    }
+
+    /**
+     * Update price metadata for a commodity using Yahoo Finance source
+     * @param symbol Commodity symbol to update
+     * @param yahooSymbol Yahoo Finance symbol
+     * @param currency Currency for the price metadata (default: USD)
+     */
+    async updatePriceMetadata(symbol: string, yahooSymbol: string, currency: string = 'USD'): Promise<void> {
+        this.loading.set(true);
+        this.error.set(null);
+
+        try {
+            // Generate the price metadata string
+            const priceMetadata = `${currency}:yahoo/${yahooSymbol.toUpperCase()}`;
+            
+            // Get current commodities and selected commodity
+            const currentCommodities = get(this.commodities);
+            const currentSelectedCommodity = get(this.selectedCommodity);
+            
+            // Here we would call the backend to update the Beancount file
+            // For now, we'll simulate this by updating our local state
+            // In a real implementation, this would modify the commodity directive in the Beancount file
+            
+            // Update the commodity in our local state
+            const updatedCommodities = currentCommodities.map((commodity: CommodityInfo) => {
+                if (commodity.symbol === symbol) {
+                    return {
+                        ...commodity,
+                        hasPriceMetadata: true,
+                        priceMetadata: priceMetadata,
+                        fullMetadata: {
+                            ...commodity.fullMetadata,
+                            price: priceMetadata
+                        }
+                    };
+                }
+                return commodity;
+            });
+
+            // Update selected commodity if it matches
+            let updatedSelectedCommodity = currentSelectedCommodity;
+            if (currentSelectedCommodity && currentSelectedCommodity.symbol === symbol) {
+                updatedSelectedCommodity = {
+                    ...currentSelectedCommodity,
+                    hasPriceMetadata: true,
+                    priceMetadata: priceMetadata,
+                    fullMetadata: {
+                        ...currentSelectedCommodity.fullMetadata,
+                        price: priceMetadata
+                    }
+                };
+                this.selectedCommodity.set(updatedSelectedCommodity);
+            }
+
+            // Update stores
+            this.commodities.set(updatedCommodities);
+            this.loading.set(false);
+
+            // TODO: Implement actual Beancount file modification
+            // This would involve calling a backend service or direct file manipulation
+            console.log(`Updated ${symbol} with Yahoo Finance source: ${priceMetadata}`);
+            
+        } catch (error) {
+            console.error('Error updating price metadata:', error);
+            this.loading.set(false);
+            this.error.set(`Failed to update price metadata: ${error.message}`);
+        }
+    }
+
+    /**
+     * Remove price metadata for a commodity
+     * @param symbol Commodity symbol
+     */
+    async removePriceMetadata(symbol: string): Promise<void> {
+        this.loading.set(true);
+        this.error.set(null);
+
+        try {
+            // Get current commodities and selected commodity
+            const currentCommodities = get(this.commodities);
+            const currentSelectedCommodity = get(this.selectedCommodity);
+            
+            // Update the commodity in our local state
+            const updatedCommodities = currentCommodities.map((commodity: CommodityInfo) => {
+                if (commodity.symbol === symbol) {
+                    const { price, ...remainingMetadata } = commodity.fullMetadata;
+                    return {
+                        ...commodity,
+                        hasPriceMetadata: false,
+                        priceMetadata: undefined,
+                        fullMetadata: remainingMetadata
+                    };
+                }
+                return commodity;
+            });
+
+            // Update selected commodity if it matches
+            let updatedSelectedCommodity = currentSelectedCommodity;
+            if (currentSelectedCommodity && currentSelectedCommodity.symbol === symbol) {
+                const { price, ...remainingMetadata } = currentSelectedCommodity.fullMetadata;
+                updatedSelectedCommodity = {
+                    ...currentSelectedCommodity,
+                    hasPriceMetadata: false,
+                    priceMetadata: undefined,
+                    fullMetadata: remainingMetadata
+                };
+                this.selectedCommodity.set(updatedSelectedCommodity);
+            }
+
+            // Update stores
+            this.commodities.set(updatedCommodities);
+            this.loading.set(false);
+
+            console.log(`Removed price metadata for ${symbol}`);
+            
+        } catch (error) {
+            console.error('Error removing price metadata:', error);
+            this.loading.set(false);
+            this.error.set(`Failed to remove price metadata: ${error.message}`);
+        }
     }
 }
