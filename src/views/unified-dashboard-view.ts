@@ -10,6 +10,7 @@ import { TransactionController } from '../controllers/TransactionController';
 import { BalanceSheetController } from '../controllers/BalanceSheetController';
 import { AccountsController } from '../controllers/AccountsController';
 import { CommoditiesController } from '../controllers/CommoditiesController';
+import { JournalController } from '../controllers/JournalController';
 // -----------------------------
 
 export const UNIFIED_DASHBOARD_VIEW_TYPE = "beancount-unified-dashboard";
@@ -24,6 +25,7 @@ export class UnifiedDashboardView extends ItemView {
 	balanceSheetController: BalanceSheetController;
 	accountsController: AccountsController;
 	commoditiesController: CommoditiesController;
+	journalController: JournalController;
 	// --- REMOVED all state properties ---
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
@@ -35,6 +37,7 @@ export class UnifiedDashboardView extends ItemView {
 		this.balanceSheetController = new BalanceSheetController(this.plugin);
 		this.accountsController = new AccountsController(this.plugin);
 		this.commoditiesController = new CommoditiesController(this.plugin);
+		this.journalController = new JournalController(this.plugin);
 	}
 
 	getViewType(): string { return UNIFIED_DASHBOARD_VIEW_TYPE; }
@@ -53,7 +56,8 @@ export class UnifiedDashboardView extends ItemView {
 				transactionController: this.transactionController,
 				balanceSheetController: this.balanceSheetController,
 				accountsController: this.accountsController,
-				commoditiesController: this.commoditiesController
+				commoditiesController: this.commoditiesController,
+				journalController: this.journalController
 			}
 		});
 
@@ -72,6 +76,11 @@ export class UnifiedDashboardView extends ItemView {
 	async onClose() {
 		if (this.component) {
 			this.component.$destroy();
+		}
+		
+		// Cleanup controllers
+		if (this.journalController) {
+			this.journalController.cleanup();
 		}
 	}
 

@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-finance-plugin",
-	"version": "0.0.1",
-	"description": "Personal Finance Plugin for Obsidian with Beancount integration",
+	"version": "0.1.0",
+	"description": "Comprehensive financial dashboard with Beancount integration. Features unified entry management, commodity tracking, interactive account hierarchies, and real-time price data.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

@@ -1,0 +1,13 @@
+; Test Beancount file for development
+plugin "beancount.plugins.auto_accounts"
+
+1900-01-01 open Assets:Cash USD
+1900-01-01 open Expenses:Food USD
+
+2024-01-01 * "Test Transaction" "Sample transaction for testing"
+  Assets:Cash                 -10.00 USD
+  Expenses:Food                10.00 USD
+
+2024-01-02 * "Another Test" "Second test transaction"
+  Assets:Cash                 -25.50 USD
+  Expenses:Food                25.50 USD

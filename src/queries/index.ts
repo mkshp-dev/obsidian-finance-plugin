@@ -140,3 +140,8 @@ export function getCommodityDetailsQuery(commodity: string): string {
 export function getPriceDataAvailabilityQuery(): string {
 	return `SELECT COUNT(*) as commodity_count FROM #commodities`;
 }
+
+/** Gets full journal entries with all postings for each transaction */
+export function getJournalTransactionsQuery(): string {
+	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC`;
+}

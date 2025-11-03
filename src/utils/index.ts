@@ -129,4 +129,16 @@ export function extractConvertedAmount(inventoryString: string, targetCurrency: 
 	return `0.00 ${targetCurrency}`;
 }
 
+// --- CURRENCY FORMATTER ---
+export function formatCurrency(amount: number, currency: string): string {
+	if (isNaN(amount)) {
+		return `0.00 ${currency}`;
+	}
+	
+	return `${amount.toLocaleString(undefined, { 
+		minimumFractionDigits: 2, 
+		maximumFractionDigits: 4 
+	})} ${currency}`;
+}
+
 // ----------------------------

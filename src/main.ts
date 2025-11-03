@@ -3,7 +3,7 @@
 import { Plugin } from 'obsidian';
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view'; 
-import { TransactionModal } from './components/transaction-modal';
+import { UnifiedTransactionModal } from './components/UnifiedTransactionModal';
 import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './views/unified-dashboard-view';
 // --------------------------------------------------
@@ -47,19 +47,16 @@ export default class BeancountPlugin extends Plugin {
 		this.addCommand({
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount Transaction',
-			hotkeys: [{ modifiers: ['Mod'], key: 't' }],
-			callback: () => { new TransactionModal(this.app, this).open(); }
+			callback: () => { new UnifiedTransactionModal(this.app, this).open(); }
 		});
 		this.addCommand({
 			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view
 			name: 'Open Beancount Unified Dashboard',
-			hotkeys: [{ modifiers: ['Mod'], key: 'd' }],
 			callback: () => { this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); }
 		});
 		this.addCommand({
 			id: 'open-beancount-snapshot',
 			name: 'Open Beancount Snapshot',
-			hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 's' }],
 			callback: () => { this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); }
 		});
 

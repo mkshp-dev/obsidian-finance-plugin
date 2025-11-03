@@ -1,0 +1,901 @@
+#!/usr/bin/env python3
+"""
+Beancount Journal API Backend
+Provides REST API endpoints for complete transaction data parsing
+"""
+
+import os
+import sys
+import json
+import argparse
+import re
+import shutil
+from datetime import datetime, date
+from decimal import Decimal
+from typing import List, Dict, Any, Optional, Union
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
+# Beancount imports
+try:
+    from beancount import loader
+    from beancount.core import data
+    from beancount.core.amount import Amount
+    from beancount.core.position import Position
+    from beancount.core.inventory import Inventory
+    from beancount.parser import options
+except ImportError:
+    print("Error: Beancount is not installed. Install it with: pip install beancount")
+    sys.exit(1)
+
+class BeancountJournalAPI:
+    """Main API class for Beancount journal data"""
+    
+    def __init__(self, beancount_file: str):
+        self.beancount_file = beancount_file
+        self.entries = None
+        self.errors = None
+        self.options_map = None
+        self.load_data()
+    
+    def load_data(self):
+        """Load and parse the Beancount file"""
+        try:
+            self.entries, self.errors, self.options_map = loader.load_file(self.beancount_file)
+            if self.errors:
+                print(f"Warning: {len(self.errors)} errors found in Beancount file")
+                for error in self.errors[:5]:  # Show first 5 errors
+                    print(f"  - {error}")
+        except Exception as e:
+            print(f"Error loading Beancount file: {e}")
+            raise
+    
+    def reload_data(self):
+        """Reload the Beancount file (for when it changes)"""
+        self.load_data()
+    
+    def get_entries(self, 
+                   start_date: Optional[str] = None,
+                   end_date: Optional[str] = None,
+                   account_filter: Optional[str] = None,
+                   payee_filter: Optional[str] = None,
+                   tag_filter: Optional[str] = None,
+                   search_term: Optional[str] = None,
+                   entry_types: Optional[List[str]] = None,
+                   limit: int = 100,
+                   offset: int = 0) -> Dict[str, Any]:
+        """
+        Get all entries (transactions and other directives) with filtering and pagination
+        """
+        entries = []
+        
+        # Default to essential journal entry types if none specified
+        if not entry_types:
+            entry_types = ['transaction', 'balance', 'pad', 'note']
+        
+        print(f"[DEBUG] Processing entries with types: {entry_types}")
+        print(f"[DEBUG] Total beancount entries: {len(self.entries)}")
+        
+        # Filter entries based on type and other criteria
+        for i, entry in enumerate(self.entries):
+            try:
+                entry_type = self.get_entry_type(entry)
+                
+                # Skip if entry type not requested
+                if entry_type not in entry_types:
+                    continue
+                
+                # Apply date filters
+                if start_date:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    if entry.date < start_dt:
+                        continue
+                
+                if end_date:
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    if entry.date > end_dt:
+                        continue
+                
+                # Apply account filter (different logic for different entry types)
+                if account_filter:
+                    if not self.entry_matches_account(entry, account_filter):
+                        continue
+                
+                # Apply payee filter (only for transactions)
+                if payee_filter and isinstance(entry, data.Transaction):
+                    if not entry.payee or payee_filter.lower() not in entry.payee.lower():
+                        continue
+                
+                # Apply tag filter (only for transactions)
+                if tag_filter and isinstance(entry, data.Transaction):
+                    if not entry.tags or tag_filter.lower() not in [t.lower() for t in entry.tags]:
+                        continue
+                
+                # Apply search term
+                if search_term:
+                    if not self.entry_matches_search(entry, search_term):
+                        continue
+                
+                # Convert entry to dict
+                entry_data = self.entry_to_dict(entry)
+                entries.append(entry_data)
+                
+                if len(entries) % 100 == 0:
+                    print(f"[DEBUG] Processed {len(entries)} entries so far...")
+                    
+            except Exception as e:
+                print(f"[ERROR] Failed to process entry {i}: {e}")
+                continue
+        
+        print(f"[DEBUG] Filtered to {len(entries)} entries before pagination")
+        
+        # Sort by date descending (newest first)
+        entries.sort(key=lambda x: x['date'], reverse=True)
+        
+        # Apply pagination
+        total_count = len(entries)
+        entries = entries[offset:offset + limit]
+        
+        return {
+            'entries': entries,
+            'total_count': total_count,
+            'returned_count': len(entries),
+            'offset': offset,
+            'limit': limit,
+            'has_more': offset + len(entries) < total_count
+        }
+    
+    def get_entry_type(self, entry) -> str:
+        """Get the type of a Beancount entry (focused on journal essentials)"""
+        if isinstance(entry, data.Transaction):
+            return 'transaction'
+        elif isinstance(entry, data.Note):
+            return 'note'
+        elif isinstance(entry, data.Balance):
+            return 'balance'
+        elif isinstance(entry, data.Pad):
+            return 'pad'
+        else:
+            return 'unknown'
+    
+    def entry_matches_account(self, entry, account_filter: str) -> bool:
+        """Check if an entry matches the account filter"""
+        account_lower = account_filter.lower()
+        
+        if isinstance(entry, data.Transaction):
+            return any(account_lower in posting.account.lower() for posting in entry.postings)
+        elif isinstance(entry, (data.Note, data.Balance, data.Pad)):
+            return account_lower in entry.account.lower()
+        
+        return False
+    
+    def entry_matches_search(self, entry, search_term: str) -> bool:
+        """Check if an entry matches the search term"""
+        search_lower = search_term.lower()
+        
+        if isinstance(entry, data.Transaction):
+            matches_payee = entry.payee and search_lower in entry.payee.lower()
+            matches_narration = entry.narration and search_lower in entry.narration.lower()
+            matches_account = any(search_lower in posting.account.lower() for posting in entry.postings)
+            return matches_payee or matches_narration or matches_account
+        
+        elif isinstance(entry, data.Note):
+            matches_account = search_lower in entry.account.lower()
+            matches_comment = search_lower in entry.comment.lower()
+            return matches_account or matches_comment
+        
+        elif isinstance(entry, (data.Balance, data.Pad)):
+            return search_lower in entry.account.lower()
+        
+        return False
+    
+    def entry_to_dict(self, entry) -> Dict[str, Any]:
+        """Convert any supported Beancount entry to a dictionary"""
+        # Safely convert metadata
+        safe_metadata = {}
+        if hasattr(entry, 'meta') and entry.meta:
+            for key, value in entry.meta.items():
+                try:
+                    # Only include JSON-serializable values
+                    if value is None or isinstance(value, (str, int, float, bool)):
+                        safe_metadata[key] = value
+                    elif hasattr(value, 'isoformat'):  # Date objects
+                        safe_metadata[key] = value.isoformat()
+                    else:
+                        # Convert other types to string
+                        safe_metadata[key] = str(value)
+                except Exception as e:
+                    print(f"[WARNING] Skipping metadata key '{key}' due to serialization error: {e}")
+                    continue
+        
+        base_data = {
+            'id': self.generate_entry_id(entry),
+            'type': self.get_entry_type(entry),
+            'date': entry.date.isoformat(),
+            'metadata': safe_metadata
+        }
+        
+        if isinstance(entry, data.Transaction):
+            return {**base_data, **self.transaction_to_dict_data(entry)}
+        elif isinstance(entry, data.Note):
+            return {**base_data, **self.note_to_dict_data(entry)}
+        elif isinstance(entry, data.Balance):
+            return {**base_data, **self.balance_to_dict_data(entry)}
+        elif isinstance(entry, data.Pad):
+            return {**base_data, **self.pad_to_dict_data(entry)}
+        else:
+            return base_data
+    
+    def generate_entry_id(self, entry) -> str:
+        """Generate a unique ID for any supported entry"""
+        entry_type = self.get_entry_type(entry)
+        date_str = entry.date.isoformat()
+        
+        if isinstance(entry, data.Transaction):
+            return f"{date_str}_{entry_type}_{hash(entry.narration)}_{len(entry.postings)}"
+        elif isinstance(entry, data.Note):
+            return f"{date_str}_{entry_type}_{hash(entry.account)}_{hash(entry.comment)}"
+        elif isinstance(entry, (data.Balance, data.Pad)):
+            return f"{date_str}_{entry_type}_{hash(entry.account)}"
+        else:
+            return f"{date_str}_{entry_type}_{hash(str(entry))}"
+    
+    def transaction_to_dict_data(self, transaction: data.Transaction) -> Dict[str, Any]:
+        """Convert transaction-specific data"""
+        postings = []
+        for posting in transaction.postings:
+            posting_data = {
+                'account': posting.account,
+                'amount': None,
+                'currency': None,
+                'price': None,
+                'cost': None
+            }
+            
+            if posting.units:
+                posting_data['amount'] = str(posting.units.number)
+                posting_data['currency'] = posting.units.currency
+            
+            if posting.price:
+                posting_data['price'] = {
+                    'amount': str(posting.price.number),
+                    'currency': posting.price.currency
+                }
+            
+            if posting.cost:
+                posting_data['cost'] = {
+                    'number': str(posting.cost.number) if posting.cost.number else None,
+                    'currency': posting.cost.currency,
+                    'date': posting.cost.date.isoformat() if posting.cost.date else None,
+                    'label': posting.cost.label
+                }
+            
+            postings.append(posting_data)
+        
+        return {
+            'flag': transaction.flag,
+            'payee': transaction.payee,
+            'narration': transaction.narration,
+            'tags': list(transaction.tags) if transaction.tags else [],
+            'links': list(transaction.links) if transaction.links else [],
+            'postings': postings
+        }
+    
+    def note_to_dict_data(self, note: data.Note) -> Dict[str, Any]:
+        """Convert Note directive data"""
+        return {
+            'account': note.account,
+            'comment': note.comment
+        }
+    
+    def balance_to_dict_data(self, balance: data.Balance) -> Dict[str, Any]:
+        """Convert Balance directive data"""
+        return {
+            'account': balance.account,
+            'amount': str(balance.amount.number),
+            'currency': balance.amount.currency,
+            'tolerance': str(balance.tolerance) if balance.tolerance else None,
+            'diff_amount': str(balance.diff_amount.number) if balance.diff_amount else None
+        }
+    
+    def pad_to_dict_data(self, pad: data.Pad) -> Dict[str, Any]:
+        """Convert Pad directive data"""
+        return {
+            'account': pad.account,
+            'source_account': pad.source_account
+        }
+    
+    def get_transactions(self, 
+                        start_date: Optional[str] = None,
+                        end_date: Optional[str] = None,
+                        account_filter: Optional[str] = None,
+                        payee_filter: Optional[str] = None,
+                        tag_filter: Optional[str] = None,
+                        search_term: Optional[str] = None,
+                        limit: int = 100,
+                        offset: int = 0) -> Dict[str, Any]:
+        """
+        Legacy method to get only transactions (for backward compatibility)
+        """
+        result = self.get_entries(
+            start_date=start_date,
+            end_date=end_date,
+            account_filter=account_filter,
+            payee_filter=payee_filter,
+            tag_filter=tag_filter,
+            search_term=search_term,
+            entry_types=['transaction'],
+            limit=limit,
+            offset=offset
+        )
+        
+        # Rename 'entries' to 'transactions' for backward compatibility
+        return {
+            'transactions': result['entries'],
+            'total_count': result['total_count'],
+            'returned_count': result['returned_count'],
+            'offset': result['offset'],
+            'limit': result['limit'],
+            'has_more': result['has_more']
+        }
+    
+    def get_accounts(self) -> List[str]:
+        """Get all account names"""
+        accounts = set()
+        for entry in self.entries:
+            if isinstance(entry, data.Transaction):
+                for posting in entry.postings:
+                    accounts.add(posting.account)
+            elif isinstance(entry, data.Open):
+                accounts.add(entry.account)
+        
+        return sorted(list(accounts))
+    
+    def get_payees(self) -> List[str]:
+        """Get all unique payees"""
+        payees = set()
+        for entry in self.entries:
+            if isinstance(entry, data.Transaction) and entry.payee:
+                payees.add(entry.payee)
+        
+        return sorted(list(payees))
+    
+    def get_tags(self) -> List[str]:
+        """Get all unique tags"""
+        tags = set()
+        for entry in self.entries:
+            if isinstance(entry, data.Transaction) and entry.tags:
+                tags.update(entry.tags)
+        
+        return sorted(list(tags))
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive statistics about the ledger (focused on journal essentials)"""
+        stats = {
+            'transaction_count': 0,
+            'note_count': 0,
+            'balance_count': 0,
+            'pad_count': 0,
+            'total_entries': 0,
+            'date_range': {'start': None, 'end': None},
+            'account_count': 0,
+            'file_path': self.beancount_file,
+            'last_loaded': datetime.now().isoformat()
+        }
+        
+        for entry in self.entries:
+            entry_type = self.get_entry_type(entry)
+            
+            # Only count essential entry types
+            if entry_type in ['transaction', 'note', 'balance', 'pad']:
+                stats[f'{entry_type}_count'] += 1
+                stats['total_entries'] += 1
+                
+                # Update date range
+                if stats['date_range']['start'] is None or entry.date < stats['date_range']['start']:
+                    stats['date_range']['start'] = entry.date
+                
+                if stats['date_range']['end'] is None or entry.date > stats['date_range']['end']:
+                    stats['date_range']['end'] = entry.date
+        
+        stats['account_count'] = len(self.get_accounts())
+        
+        # Convert dates to ISO format
+        if stats['date_range']['start']:
+            stats['date_range']['start'] = stats['date_range']['start'].isoformat()
+        if stats['date_range']['end']:
+            stats['date_range']['end'] = stats['date_range']['end'].isoformat()
+        
+        return stats
+
+    def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
+        """Find a transaction by its ID"""
+        for entry in self.entries:
+            if isinstance(entry, data.Transaction):
+                entry_id = self.generate_entry_id(entry)
+                if entry_id == transaction_id:
+                    return entry
+        return None
+
+    def update_transaction_in_file(self, transaction_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a transaction in the Beancount file"""
+        try:
+            # Find the original transaction
+            original_transaction = self.find_transaction_by_id(transaction_id)
+            if not original_transaction:
+                return {'success': False, 'error': 'Transaction not found'}
+
+            # Create backup
+            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(self.beancount_file, backup_path)
+
+            # Read the file content
+            with open(self.beancount_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Find the transaction in the file by looking for its line number
+            if hasattr(original_transaction, 'meta') and 'lineno' in original_transaction.meta:
+                lineno = original_transaction.meta['lineno']
+                lines = content.split('\n')
+                
+                # Generate new transaction text
+                new_transaction_text = self.generate_transaction_text(updated_data)
+                
+                # Find the start and end of the transaction
+                start_line = lineno - 1  # Convert to 0-based indexing
+                end_line = start_line
+                
+                # Find the end of the transaction (next non-indented line or empty line)
+                while end_line + 1 < len(lines):
+                    next_line = lines[end_line + 1].strip()
+                    if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
+                        break
+                    end_line += 1
+                
+                # Replace the transaction
+                lines[start_line:end_line + 1] = new_transaction_text.split('\n')
+                
+                # Write back to file
+                with open(self.beancount_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                
+                # Reload the data
+                self.reload_data()
+                
+                return {
+                    'success': True, 
+                    'message': 'Transaction updated successfully',
+                    'backup_file': backup_path
+                }
+            else:
+                return {'success': False, 'error': 'Could not locate transaction in file'}
+
+        except Exception as e:
+            return {'success': False, 'error': f'Failed to update transaction: {str(e)}'}
+
+    def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
+        """Delete a transaction from the Beancount file"""
+        try:
+            # Find the original transaction
+            original_transaction = self.find_transaction_by_id(transaction_id)
+            if not original_transaction:
+                return {'success': False, 'error': 'Transaction not found'}
+
+            # Create backup
+            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(self.beancount_file, backup_path)
+
+            # Read the file content
+            with open(self.beancount_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Find the transaction in the file by looking for its line number
+            if hasattr(original_transaction, 'meta') and 'lineno' in original_transaction.meta:
+                lineno = original_transaction.meta['lineno']
+                lines = content.split('\n')
+                
+                # Find the start and end of the transaction
+                start_line = lineno - 1  # Convert to 0-based indexing
+                end_line = start_line
+                
+                # Find the end of the transaction (next non-indented line or empty line)
+                while end_line + 1 < len(lines):
+                    next_line = lines[end_line + 1].strip()
+                    if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
+                        break
+                    end_line += 1
+                
+                # Remove the transaction lines
+                del lines[start_line:end_line + 1]
+                
+                # Write back to file
+                with open(self.beancount_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                
+                # Reload the data
+                self.reload_data()
+                
+                return {
+                    'success': True, 
+                    'message': 'Transaction deleted successfully',
+                    'backup_file': backup_path
+                }
+            else:
+                return {'success': False, 'error': 'Could not locate transaction in file'}
+
+        except Exception as e:
+            return {'success': False, 'error': f'Failed to delete transaction: {str(e)}'}
+
+    def generate_transaction_text(self, transaction_data: Dict[str, Any]) -> str:
+        """Generate Beancount transaction text from transaction data"""
+        date_str = transaction_data['date']
+        flag = transaction_data.get('flag', '*')
+        payee = transaction_data.get('payee', '')
+        narration = transaction_data.get('narration', '')
+        tags = transaction_data.get('tags', [])
+        links = transaction_data.get('links', [])
+        
+        # Format payee and narration
+        if payee and narration:
+            payee_narration = f'"{payee}" "{narration}"'
+        elif narration:
+            payee_narration = f'"{narration}"'
+        else:
+            payee_narration = '""'
+        
+        # Build the transaction header with tags and links
+        header_parts = [date_str, flag, payee_narration]
+        
+        # Add tags (with # prefix)
+        if tags:
+            for tag in tags:
+                header_parts.append(f"#{tag}")
+        
+        # Add links (with ^ prefix)
+        if links:
+            for link in links:
+                header_parts.append(f"^{link}")
+        
+        # Start with the transaction line
+        lines = [" ".join(header_parts)]
+        
+        # Add postings
+        for posting in transaction_data.get('postings', []):
+            account = posting['account']
+            amount = posting.get('amount')
+            currency = posting.get('currency')
+            
+            if amount and currency:
+                posting_line = f"  {account}  {amount} {currency}"
+            else:
+                posting_line = f"  {account}"
+            
+            lines.append(posting_line)
+        
+        return '\n'.join(lines)
+
+    def add_entry_to_file(self, entry_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add a new entry (transaction, balance, or note) to the Beancount file"""
+        try:
+            # Create backup
+            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(self.beancount_file, backup_path)
+
+            # Generate entry text based on type
+            entry_type = entry_data.get('type', 'transaction')
+            if entry_type == 'transaction':
+                entry_text = self.generate_transaction_text(entry_data)
+            elif entry_type == 'balance':
+                entry_text = self.generate_balance_text(entry_data)
+            elif entry_type == 'note':
+                entry_text = self.generate_note_text(entry_data)
+            else:
+                raise ValueError(f"Unsupported entry type: {entry_type}")
+            
+            # Append to file with proper newlines
+            with open(self.beancount_file, 'a', encoding='utf-8') as f:
+                f.write('\n' + entry_text + '\n')
+            
+            # Reload the data
+            self.reload_data()
+            
+            return {
+                'success': True, 
+                'message': f'{entry_type.capitalize()} added successfully',
+                'backup_file': backup_path
+            }
+
+        except Exception as e:
+            return {'success': False, 'error': f'Failed to add {entry_data.get("type", "entry")}: {str(e)}'}
+
+    def generate_balance_text(self, balance_data: Dict[str, Any]) -> str:
+        """Generate balance assertion text for Beancount file"""
+        date_str = balance_data['date']
+        account = balance_data['account']
+        amount = balance_data['amount']
+        currency = balance_data['currency']
+        tolerance = balance_data.get('tolerance')
+        
+        if tolerance:
+            return f"{date_str} balance {account} {amount} {currency} ~ {tolerance} {currency}"
+        else:
+            return f"{date_str} balance {account} {amount} {currency}"
+
+    def generate_note_text(self, note_data: Dict[str, Any]) -> str:
+        """Generate note directive text for Beancount file"""
+        date_str = note_data['date']
+        account = note_data['account']
+        comment = note_data['comment']
+        
+        return f'{date_str} note {account} "{comment}"'
+
+    def add_transaction_to_file(self, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Legacy method - redirects to add_entry_to_file"""
+        transaction_data['type'] = 'transaction'
+        return self.add_entry_to_file(transaction_data)
+
+# Flask App Setup
+def create_app(beancount_file: str) -> Flask:
+    """Create and configure the Flask app"""
+    app = Flask(__name__)
+    CORS(app)  # Enable CORS for all routes
+    
+    # Initialize the API
+    api = BeancountJournalAPI(beancount_file)
+    
+    @app.route('/health', methods=['GET'])
+    def health():
+        """Health check endpoint"""
+        return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
+    
+    @app.route('/reload', methods=['POST'])
+    def reload():
+        """Reload the Beancount file"""
+        try:
+            api.reload_data()
+            return jsonify({'status': 'success', 'message': 'Data reloaded successfully'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+    @app.route('/transactions', methods=['GET'])
+    def get_transactions():
+        """Get transactions with optional filtering (legacy endpoint)"""
+        try:
+            # Get query parameters
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            account_filter = request.args.get('account')
+            payee_filter = request.args.get('payee')
+            tag_filter = request.args.get('tag')
+            search_term = request.args.get('search')
+            limit = int(request.args.get('limit', 100))
+            offset = int(request.args.get('offset', 0))
+            
+            result = api.get_transactions(
+                start_date=start_date,
+                end_date=end_date,
+                account_filter=account_filter,
+                payee_filter=payee_filter,
+                tag_filter=tag_filter,
+                search_term=search_term,
+                limit=limit,
+                offset=offset
+            )
+            
+            return jsonify(result)
+        
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/transactions', methods=['POST'])
+    def create_entry():
+        """Create a new entry (transaction, balance, or note)"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            # Validate required fields based on entry type
+            entry_type = request.json.get('type', 'transaction')
+            
+            if entry_type == 'transaction':
+                required_fields = ['date', 'narration', 'postings']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
+                
+                # Validate postings
+                postings = request.json['postings']
+                if not isinstance(postings, list) or len(postings) < 2:
+                    return jsonify({'error': 'At least 2 postings are required'}), 400
+                
+                for i, posting in enumerate(postings):
+                    if 'account' not in posting:
+                        return jsonify({'error': f'Posting {i + 1} missing account'}), 400
+                        
+            elif entry_type == 'balance':
+                required_fields = ['date', 'account', 'amount', 'currency']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
+                        
+            elif entry_type == 'note':
+                required_fields = ['date', 'account', 'comment']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
+            else:
+                return jsonify({'error': f'Unsupported entry type: {entry_type}'}), 400
+            
+            result = api.add_entry_to_file(request.json)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/entries', methods=['GET'])
+    def get_entries():
+        """Get all entries (transactions and other directives) with optional filtering"""
+        try:
+            # Get query parameters
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            account_filter = request.args.get('account')
+            payee_filter = request.args.get('payee')
+            tag_filter = request.args.get('tag')
+            search_term = request.args.get('search')
+            limit = int(request.args.get('limit', 100))
+            offset = int(request.args.get('offset', 0))
+            
+            # Parse entry types filter
+            entry_types_param = request.args.get('types')
+            entry_types = None
+            if entry_types_param:
+                entry_types = [t.strip() for t in entry_types_param.split(',')]
+            
+            print(f"[DEBUG] get_entries called with entry_types: {entry_types}")
+            
+            result = api.get_entries(
+                start_date=start_date,
+                end_date=end_date,
+                account_filter=account_filter,
+                payee_filter=payee_filter,
+                tag_filter=tag_filter,
+                search_term=search_term,
+                entry_types=entry_types,
+                limit=limit,
+                offset=offset
+            )
+            
+            print(f"[DEBUG] get_entries returning {len(result.get('entries', []))} entries")
+            return jsonify(result)
+        
+        except Exception as e:
+            print(f"[ERROR] get_entries failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts', methods=['GET'])
+    def get_accounts():
+        """Get all account names"""
+        try:
+            accounts = api.get_accounts()
+            return jsonify({'accounts': accounts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/payees', methods=['GET'])
+    def get_payees():
+        """Get all payees"""
+        try:
+            payees = api.get_payees()
+            return jsonify({'payees': payees})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/tags', methods=['GET'])
+    def get_tags():
+        """Get all tags"""
+        try:
+            tags = api.get_tags()
+            return jsonify({'tags': tags})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/statistics', methods=['GET'])
+    def get_statistics():
+        """Get ledger statistics"""
+        try:
+            stats = api.get_statistics()
+            return jsonify(stats)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/transactions/<transaction_id>', methods=['PUT'])
+    def update_transaction(transaction_id: str):
+        """Update a transaction"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            # Validate required fields
+            required_fields = ['date', 'narration', 'postings']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            # Validate postings
+            postings = request.json['postings']
+            if not isinstance(postings, list) or len(postings) < 2:
+                return jsonify({'error': 'At least 2 postings are required'}), 400
+            
+            for i, posting in enumerate(postings):
+                if 'account' not in posting:
+                    return jsonify({'error': f'Posting {i + 1} missing account'}), 400
+            
+            result = api.update_transaction_in_file(transaction_id, request.json)
+            
+            if result['success']:
+                return jsonify(result), 200
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/transactions/<transaction_id>', methods=['DELETE'])
+    def delete_transaction(transaction_id: str):
+        """Delete a transaction"""
+        try:
+            result = api.delete_transaction_from_file(transaction_id)
+            
+            if result['success']:
+                return jsonify(result), 200
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/transactions/<transaction_id>', methods=['GET'])
+    def get_transaction_by_id(transaction_id: str):
+        """Get a specific transaction by ID"""
+        try:
+            transaction = api.find_transaction_by_id(transaction_id)
+            if transaction:
+                transaction_dict = api.entry_to_dict(transaction)
+                return jsonify(transaction_dict)
+            else:
+                return jsonify({'error': 'Transaction not found'}), 404
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    return app
+
+def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description='Beancount Journal API Server')
+    parser.add_argument('beancount_file', help='Path to the Beancount file')
+    parser.add_argument('--port', type=int, default=5001, help='Port to run the server on')
+    parser.add_argument('--host', default='localhost', help='Host to bind the server to')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    
+    args = parser.parse_args()
+    
+    if not os.path.exists(args.beancount_file):
+        print(f"Error: Beancount file '{args.beancount_file}' not found")
+        sys.exit(1)
+    
+    print(f"Starting Beancount Journal API server...")
+    print(f"Beancount file: {args.beancount_file}")
+    print(f"Server: http://{args.host}:{args.port}")
+    
+    app = create_app(args.beancount_file)
+    app.run(host=args.host, port=args.port, debug=args.debug)
+
+if __name__ == '__main__':
+    main()

@@ -4,6 +4,7 @@
 	import BalanceSheetTab from '../components/tabs/BalanceSheetTab.svelte';
 	import AccountsTab from '../components/tabs/AccountsTab.svelte';
 	import CommoditiesTab from '../components/tabs/CommoditiesTab.svelte';
+	import JournalTab from '../components/tabs/JournalTab.svelte';
 	import { createEventDispatcher } from 'svelte';
 	
 	// --- Import Controller Types ---
@@ -12,6 +13,7 @@
 	import type { BalanceSheetController } from '../controllers/BalanceSheetController';
 	import type { AccountsController } from '../controllers/AccountsController';
 	import type { CommoditiesController } from '../controllers/CommoditiesController';
+	import type { JournalController } from '../controllers/JournalController';
 
 	// --- Receive Controllers as props ---
 	export let overviewController: OverviewController;
@@ -19,9 +21,10 @@
 	export let balanceSheetController: BalanceSheetController;
 	export let accountsController: AccountsController;
 	export let commoditiesController: CommoditiesController;
+	export let journalController: JournalController;
 	// --- REMOVED transactionState prop ---
 
-	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet' | 'Accounts' | 'Commodities';
+	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet' | 'Accounts' | 'Commodities' | 'Journal';
 	let activeTab: Tab = 'Overview'; // Default to Overview
 
 	const dispatch = createEventDispatcher();
@@ -37,6 +40,7 @@
 		<button class:active={activeTab === 'Balance Sheet'} on:click={() => activeTab = 'Balance Sheet'}>Balance Sheet</button>
 		<button class:active={activeTab === 'Accounts'} on:click={() => activeTab = 'Accounts'}>Accounts</button>
 		<button class:active={activeTab === 'Commodities'} on:click={() => activeTab = 'Commodities'}>Commodities</button>
+		<button class:active={activeTab === 'Journal'} on:click={() => activeTab = 'Journal'}>Journal</button>
 	</div>
 
 	<div class="tab-content">
@@ -57,6 +61,9 @@
 
 		{:else if activeTab === 'Commodities'}
 			<CommoditiesTab controller={commoditiesController} />
+
+		{:else if activeTab === 'Journal'}
+			<JournalTab controller={journalController} />
 		{/if}
 	</div>
 </div>
