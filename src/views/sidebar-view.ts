@@ -23,7 +23,9 @@ export class BeancountView extends ItemView {
 		hasUnconvertedCommodities: false,
 		kpiError: null as string | null,
 		fileStatus: "checking" as "checking" | "ok" | "error",
-		fileStatusMessage: "" as string | null
+		fileStatusMessage: "" as string | null,
+		errorCount: 0,
+		errorList: [] as string[]
 	};
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
@@ -110,7 +112,9 @@ export class BeancountView extends ItemView {
 				hasUnconvertedCommodities,
 				kpiError: null, 
 				fileStatus: checkResult.status, 
-				fileStatusMessage: checkResult.message
+				fileStatusMessage: checkResult.message,
+				errorCount: checkResult.errorCount,
+				errorList: checkResult.errorList
 			});
 
 		} catch (error) {
@@ -119,7 +123,9 @@ export class BeancountView extends ItemView {
 				kpiError: error.message, 
 				hasUnconvertedCommodities: false,
 				fileStatus: "error", 
-				fileStatusMessage: "Failed during refresh." 
+				fileStatusMessage: "Failed during refresh.",
+				errorCount: 0,
+				errorList: []
 			});
 		} finally {
 			if(this.state.isLoading) this.updateProps({ isLoading: false });
@@ -127,11 +133,11 @@ export class BeancountView extends ItemView {
 	}
 
 	// --- Runs bean-check ---
-	async runBeanCheck(): Promise<{ status: "ok" | "error"; message: string | null }> {
+	async runBeanCheck(): Promise<{ status: "ok" | "error"; message: string | null; errorCount: number; errorList: string[] }> {
 		const filePath = this.plugin.settings.beancountFilePath;
 		let commandBase = this.plugin.settings.beancountCommand;
-		if (!filePath) return { status: "error", message: "File path not set." };
-		if (!commandBase) return { status: "error", message: "Command not set." };
+		if (!filePath) return { status: "error", message: "File path not set.", errorCount: 0, errorList: [] };
+		if (!commandBase) return { status: "error", message: "Command not set.", errorCount: 0, errorList: [] };
 
 		// --- Use imported query function ---
 		const command = queries.getBeanCheckCommand(filePath, commandBase);
@@ -142,15 +148,49 @@ export class BeancountView extends ItemView {
 			exec(command, (error, stdout, stderr) => {
 				if (error || stdout || stderr) {
 					const errorMessage = stdout || stderr || (error ? error.message : "Unknown check error.");
+					
+					// Parse error lines to extract individual errors
+					const errorLines = this.parseErrorLines(errorMessage);
+					const errorCount = errorLines.length;
+					
 					// console.error("bean-check failed:", errorMessage); 
-					resolve({ status: "error", message: errorMessage });
+					resolve({ 
+						status: "error", 
+						message: errorMessage,
+						errorCount,
+						errorList: errorLines
+					});
 				} else {
 					// console.log("bean-check successful"); 
-					resolve({ status: "ok", message: "File OK" });
+					resolve({ 
+						status: "ok", 
+						message: "File OK",
+						errorCount: 0,
+						errorList: []
+					});
 				}
 			});
 			// ------------------------------------------
 		});
+	}
+
+	// --- Parse bean-check output to extract individual error lines ---
+	private parseErrorLines(output: string): string[] {
+		if (!output) return [];
+		
+		// Split by lines and filter for error patterns
+		const lines = output.split('\n');
+		const errorLines: string[] = [];
+		
+		for (const line of lines) {
+			const trimmed = line.trim();
+			// Match error lines that follow the pattern: filename:line: Error message
+			if (trimmed && trimmed.match(/^[^:]+:\d+:\s/)) {
+				errorLines.push(trimmed);
+			}
+		}
+		
+		return errorLines;
 	}
 
 	// --- Opens the ledger file ---

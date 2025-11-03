@@ -13,10 +13,17 @@ export class UnifiedTransactionModal extends Modal {
     private transaction: JournalTransaction | null;
     private entry: JournalEntry | null;
     private mode: 'add' | 'edit';
+    private onRefreshCallback?: () => Promise<void>; // Add refresh callback
 
-    constructor(app: App, plugin: BeancountPlugin, entryOrTransaction: JournalEntry | JournalTransaction | null = null) {
+    constructor(
+        app: App, 
+        plugin: BeancountPlugin, 
+        entryOrTransaction: JournalEntry | JournalTransaction | null = null,
+        onRefresh?: () => Promise<void> // Add optional refresh callback
+    ) {
         super(app);
         this.plugin = plugin;
+        this.onRefreshCallback = onRefresh;
         
         // Handle both transaction (legacy) and entry (new) parameters
         if (entryOrTransaction?.type === 'transaction') {
@@ -106,6 +113,17 @@ export class UnifiedTransactionModal extends Modal {
             const success = await this.journalController.addEntry(entryData);
             if (success) {
                 new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} added successfully!`);
+                
+                // Call refresh callback if provided
+                if (this.onRefreshCallback) {
+                    try {
+                        await this.onRefreshCallback();
+                    } catch (error) {
+                        console.error('Error refreshing dashboard:', error);
+                        // Don't show error to user since transaction was successful
+                    }
+                }
+                
                 this.close();
             }
         } catch (error) {
@@ -122,6 +140,17 @@ export class UnifiedTransactionModal extends Modal {
             const success = await this.journalController.updateTransaction(entryId!, entryData);
             if (success) {
                 new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} updated successfully!`);
+                
+                // Call refresh callback if provided
+                if (this.onRefreshCallback) {
+                    try {
+                        await this.onRefreshCallback();
+                    } catch (error) {
+                        console.error('Error refreshing dashboard:', error);
+                        // Don't show error to user since update was successful
+                    }
+                }
+                
                 this.close();
             }
         } catch (error) {
@@ -135,6 +164,17 @@ export class UnifiedTransactionModal extends Modal {
             const success = await this.journalController.deleteTransaction(entryId);
             if (success) {
                 new Notice('Entry deleted successfully!');
+                
+                // Call refresh callback if provided
+                if (this.onRefreshCallback) {
+                    try {
+                        await this.onRefreshCallback();
+                    } catch (error) {
+                        console.error('Error refreshing dashboard:', error);
+                        // Don't show error to user since deletion was successful
+                    }
+                }
+                
                 this.close();
             }
         } catch (error) {

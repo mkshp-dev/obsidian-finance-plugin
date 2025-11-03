@@ -33,7 +33,7 @@ export default class BeancountPlugin extends Plugin {
 		);
 		// Add Ribbon Icons
 		this.addRibbonIcon('plus-circle', 'Add Transaction', () => {
-			new UnifiedTransactionModal(this.app, this).open();
+			new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open();
 		});
 		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
 			this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); // Open the NEW view
@@ -47,7 +47,7 @@ export default class BeancountPlugin extends Plugin {
 		this.addCommand({
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount Transaction',
-			callback: () => { new UnifiedTransactionModal(this.app, this).open(); }
+			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
 		});
 		this.addCommand({
 			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view
@@ -118,6 +118,20 @@ export default class BeancountPlugin extends Plugin {
 	// Make convertWslPathToWindows available publicly
 	public convertWslPathToWindows = (wslPath: string): string => {
 		return convertWslPathToWindows(wslPath);
+	}
+
+	// Helper method to get dashboard refresh callback
+	private getDashboardRefreshCallback(): () => Promise<void> {
+		return async () => {
+			// Find the unified dashboard view and call its refresh method
+			const leaves = this.app.workspace.getLeavesOfType(UNIFIED_DASHBOARD_VIEW_TYPE);
+			for (const leaf of leaves) {
+				if (leaf.view instanceof UnifiedDashboardView) {
+					await leaf.view.refreshAllTabs();
+					break;
+				}
+			}
+		};
 	}
 
 	onunload() {}

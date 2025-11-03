@@ -10,6 +10,8 @@
 	export let kpiError: string | null = null;
 	export let fileStatus: "checking" | "ok" | "error" = "checking";
 	export let fileStatusMessage: string | null = "";
+	export let errorCount = 0;
+	export let errorList: string[] = [];
 
 	const dispatch = createEventDispatcher();
 
@@ -44,7 +46,7 @@
 			{:else if fileStatus === 'ok'}
 				<span>✅ OK</span>
 			{:else if fileStatus === 'error'}
-				<span>❌ Error</span>
+				<span>❌ {errorCount} Error{errorCount !== 1 ? 's' : ''}</span>
 			{/if}
 		</button>
 
@@ -102,6 +104,25 @@
 			<path d="m12 17 .01 0"/>
 		</svg>
 		<span>Some commodities lack price data and are excluded from totals</span>
+	</div>
+{/if}
+
+{#if fileStatus === 'error' && errorList.length > 0}
+	<hr class="error-separator">
+	<div class="error-section">
+		<h4>Errors ({errorCount})</h4>
+		<div class="error-list">
+			{#each errorList as error}
+				<div class="error-item">
+					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"/>
+						<path d="m15 9-6 6"/>
+						<path d="m9 9 6 6"/>
+					</svg>
+					<span class="error-text">{error}</span>
+				</div>
+			{/each}
+		</div>
 	</div>
 {/if}
 
@@ -231,5 +252,48 @@
 	}
 	.conversion-warning span {
 		line-height: 1.3;
+	}
+
+	/* --- Error Section Styles --- */
+	.error-separator {
+		border: none;
+		border-top: 1px solid var(--background-modifier-border);
+		margin: 15px 0 10px 0;
+	}
+	
+	.error-section h4 {
+		color: var(--text-error);
+		margin: 0 0 10px 0;
+		font-size: var(--font-ui-medium);
+	}
+	
+	.error-list {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	
+	.error-item {
+		display: flex;
+		align-items: flex-start;
+		gap: 6px;
+		padding: 6px 8px;
+		background-color: var(--background-secondary);
+		border-radius: 4px;
+		border-left: 3px solid var(--text-error);
+	}
+	
+	.error-item svg {
+		flex-shrink: 0;
+		color: var(--text-error);
+		margin-top: 2px;
+	}
+	
+	.error-text {
+		font-size: var(--font-ui-small);
+		color: var(--text-normal);
+		line-height: 1.4;
+		word-break: break-all;
+		font-family: var(--font-monospace);
 	}
 </style>

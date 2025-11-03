@@ -73,27 +73,68 @@ export class OverviewController {
 			const incomeInventoryStr = this.plugin.parseSingleValue(incomeResult);
 			const expensesInventoryStr = this.plugin.parseSingleValue(expensesResult);
 
+			console.log('Raw query results:', {
+				assets: assetsInventoryStr,
+				liabilities: liabilitiesInventoryStr,
+				income: incomeInventoryStr,
+				expenses: expensesInventoryStr
+			});
+
 			const assetsStr = extractConvertedAmount(assetsInventoryStr, reportingCurrency);
 			const liabilitiesStr = extractConvertedAmount(liabilitiesInventoryStr, reportingCurrency);
 			const incomeStr = extractConvertedAmount(incomeInventoryStr, reportingCurrency);
 			const expensesStr = extractConvertedAmount(expensesInventoryStr, reportingCurrency);
 			
+			console.log('Extracted amounts:', {
+				assets: assetsStr,
+				liabilities: liabilitiesStr,
+				income: incomeStr,
+				expenses: expensesStr
+			});
+			
 			const assetsData = parseAmount(assetsStr);
 			const liabilitiesData = parseAmount(liabilitiesStr);
 			const incomeData = parseAmount(incomeStr);
 			const expensesData = parseAmount(expensesStr);
-			const expensesAbs = Math.abs(expensesData.amount);
 			
-			const netWorthNum = assetsData.amount - liabilitiesData.amount;
-			const savingsNum = incomeData.amount - expensesAbs;
+			// In Beancount:
+			// - Income accounts have negative balances (we want positive for display)
+			// - Expense accounts have positive balances (already positive)
+			// - Liability accounts have negative balances (we want positive for display)
+			const incomeAmount = Math.abs(incomeData.amount); // Convert negative income to positive
+			const expensesAmount = expensesData.amount; // Expenses are already positive
+			const liabilitiesAmount = Math.abs(liabilitiesData.amount); // Convert negative liabilities to positive
+			
+			console.log('Parsed amounts:', {
+				assets: assetsData,
+				liabilities: liabilitiesData,
+				income: incomeData,
+				expenses: expensesData,
+				incomeAmount: incomeAmount,
+				expensesAmount: expensesAmount,
+				liabilitiesAmount: liabilitiesAmount
+			});
+			
+			const netWorthNum = assetsData.amount - liabilitiesAmount;
+			const savingsNum = incomeAmount - expensesAmount;
+
+			console.log('Calculations:', {
+				netWorth: netWorthNum,
+				savings: savingsNum,
+				income: incomeAmount,
+				expenses: expensesAmount,
+				savingsRate: incomeAmount > 0 ? ((savingsNum / incomeAmount) * 100).toFixed(0) : 'N/A'
+			});
 
 			const newState: Partial<OverviewState> = {
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
-				monthlyIncome: `${incomeData.amount.toFixed(2)} ${reportingCurrency}`,
-				monthlyExpenses: `${expensesAbs.toFixed(2)} ${reportingCurrency}`,
-				savingsRate: incomeData.amount > 0 ? `${((savingsNum / incomeData.amount) * 100).toFixed(0)}%` : 'N/A',
+				monthlyIncome: `${incomeAmount.toFixed(2)} ${reportingCurrency}`,
+				monthlyExpenses: `${expensesAmount.toFixed(2)} ${reportingCurrency}`,
+				savingsRate: incomeAmount > 0 ? `${((savingsNum / incomeAmount) * 100).toFixed(0)}%` : 'N/A',
 				currency: reportingCurrency,
 			};
+
+			console.log('Final state to be set:', newState);
 
 			// Process Historical Data for Chart
 			try {
@@ -108,33 +149,149 @@ export class OverviewController {
 				
 				for (const row of dataRows) {
 					if (row.length < 3) continue;
-					const month = row[0]; const account = row[1];
+					const month = row[0]; 
+					const account = row[1];
 					const sumStr = extractConvertedAmount(row[2], reportingCurrency);
 					const sumData = parseAmount(sumStr);
 					if (!monthlyChanges[month]) monthlyChanges[month] = { assets: 0, liabilities: 0 };
-					if (account.startsWith('Assets')) { monthlyChanges[month].assets += sumData.amount; }
-					else if (account.startsWith('Liabilities')) { monthlyChanges[month].liabilities += sumData.amount; }
+					if (account.startsWith('Assets')) { 
+						monthlyChanges[month].assets += sumData.amount; 
+					} else if (account.startsWith('Liabilities')) { 
+						// Correct Beancount accounting: liabilities are negative, convert to positive for net worth calculation
+						monthlyChanges[month].liabilities += Math.abs(sumData.amount); 
+					}
 				}
 
-				const labels: string[] = []; const dataPoints: number[] = [];
+				// Format month labels and sort properly
+				const formatMonthLabel = (monthStr: string): { sortKey: string, displayLabel: string } => {
+					// Handle different month formats from Beancount
+					if (monthStr.includes('-')) {
+						// Format: "2024-01" or "2024-1"
+						const [year, month] = monthStr.split('-');
+						const monthNum = parseInt(month);
+						const date = new Date(parseInt(year), monthNum - 1);
+						return {
+							sortKey: `${year}-${month.padStart(2, '0')}`,
+							displayLabel: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+						};
+					} else if (monthStr.length <= 2) {
+						// Format: "1", "12" (just month number, assume current year)
+						const currentYear = new Date().getFullYear();
+						const monthNum = parseInt(monthStr);
+						const date = new Date(currentYear, monthNum - 1);
+						return {
+							sortKey: `${currentYear}-${monthStr.padStart(2, '0')}`,
+							displayLabel: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+						};
+					} else {
+						// Fallback: use as-is
+						return {
+							sortKey: monthStr,
+							displayLabel: monthStr
+						};
+					}
+				};
+
+				const labels: string[] = []; 
+				const dataPoints: number[] = [];
 				let cumulativeNetWorth = 0;
-				const sortedMonths = Object.keys(monthlyChanges).sort();
-				for (const month of sortedMonths) {
-					const change = monthlyChanges[month];
+				
+				// Sort months properly by creating sort keys
+				const monthEntries = Object.entries(monthlyChanges).map(([month, data]) => ({
+					...formatMonthLabel(month),
+					data
+				}));
+				
+				monthEntries.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+				for (const entry of monthEntries) {
+					const change = entry.data;
 					cumulativeNetWorth += (change.assets - change.liabilities);
-					labels.push(month); dataPoints.push(cumulativeNetWorth);
+					labels.push(entry.displayLabel); 
+					dataPoints.push(cumulativeNetWorth);
 				}
+
+				console.log('Chart data processed:', {
+					monthlyChanges,
+					labels,
+					dataPoints,
+					finalNetWorth: cumulativeNetWorth
+				});
 
 				newState.chartConfig = {
 					type: 'line',
 					data: {
 						labels: labels,
 						datasets: [{
-							label: `Net Worth (${reportingCurrency})`, data: dataPoints,
-							borderColor: 'rgb(75, 192, 192)', tension: 0.1
+							label: `Net Worth (${reportingCurrency})`, 
+							data: dataPoints,
+							borderColor: 'rgb(75, 192, 192)', 
+							backgroundColor: 'rgba(75, 192, 192, 0.1)',
+							tension: 0.3,
+							fill: true,
+							pointRadius: 4,
+							pointHoverRadius: 6
 						}]
 					},
-					options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } }
+					options: { 
+						responsive: true, 
+						maintainAspectRatio: false,
+						plugins: {
+							title: {
+								display: true,
+								text: `Net Worth Over Time (${reportingCurrency})`,
+								font: { size: 16 }
+							},
+							legend: {
+								display: true,
+								position: 'top'
+							},
+							tooltip: {
+								mode: 'index',
+								intersect: false,
+								callbacks: {
+									label: function(context: any) {
+										const value = context.parsed.y;
+										return `Net Worth: ${value.toLocaleString()} ${reportingCurrency}`;
+									}
+								}
+							}
+						},
+						scales: { 
+							x: {
+								display: true,
+								title: {
+									display: true,
+									text: 'Month'
+								},
+								grid: {
+									display: true,
+									color: 'rgba(0, 0, 0, 0.1)'
+								}
+							},
+							y: { 
+								display: true,
+								title: {
+									display: true,
+									text: `Amount (${reportingCurrency})`
+								},
+								grid: {
+									display: true,
+									color: 'rgba(0, 0, 0, 0.1)'
+								},
+								ticks: {
+									callback: function(value: any) {
+										return value.toLocaleString();
+									}
+								}
+							}
+						},
+						interaction: {
+							mode: 'nearest',
+							axis: 'x',
+							intersect: false
+						}
+					}
 				};
 				newState.chartError = null;
 

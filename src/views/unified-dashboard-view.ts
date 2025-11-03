@@ -44,6 +44,22 @@ export class UnifiedDashboardView extends ItemView {
 	getDisplayText(): string { return "Beancount Dashboard"; }
 	getIcon(): string { return "layout-dashboard"; }
 
+	// Method to refresh all tabs when transactions are added
+	async refreshAllTabs() {
+		try {
+			await Promise.all([
+				this.overviewController.loadData(),
+				this.transactionController.loadFilterData(), // TransactionController doesn't have loadData
+				this.balanceSheetController.loadData(),
+				this.accountsController.loadData(),
+				this.commoditiesController.loadData(),
+				this.journalController.loadData()
+			]);
+		} catch (error) {
+			console.error('Error refreshing dashboard data:', error);
+		}
+	}
+
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
