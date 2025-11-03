@@ -48,7 +48,6 @@ export class UnifiedDashboardView extends ItemView {
 		this.component = new UnifiedDashboardComponent({
 			target: container,
 			props: {
-				plugin: this.plugin,
 				// --- Pass controllers to Svelte ---
 				overviewController: this.overviewController,
 				transactionController: this.transactionController,

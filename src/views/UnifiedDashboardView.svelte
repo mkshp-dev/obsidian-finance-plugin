@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type BeancountPlugin from '../main';
 	import OverviewTab from '../components/tabs/OverviewTab.svelte';
 	import TransactionsTab from '../components/tabs/TransactionsTab.svelte';
 	import BalanceSheetTab from '../components/tabs/BalanceSheetTab.svelte';
@@ -15,7 +14,6 @@
 	import type { CommoditiesController } from '../controllers/CommoditiesController';
 
 	// --- Receive Controllers as props ---
-	export let plugin: BeancountPlugin;
 	export let overviewController: OverviewController;
 	export let transactionController: TransactionController;
 	export let balanceSheetController: BalanceSheetController;

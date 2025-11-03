@@ -197,6 +197,8 @@
 
 <!-- Commodity Detail Modal -->
 {#if showDetailModal && $selectedCommodityStore}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div 
         class="modal-overlay" 
         on:click={closeDetailModal}
@@ -204,6 +206,8 @@
         aria-modal="true"
         aria-labelledby="modal-title"
     >
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
         <div 
             class="commodity-modal" 
             on:click|stopPropagation
@@ -629,14 +633,6 @@
         border-bottom: 1px solid var(--background-modifier-border-focus);
     }
 
-    .summary-row.highlighted {
-        background: var(--background-secondary);
-        padding: 12px;
-        border-radius: 6px;
-        border: none;
-        margin-top: 8px;
-    }
-
     .summary-row .label {
         font-weight: 500;
         color: var(--text-muted);
@@ -762,94 +758,6 @@
         border: 1px solid var(--background-modifier-border);
     }
 
-    .price-history h4 {
-        margin: 0 0 12px 0;
-        color: var(--text-normal);
-    }
-
-    .price-history-table {
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .table-header {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        background: var(--background-secondary);
-        padding: 12px;
-        font-weight: 600;
-        color: var(--text-normal);
-    }
-
-    .table-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        padding: 10px 12px;
-        border-top: 1px solid var(--background-modifier-border-focus);
-    }
-
-    .table-row:nth-child(even) {
-        background: var(--background-secondary-alt);
-    }
-
-    .table-row.more-entries {
-        font-style: italic;
-        color: var(--text-muted);
-        text-align: center;
-        grid-column: 1 / -1;
-    }
-
-    .no-price-history {
-        text-align: center;
-        padding: 40px;
-        color: var(--text-muted);
-    }
-
-    .no-price-icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-    }
-
-    .no-price-history h4 {
-        margin: 0 0 8px 0;
-        color: var(--text-normal);
-    }
-
-    .price-setup-guide {
-        background: var(--background-secondary);
-        border-radius: 8px;
-        padding: 16px;
-        margin-top: 20px;
-        text-align: left;
-    }
-
-    .price-setup-guide h5 {
-        margin: 0 0 12px 0;
-        color: var(--text-normal);
-    }
-
-    .price-setup-guide ol {
-        margin: 0;
-        padding-left: 20px;
-    }
-
-    .price-setup-guide li {
-        margin: 8px 0;
-        color: var(--text-muted);
-    }
-
-    .price-setup-guide code {
-        background: var(--background-primary);
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: var(--font-monospace);
-        font-size: 12px;
-        display: block;
-        margin: 4px 0;
-        border: 1px solid var(--background-modifier-border);
-    }
-
     @media (max-width: 768px) {
         .commodities-header {
             flex-direction: column;
@@ -873,12 +781,6 @@
         .commodity-modal {
             margin: 10px;
             max-height: 90vh;
-        }
-
-        .table-header,
-        .table-row {
-            grid-template-columns: 1fr 1fr 1fr;
-            font-size: 14px;
         }
     }
 </style>
