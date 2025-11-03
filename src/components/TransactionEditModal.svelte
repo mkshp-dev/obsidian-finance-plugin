@@ -7,6 +7,7 @@
     export let accounts: string[] = [];
     export let payees: string[] = [];
     export let tags: string[] = [];
+    export let currencies: string[] = []; // Add currencies prop
     export let mode: 'add' | 'edit' = (transaction || entry) ? 'edit' : 'add'; // Auto-detect mode
     export let defaultCurrency: string = 'INR';
     
@@ -328,6 +329,7 @@
                             <input 
                                 type="text" 
                                 bind:value={posting.currency}
+                                list="currencies-list"
                                 placeholder="INR"
                                 maxlength="3"
                             />
@@ -355,9 +357,9 @@
                     <input 
                         type="text" 
                         id="tags"
-                        on:input={handleTagInput}
+                        on:keydown={handleTagInput}
                         list="tags-list"
-                        placeholder="Add tags (comma-separated)"
+                        placeholder="Type tag and press Enter"
                     />
                     <datalist id="tags-list">
                         {#each tags as tag}
@@ -433,6 +435,7 @@
                         type="text" 
                         id="balance-currency" 
                         bind:value={balanceCurrency}
+                        list="currencies-list"
                         placeholder="INR"
                         maxlength="3"
                         required
@@ -484,6 +487,13 @@
         <datalist id="accounts-list">
             {#each accounts as account}
                 <option value={account} />
+            {/each}
+        </datalist>
+        
+        <!-- Shared currencies datalist -->
+        <datalist id="currencies-list">
+            {#each currencies as currency}
+                <option value={currency} />
             {/each}
         </datalist>
     </div>
@@ -542,10 +552,11 @@
         background: var(--background-primary);
         border: 1px solid var(--background-modifier-border);
         border-radius: 8px;
-        max-width: 800px;
         max-height: 90vh;
         overflow-y: auto;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        margin: 0; /* Remove margin since modal handles positioning */
+        width: 100%; /* Use full width of modal container */
     }
     
     .modal-header {
@@ -642,11 +653,11 @@
     
     .posting-row {
         display: grid;
-        grid-template-columns: 2fr 1fr 1fr auto;
-        gap: 0.75rem;
+        grid-template-columns: 3fr 1.2fr 1fr auto; /* Give more space to account field and amount */
+        gap: 1rem; /* Increased gap from 0.75rem to 1rem */
         align-items: end;
         margin-bottom: 1rem;
-        padding: 1rem;
+        padding: 1.25rem; /* Increased padding from 1rem to 1.25rem */
         background: var(--background-secondary);
         border-radius: 6px;
     }

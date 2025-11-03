@@ -369,6 +369,29 @@ class BeancountJournalAPI:
         
         return sorted(list(tags))
     
+    def get_commodities(self) -> List[Dict[str, Any]]:
+        """Get all unique commodities/currencies from transactions and price entries"""
+        commodities = set()
+        
+        # Extract commodities from transaction postings
+        for entry in self.entries:
+            if isinstance(entry, data.Transaction):
+                for posting in entry.postings:
+                    if posting.units and posting.units.currency:
+                        commodities.add(posting.units.currency)
+                    if posting.cost and posting.cost.currency:
+                        commodities.add(posting.cost.currency)
+                    if posting.price and posting.price.currency:
+                        commodities.add(posting.price.currency)
+            elif isinstance(entry, data.Commodity):
+                commodities.add(entry.currency)
+            elif isinstance(entry, data.Price):
+                commodities.add(entry.currency)
+                commodities.add(entry.amount.currency)
+        
+        # Return as list of dictionaries for consistency with other endpoints
+        return [{'name': commodity} for commodity in sorted(list(commodities))]
+    
     def get_statistics(self) -> Dict[str, Any]:
         """Get comprehensive statistics about the ledger (focused on journal essentials)"""
         stats = {
@@ -803,6 +826,15 @@ def create_app(beancount_file: str) -> Flask:
         try:
             tags = api.get_tags()
             return jsonify({'tags': tags})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/commodities', methods=['GET'])
+    def get_commodities():
+        """Get all commodities/currencies"""
+        try:
+            commodities = api.get_commodities()
+            return jsonify({'commodities': commodities})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     

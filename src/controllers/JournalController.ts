@@ -404,6 +404,23 @@ export class JournalController {
     }
 
     /**
+     * Get available commodities/currencies from ledger
+     */
+    public async getCommodities(): Promise<string[]> {
+        try {
+            const response = await this.backendManager.apiRequest('/commodities');
+            if (!response.ok) return [];
+            
+            const data = await response.json();
+            // Extract commodity names from the result
+            return data.commodities?.map((c: any) => c.name) || [];
+        } catch (error) {
+            console.error('Error fetching commodities:', error);
+            return [];
+        }
+    }
+
+    /**
      * Get ledger statistics from API
      */
     public async getStatistics(): Promise<any> {

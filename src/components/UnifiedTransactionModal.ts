@@ -3,6 +3,8 @@
 import { App, Modal, Notice } from 'obsidian';
 import type BeancountPlugin from '../main';
 import { JournalController, type JournalTransaction, type JournalEntry } from '../controllers/JournalController';
+// Import the component statically to avoid dynamic import delay
+import TransactionEditModal from './TransactionEditModal.svelte';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -35,30 +37,49 @@ export class UnifiedTransactionModal extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
+        
+        // Set modal container to be wider
+        this.modalEl.style.maxWidth = '1200px';
+        this.modalEl.style.width = '95vw';
 
-        // Load form data
+        // Show loading indicator
+        const loadingEl = contentEl.createDiv('loading-indicator');
+        loadingEl.textContent = 'Loading...';
+
+        // Load form data with better error handling and defaults
         let accounts: string[] = [];
         let payees: string[] = [];
         let tags: string[] = [];
+        let currencies: string[] = [];
 
         try {
-            const [accountsResult, payeesResult, tagsResult] = await Promise.all([
+            // Run all requests in parallel for better performance
+            const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
                 this.journalController.getAccounts(),
                 this.journalController.getPayees(),
-                this.journalController.getTags()
+                this.journalController.getTags(),
+                this.journalController.getCommodities()
             ]);
             
-            accounts = accountsResult;
-            payees = payeesResult;
-            tags = tagsResult;
+            accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : [];
+            payees = payeesResult.status === 'fulfilled' ? payeesResult.value : [];
+            tags = tagsResult.status === 'fulfilled' ? tagsResult.value : [];
+            currencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value : [];
+            
+            // Fallback to common currencies if no commodities found
+            if (currencies.length === 0) {
+                currencies = ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
+            }
         } catch (error) {
             console.error('Error loading form data:', error);
-            new Notice('Could not load account/payee/tag autocomplete data.');
+            // Don't show notice for data loading errors, just use empty arrays and fallback currencies
+            currencies = ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
         }
 
-        // Import the Svelte component dynamically
-        const { default: TransactionEditModal } = await import('./TransactionEditModal.svelte');
-        
+        // Remove loading indicator
+        loadingEl.remove();
+
+        // Create component immediately with static import
         this.component = new (TransactionEditModal as any)({
             target: contentEl,
             props: {
@@ -67,6 +88,7 @@ export class UnifiedTransactionModal extends Modal {
                 accounts,
                 payees,
                 tags,
+                currencies, // Add currencies for autocomplete
                 mode: this.mode,
                 defaultCurrency: this.plugin.settings.defaultCurrency
             }
