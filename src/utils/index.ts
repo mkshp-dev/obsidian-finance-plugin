@@ -11,7 +11,7 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 		const commandName = plugin.settings.beancountCommand;
 		if (!filePath) return reject(new Error('File path not set.'));
 		if (!commandName) return reject(new Error('Command not set.'));
-		const command = `${commandName} -f csv "${filePath}" "${query}"`;
+		const command = `${commandName} -q -f csv "${filePath}" "${query}"`;
 		exec(command, (error, stdout, stderr) => {
 			if (error) return reject(error);
 			if (stderr) return reject(new Error(stderr));

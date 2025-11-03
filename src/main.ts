@@ -32,8 +32,8 @@ export default class BeancountPlugin extends Plugin {
 			(leaf) => new UnifiedDashboardView(leaf, this)
 		);
 		// Add Ribbon Icons
-		this.addRibbonIcon('dollar-sign', 'Open Beancount Snapshot', () => {
-			this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); // Specify type and location
+		this.addRibbonIcon('plus-circle', 'Add Transaction', () => {
+			new UnifiedTransactionModal(this.app, this).open();
 		});
 		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
 			this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); // Open the NEW view
