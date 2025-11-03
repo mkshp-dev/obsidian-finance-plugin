@@ -16,13 +16,17 @@ export interface BeancountPluginSettings {
     beancountCommand: string;
     defaultCurrency: string;
     reportingCurrency: string;
+    maxTransactionResults: number;
+    maxJournalResults: number;
 }
 
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
     defaultCurrency: 'USD',
-    reportingCurrency: 'INR'
+    reportingCurrency: 'INR',
+    maxTransactionResults: 2000,
+    maxJournalResults: 1000
 }
 
 export class BeancountSettingTab extends PluginSettingTab {
@@ -322,5 +326,36 @@ export class BeancountSettingTab extends PluginSettingTab {
                 
                 return text;
             });
+
+        // --- Performance Settings ---
+        containerEl.createEl('h3', { text: 'Performance' });
+
+        new Setting(containerEl)
+            .setName('Max transaction results')
+            .setDesc('Maximum number of transactions to load at once (to prevent memory issues with large datasets).')
+            .addText(text => text
+                .setPlaceholder('2000')
+                .setValue(this.plugin.settings.maxTransactionResults.toString())
+                .onChange(async (value) => {
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue > 0 && numValue <= 10000) {
+                        this.plugin.settings.maxTransactionResults = numValue;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        new Setting(containerEl)
+            .setName('Max journal results')
+            .setDesc('Maximum number of journal entries to load at once.')
+            .addText(text => text
+                .setPlaceholder('1000')
+                .setValue(this.plugin.settings.maxJournalResults.toString())
+                .onChange(async (value) => {
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue > 0 && numValue <= 5000) {
+                        this.plugin.settings.maxJournalResults = numValue;
+                        await this.plugin.saveSettings();
+                    }
+                }));
     }
 }

@@ -12,7 +12,9 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 		if (!filePath) return reject(new Error('File path not set.'));
 		if (!commandName) return reject(new Error('Command not set.'));
 		const command = `${commandName} -q -f csv "${filePath}" "${query}"`;
-		exec(command, (error, stdout, stderr) => {
+		
+		// Increase maxBuffer to handle large query results (50MB limit)
+		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
 			if (error) return reject(error);
 			if (stderr) return reject(new Error(stderr));
 			resolve(stdout);
@@ -135,6 +137,31 @@ export function extractConvertedAmount(inventoryString: string, targetCurrency: 
 	}
 	// If currency not found, it means the total was 0
 	return `0.00 ${targetCurrency}`;
+}
+
+export function extractNonReportingCurrencies(inventoryString: string, reportingCurrency: string): string {
+	// Extract all currency amounts from the inventory string
+	const currencyRegex = /(-?[\d,]+\.?\d*)\s*([A-Z]{3,4})/g;
+	const matches = [];
+	let match;
+	
+	// Find all currency amounts
+	while ((match = currencyRegex.exec(inventoryString)) !== null) {
+		const amount = match[1];
+		const currency = match[2];
+		
+		// Skip the reporting currency - we only want other currencies
+		if (currency !== reportingCurrency) {
+			// Only include non-zero amounts
+			const numAmount = parseFloat(amount.replace(/,/g, ''));
+			if (numAmount !== 0) {
+				matches.push(`${amount} ${currency}`);
+			}
+		}
+	}
+	
+	// Return newline-separated list of non-reporting currencies for better multi-line display
+	return matches.join('\n');
 }
 
 // --- CURRENCY FORMATTER ---

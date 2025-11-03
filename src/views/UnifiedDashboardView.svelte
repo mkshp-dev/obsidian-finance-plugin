@@ -24,7 +24,7 @@
 	export let journalController: JournalController;
 	// --- REMOVED transactionState prop ---
 
-	type Tab = 'Overview' | 'Transactions' | 'Balance Sheet' | 'Accounts' | 'Commodities' | 'Journal';
+	type Tab = 'Overview' | 'Postings' | 'Balance Sheet' | 'Accounts' | 'Commodities' | 'Journal';
 	let activeTab: Tab = 'Overview'; // Default to Overview
 
 	const dispatch = createEventDispatcher();
@@ -36,7 +36,7 @@
 <div class="beancount-unified-dashboard">
 	<div class="beancount-tabs">
 		<button class:active={activeTab === 'Overview'} on:click={() => activeTab = 'Overview'}>Overview</button>
-		<button class:active={activeTab === 'Transactions'} on:click={() => activeTab = 'Transactions'}>Transactions</button>
+		<button class:active={activeTab === 'Postings'} on:click={() => activeTab = 'Postings'}>Postings</button>
 		<button class:active={activeTab === 'Balance Sheet'} on:click={() => activeTab = 'Balance Sheet'}>Balance Sheet</button>
 		<button class:active={activeTab === 'Accounts'} on:click={() => activeTab = 'Accounts'}>Accounts</button>
 		<button class:active={activeTab === 'Commodities'} on:click={() => activeTab = 'Commodities'}>Commodities</button>
@@ -47,7 +47,7 @@
 		{#if activeTab === 'Overview'}
 			<OverviewTab controller={overviewController} />
 
-		{:else if activeTab === 'Transactions'}
+		{:else if activeTab === 'Postings'}
 			<TransactionsTab
 				controller={transactionController}
 				on:filtersChange={forwardFiltersChange}

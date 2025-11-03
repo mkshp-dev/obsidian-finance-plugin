@@ -45,8 +45,38 @@ export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- 
    return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Liabilities'`;
 }
 
+/** Gets historical cost of all Asset accounts */
+export function getTotalAssetsCostQueryByCost(): string {
+   return `SELECT sum(cost(position)) WHERE account ~ '^Assets'`;
+}
+
+/** Gets historical cost of all Liability accounts */
+export function getTotalLiabilitiesCostQueryByCost(): string {
+   return `SELECT sum(cost(position)) WHERE account ~ '^Liabilities'`;
+}
+
+/** Gets units of all Asset accounts */
+export function getTotalAssetsCostQueryByUnits(): string {
+   return `SELECT sum(units(position)) WHERE account ~ '^Assets'`;
+}
+
+/** Gets units of all Liability accounts */
+export function getTotalLiabilitiesCostQueryByUnits(): string {
+   return `SELECT sum(units(position)) WHERE account ~ '^Liabilities'`;
+}
+
 export function getBalanceSheetQuery(currency: string): string {
 	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+}
+
+/** Gets balance sheet at historical cost (no currency conversion) */
+export function getBalanceSheetQueryByCost(): string {
+	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+}
+
+/** Gets balance sheet in raw units (no cost or currency conversion) */
+export function getBalanceSheetQueryByUnits(): string {
+	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
 }
 
 /** Gets balances for ALL account types (Assets, Liabilities, Equity, Income, Expenses) */
@@ -68,10 +98,10 @@ export function getBalanceReportQuery(reportType: 'assets' | 'liabilities' | 'eq
 }
 
 /** Gets transactions based on filters */
-export function getTransactionsQuery(filters: TransactionFilters): string {
-	const selectPart = `SELECT date, payee, narration, position`; // Default columns
+export function getTransactionsQuery(filters: TransactionFilters, limit: number = 1000): string {
+	const selectPart = `SELECT date, payee, narration, position, balance`; // Added balance column
 	const whereClauses: string[] = [];
-	const orderByPart = `ORDER BY date DESC`;
+	const orderByPart = `ORDER BY date DESC LIMIT ${limit}`;
 
 	// Build WHERE clauses based on provided filters
 	if (filters.account) {
@@ -142,6 +172,14 @@ export function getPriceDataAvailabilityQuery(): string {
 }
 
 /** Gets full journal entries with all postings for each transaction */
-export function getJournalTransactionsQuery(): string {
-	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC`;
+export function getJournalTransactionsQuery(limit: number = 1000): string {
+	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC LIMIT ${limit}`;
+}
+
+/** Gets recent journal entries for performance (last 6 months by default) */
+export function getRecentJournalTransactionsQuery(monthsBack: number = 6): string {
+	const startDate = new Date();
+	startDate.setMonth(startDate.getMonth() - monthsBack);
+	const dateStr = startDate.toISOString().split('T')[0];
+	return `SELECT date, flag, payee, narration, tags, account, position WHERE date >= ${dateStr} ORDER BY date DESC LIMIT 2000`;
 }

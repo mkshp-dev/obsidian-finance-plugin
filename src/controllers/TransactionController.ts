@@ -14,6 +14,7 @@ export interface TransactionState {
 	currentFilters: queries.TransactionFilters;
 	currentTransactions: string[][];
 	accountTree: AccountNode[];
+	allAccounts: string[]; // Add flat list of account names
 	allTags: string[];
 }
 
@@ -32,6 +33,7 @@ export class TransactionController {
 			currentFilters: {},
 			currentTransactions: [],
 			accountTree: [],
+			allAccounts: [], // Add empty array for account names
 			allTags: [],
 		});
 	}
@@ -67,6 +69,7 @@ export class TransactionController {
 				...s,
 				isLoadingFilters: false,
 				accountTree: [allNode, ...builtTree],
+				allAccounts: allAccounts, // Store flat list of account names
 				allTags: allTags
 			}));
 			
@@ -85,11 +88,11 @@ export class TransactionController {
 		let newError: string | null = null;
 
 		try {
-			const query = queries.getTransactionsQuery(filters);
+			const query = queries.getTransactionsQuery(filters, this.plugin.settings.maxTransactionResults);
 			const result = await this.plugin.runQuery(query);
 			const cleanStdout = result.replace(/\r/g, "").trim();
 			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
-			const defaultHeaders = ['date', 'payee', 'narration', 'position'];
+			const defaultHeaders = ['date', 'payee', 'narration', 'position', 'balance']; // Added balance column
 			const firstRowIsHeader = records[0]?.[0]?.toLowerCase().includes('date');
 			const dataRows = firstRowIsHeader ? records.slice(1) : records;
 			newTransactions = dataRows.map(row => {

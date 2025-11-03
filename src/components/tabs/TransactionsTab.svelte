@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
-	import HierarchicalDropdown from '../HierarchicalDropdown.svelte';
 	import type { AccountNode } from '../../utils/index';
 	import { parseAmount, debounce } from '../../utils/index';
 	import type { TransactionController } from '../../controllers/TransactionController'; // Import controller type
@@ -17,7 +16,7 @@
 	// ------------------------------------------
 
 	// --- LOCAL UI STATE (Filters) ---
-	let selectedAccount: string | null = null;
+	let selectedAccount: string = ''; // Changed to string for direct input
 	let startDate: string | null = null;
 	let endDate: string | null = null;
 	let payeeFilter: string = '';
@@ -26,7 +25,7 @@
 	let debouncedTagFilter: string = '';
 	
 	// --- LOCAL UI STATE (Sorting) ---
-	type SortColumn = 'date' | 'payee' | 'narration' | 'amount';
+	type SortColumn = 'date' | 'payee' | 'narration' | 'amount' | 'balance';
 	let sortColumn: SortColumn = 'date';
 	let sortDirection: 'asc' | 'desc' = 'desc';
 	let sortedTransactions: string[][] = [];
@@ -41,7 +40,7 @@
 
 	// --- Sorting logic (remains local) ---
 	function sortTransactions(transactions: string[][]) {
-		const headers = ['date', 'payee', 'narration', 'amount'];
+		const headers = ['date', 'payee', 'narration', 'amount', 'balance']; // Added balance column
 		const columnIndex = headers.indexOf(sortColumn);
 		if (columnIndex === -1) {
 			sortedTransactions = [...transactions]; return;
@@ -67,7 +66,7 @@
 	$: updateDebouncedTag(tagFilter);
 
 	$: filterState = {
-		account: selectedAccount,
+		account: selectedAccount.trim() || null, // Convert empty string to null
 		startDate: startDate,
 		endDate: endDate,
 		payee: debouncedPayeeFilter,
@@ -100,13 +99,20 @@
 	{:else}
 		<div class="controls">
 			<div>
-				<label for="account-select">Account:</label>
-				<HierarchicalDropdown
-					treeData={state.accountTree} bind:selectedAccount={selectedAccount}
-					placeholder="Select Account"
+				<label for="account-input">Account:</label>
+				<input 
+					type="text" 
+					id="account-input" 
+					bind:value={selectedAccount} 
+					placeholder="Type account name..." 
 					disabled={state.isLoading || state.isLoadingFilters}
-					isLoading={state.isLoadingFilters}
+					list="account-list"
 				/>
+				<datalist id="account-list">
+					{#each state.allAccounts as account}
+						<option value={account}>{account}</option>
+					{/each}
+				</datalist>
 			</div>
 			<div class="date-range">
 				<label for="start-date">From:</label>
@@ -146,15 +152,19 @@
 						<th on:click={() => handleSort('amount')} class:active={sortColumn === 'amount'}>
 							Amount {sortColumn === 'amount' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
 						</th>
+						<th on:click={() => handleSort('balance')} class:active={sortColumn === 'balance'}>
+							Balance {sortColumn === 'balance' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+						</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#each sortedTransactions as [date, payee, narration, position]}
+					{#each sortedTransactions as [date, payee, narration, position, balance]}
 						<tr>
 							<td>{date}</td>
 							<td>{payee}</td>
 							<td>{narration}</td>
 							<td class="align-right">{position}</td>
+							<td class="align-right">{balance}</td>
 						</tr>
 					{/each}
 				</tbody>
