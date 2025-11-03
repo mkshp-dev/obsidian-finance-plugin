@@ -6,10 +6,8 @@
 	export let assets = "0 USD";
 	export let liabilities = "0 USD";
 	export let netWorth = "0.00 USD";
+	export let hasUnconvertedCommodities = false;
 	export let kpiError: string | null = null;
-	export let reportError: string | null = null;
-	export let reportHeaders: string[] = [];
-	export let reportRows: string[][] = [];
 	export let fileStatus: "checking" | "ok" | "error" = "checking";
 	export let fileStatusMessage: string | null = "";
 
@@ -19,16 +17,12 @@
 		dispatch('refresh');
 	}
 
-	// Renders balance reports in the sidebar
-	function handleReport(type: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
-		dispatch('renderReport', type);
-	}
-
 	function handleStatusClick() {
 		if (fileStatus === 'error' && fileStatusMessage) {
 			new Notice(fileStatusMessage, 0); // Show persistent notice
 		}
 	}
+	
 	function handleEditFile() {
 		dispatch('editFile');
 	}
@@ -100,39 +94,16 @@
 	{/if}
 </div>
 
-<div class="beancount-nav">
-	<button on:click={() => handleReport('assets')} disabled={isLoading}>Assets</button>
-	<button on:click={() => handleReport('liabilities')} disabled={isLoading}>Liabilities</button>
-	<button on:click={() => handleReport('equity')} disabled={isLoading}>Equity</button>
-	<button on:click={() => handleReport('income')} disabled={isLoading}>Income</button>
-	<button on:click={() => handleReport('expenses')} disabled={isLoading}>Expenses</button>
-</div>
-<div class="beancount-report-container">
-	{#if reportError}
-		<div class="beancount-error-message">{reportError}</div>
-	{:else if reportRows.length > 0}
-		<table class="beancount-table">
-			<thead>
-				<tr>
-					{#each reportHeaders as header}
-						<th>{header}</th>
-					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each reportRows as row}
-					<tr>
-						{#each row as cell, i}
-							<td class:align-right={i > 0}>{cell}</td>
-						{/each}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{:else if !isLoading}
-		<p>No data returned for this report.</p>
-	{/if}
-</div>
+{#if hasUnconvertedCommodities && !kpiError}
+	<div class="conversion-warning">
+		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+			<path d="M12 9v4"/>
+			<path d="m12 17 .01 0"/>
+		</svg>
+		<span>Some commodities lack price data and are excluded from totals</span>
+	</div>
+{/if}
 
 <style>
 	/* Styles adjusted slightly */
@@ -196,32 +167,69 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* --- Other styles remain the same --- */
-	.beancount-kpi-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-	.kpi-metric { display: flex; flex-direction: column; padding: 10px 12px; background-color: var(--background-secondary); border-radius: 6px; border: 1px solid var(--background-modifier-border); }
-	.kpi-label { font-size: var(--font-ui-small); color: var(--text-muted); margin-bottom: 4px; }
-	.kpi-value { font-size: 1.25em; font-weight: 600; }
-	.net-worth { font-size: 1.4em; color: var(--text-accent); }
-	.kpi-metric:first-child { grid-column: 1 / -1; }
-	.beancount-nav { display: flex; gap: 8px; margin-bottom: 15px; }
-	.beancount-report-container :global(table) { width: 100%; }
-	.beancount-table { width: 100%; border-collapse: collapse; }
-	.beancount-table th { text-align: left; font-size: var(--font-ui-small); font-weight: 600; color: var(--text-muted); padding: 8px 6px; border-bottom: 1px solid var(--background-modifier-border); text-transform: capitalize; }
-	.beancount-table td { padding: 6px; border-bottom: 1px solid var(--background-secondary); }
-	.beancount-table tbody tr:nth-child(even) { background-color: var(--background-secondary); }
-	.align-right { text-align: right; font-family: var(--font-monospace); }
-	.beancount-error-message { color: var(--text-error); font-size: var(--font-ui-small); padding: 10px; background-color: var(--background-secondary-alt); border-radius: 6px; border: 1px solid var(--background-modifier-border); grid-column: 1 / -1; word-break: break-all; white-space: pre-wrap; }
-	/* Add these styles inside the <style> block */
-
-	/* Target the last row in the table body */
-	.beancount-table tbody tr:last-child {
-		font-weight: 600; /* Make text bold */
-		border-top: 2px solid var(--background-modifier-border); /* Add a top border */
-		background-color: var(--background-secondary); /* Ensure background matches zebra striping */
+	/* --- KPI Styles --- */
+	.beancount-kpi-container { 
+		display: grid; 
+		grid-template-columns: 1fr 1fr; 
+		gap: 10px; 
+		margin-bottom: 15px; 
+	}
+	.kpi-metric { 
+		display: flex; 
+		flex-direction: column; 
+		padding: 10px 12px; 
+		background-color: var(--background-secondary); 
+		border-radius: 6px; 
+		border: 1px solid var(--background-modifier-border); 
+	}
+	.kpi-label { 
+		font-size: var(--font-ui-small); 
+		color: var(--text-muted); 
+		margin-bottom: 4px; 
+	}
+	.kpi-value { 
+		font-size: 1.25em; 
+		font-weight: 600; 
+	}
+	.net-worth { 
+		font-size: 1.4em; 
+		color: var(--text-accent); 
+	}
+	.kpi-metric:first-child { 
+		grid-column: 1 / -1; 
+	}
+	
+	/* --- Error Message Styles --- */
+	.beancount-error-message { 
+		color: var(--text-error); 
+		font-size: var(--font-ui-small); 
+		padding: 10px; 
+		background-color: var(--background-secondary-alt); 
+		border-radius: 6px; 
+		border: 1px solid var(--background-modifier-border); 
+		grid-column: 1 / -1; 
+		word-break: break-all; 
+		white-space: pre-wrap; 
 	}
 
-	/* Optional: Style the 'Total' label cell differently */
-	.beancount-table tbody tr:last-child td:first-child {
-		color: var(--text-muted);
+	/* --- Conversion Warning Styles --- */
+	.conversion-warning {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: var(--font-ui-small);
+		color: var(--text-warning);
+		background-color: var(--background-modifier-warning);
+		padding: 8px 10px;
+		border-radius: 4px;
+		border: 1px solid var(--color-warning);
+		margin-top: 10px;
+	}
+	.conversion-warning svg {
+		flex-shrink: 0;
+		color: var(--text-warning);
+	}
+	.conversion-warning span {
+		line-height: 1.3;
 	}
 </style>

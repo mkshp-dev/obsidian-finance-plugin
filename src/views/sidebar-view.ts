@@ -3,7 +3,7 @@ import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer, TFile } from 'obsidi
 import { exec } from 'child_process';
 import type BeancountPlugin from '../main';
 import BeancountViewComponent from './SidebarView.svelte'; // Assuming this is the correct Svelte component for the sidebar
-import { runQuery, parseSingleValue, convertWslPathToWindows } from '../utils/index';
+import { runQuery, parseSingleValue, convertWslPathToWindows, extractConvertedAmount } from '../utils/index';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 // ----------------------------------------
@@ -20,10 +20,8 @@ export class BeancountView extends ItemView {
 		assets: "0 USD",
 		liabilities: "0 USD",
 		netWorth: "0.00 USD",
+		hasUnconvertedCommodities: false,
 		kpiError: null as string | null,
-		reportError: null as string | null,
-		reportHeaders: [] as string[],
-		reportRows: [] as string[][],
 		fileStatus: "checking" as "checking" | "ok" | "error",
 		fileStatusMessage: "" as string | null
 	};
@@ -48,7 +46,6 @@ export class BeancountView extends ItemView {
 
 		// Listen for events
 		this.component.$on('refresh', () => this.updateView());
-		this.component.$on('renderReport', (e) => this.renderReport(e.detail));
 		this.component.$on('editFile', () => this.openLedgerFile());
 
 		setTimeout(() => this.updateView(), 0);
@@ -69,7 +66,7 @@ export class BeancountView extends ItemView {
 
 	// --- Main data update function ---
 	async updateView() {
-		this.updateProps({ isLoading: true, kpiError: null, reportError: null, fileStatus: "checking", fileStatusMessage: null, reportHeaders: [], reportRows: [] });
+		this.updateProps({ isLoading: true, kpiError: null, fileStatus: "checking", fileStatusMessage: null });
 		new Notice('Refreshing snapshot...');
 		const reportingCurrency = this.plugin.settings.reportingCurrency;
         if (!reportingCurrency) {
@@ -80,7 +77,6 @@ export class BeancountView extends ItemView {
 			// Run KPI queries and bean check concurrently
 			const [
 				kpiResults,
-				_reportResult,
 				checkResult
 			] = await Promise.all([
 				Promise.all([
@@ -88,80 +84,45 @@ export class BeancountView extends ItemView {
 					runQuery(this.plugin, queries.getTotalAssetsCostQuery(reportingCurrency)),
 					runQuery(this.plugin, queries.getTotalLiabilitiesCostQuery(reportingCurrency))
 				]),
-				this.renderReport('assets'), // Render default report
 				this.runBeanCheck()
 			]);
 
 			const [assetsResult, liabilitiesResult] = kpiResults;
-			// --- Use imported parseSingleValue ---
-			const assets = parseSingleValue(assetsResult);
-			const liabilities = parseSingleValue(liabilitiesResult);
-			const netWorthNum = parseFloat(assets.split(" ")[0]) - parseFloat(liabilities.split(" ")[0]);
-			const currency = assets.split(" ")[1] || "USD";
+			
+			// Check if results contain multiple currencies (indicates missing price data)
+			const hasMultiCurrencyAssets = assetsResult.includes(',');
+			const hasMultiCurrencyLiabilities = liabilitiesResult.includes(',');
+			const hasUnconvertedCommodities = hasMultiCurrencyAssets || hasMultiCurrencyLiabilities;
+			
+			// Extract reporting currency amounts from potentially multi-currency results
+			const assets = extractConvertedAmount(assetsResult, reportingCurrency);
+			const liabilities = extractConvertedAmount(liabilitiesResult, reportingCurrency);
+			
+			// Calculate net worth: assets - liabilities
+			const assetsNum = parseFloat(assets.split(" ")[0]) || 0;
+			const liabilitiesNum = parseFloat(liabilities.split(" ")[0]) || 0;
+			const netWorthNum = assetsNum - liabilitiesNum;
 
 			this.updateProps({
-				assets, liabilities, netWorth: `${netWorthNum.toFixed(2)} ${currency}`,
-				kpiError: null, fileStatus: checkResult.status, fileStatusMessage: checkResult.message
+				assets, 
+				liabilities, 
+				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
+				hasUnconvertedCommodities,
+				kpiError: null, 
+				fileStatus: checkResult.status, 
+				fileStatusMessage: checkResult.message
 			});
 
 		} catch (error) {
 			console.error("Error updating snapshot view:", error);
-			this.updateProps({ kpiError: error.message, reportHeaders: [], reportRows: [], fileStatus: "error", fileStatusMessage: "Failed during refresh." });
+			this.updateProps({ 
+				kpiError: error.message, 
+				hasUnconvertedCommodities: false,
+				fileStatus: "error", 
+				fileStatusMessage: "Failed during refresh." 
+			});
 		} finally {
 			if(this.state.isLoading) this.updateProps({ isLoading: false });
-		}
-	}
-
-	// --- Renders balance reports in the sidebar ---
-	async renderReport(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses') {
-		this.updateProps({ isLoading: true, reportError: null, reportHeaders: [], reportRows: [] });
-		const headers = ['Account', 'Amount']; // Clean headers
-
-		try {
-			// --- Use imported runQuery and query function ---
-			const query = queries.getBalanceReportQuery(reportType);
-			const result = await runQuery(this.plugin, query);
-			const cleanStdout = result.replace(/\r/g, "").trim();
-			// --- Use imported parseCsv (assuming import exists) ---
-			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true });
-
-			if (records.length === 0) {
-				this.updateProps({ reportHeaders: [], reportRows: [] }); return;
-			}
-
-			const firstRowIsHeader = records[0][1]?.includes('sum(position)');
-			let rows: string[][] = firstRowIsHeader ? records.slice(1) : records;
-
-			let total = 0;
-			let currency = '';
-
-			const formattedRows = rows.map(row => {
-				if (row.length === 0) return row;
-				const accountName = row[0];
-				const amountStr = row[1] || '';
-				const amountMatch = amountStr.match(/(-?[\d,]+\.?\d*)\s*(\S+)/);
-				if (amountMatch) {
-					total += parseFloat(amountMatch[1].replace(/,/g, ''));
-					if (!currency) currency = amountMatch[2];
-				}
-				const lastColonIndex = accountName.lastIndexOf(':');
-				const trimmedName = lastColonIndex > -1 ? accountName.substring(lastColonIndex + 1) : accountName;
-				return [trimmedName, amountStr];
-			});
-
-			if (formattedRows.length > 0) {
-				formattedRows.push(['Total', `${total.toFixed(2)} ${currency}`]);
-			}
-
-			this.updateProps({
-				reportHeaders: headers, reportRows: formattedRows, reportError: null
-			});
-
-		} catch (error) {
-			console.error(`Error rendering ${reportType} report:`, error);
-			this.updateProps({ reportError: error.message, reportHeaders: [], reportRows: [] });
-		} finally {
-			this.updateProps({ isLoading: false });
 		}
 	}
 
