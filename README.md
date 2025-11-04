@@ -30,11 +30,13 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 - **Equity Analysis**: Track net worth changes over time
 - **Period Comparisons**: Month-over-month and year-over-year analysis
 
-### � **Commodities & Pricing**
-- **Price Integration**: Automated price updates with `bean-price`
-- **Multi-currency**: Support for stocks, forex, and cryptocurrencies
-- **Metadata Management**: Track data sources and automation status
-- **Visual Indicators**: Quick status overview with color-coded pricing
+### 🪙 **Commodities & Pricing** ⭐ **ENHANCED**
+- **Yahoo Finance Integration**: Simplified symbol search with direct links to major financial websites
+- **Easy Symbol Configuration**: Manual symbol entry with helpful examples and quick-select common stocks, ETFs, and crypto
+- **Price Metadata Management**: Configure automated price sources in the format `USD:yahoo/SYMBOL`
+- **Visual Status Indicators**: Quick overview with color-coded pricing status (🟢 automated, ⚪ manual)
+- **Compact Card Layout**: Optimized grid display that efficiently uses screen space
+- **Multi-currency Support**: Support for stocks, forex, and cryptocurrencies with proper formatting
 
 ### 📋 **Journal View** ⭐ **ENHANCED**
 - **Complete Transaction Display**: Full Beancount ledger format with all postings and metadata
@@ -126,6 +128,39 @@ If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
 
 **Note**: Other tabs work independently. The Journal tab requires Python 3.8+ and Beancount, but handles all setup automatically.
 
+### Yahoo Finance Symbol Search
+
+The **Commodities tab** includes a simplified Yahoo Finance integration that helps you find and configure ticker symbols for automated price fetching.
+
+#### How It Works
+
+1. **Browse Financial Websites**: Click buttons to open major financial websites in new tabs
+   - **Yahoo Finance** - https://finance.yahoo.com/
+   - **Google Finance** - https://www.google.com/finance/
+   - **Bloomberg** - https://www.bloomberg.com/markets/
+   - **MarketWatch** - https://www.marketwatch.com/
+   - **Investing.com** - https://www.investing.com/
+   - **Morningstar** - https://www.morningstar.com/
+
+2. **Find Your Symbol**: Search for your desired stock, ETF, or crypto on any of these sites and copy the ticker symbol
+
+3. **Quick Examples**: Use pre-populated examples organized by category:
+   - **Popular Stocks**: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, NFLX
+   - **ETFs**: SPY, QQQ, VTI, VOO, IVV  
+   - **Cryptocurrency**: BTC-USD, ETH-USD, ADA-USD, SOL-USD
+
+4. **Configure Price Source**: Enter the symbol manually or click an example to automatically generate the Beancount price metadata in the format `USD:yahoo/SYMBOL`
+
+#### Benefits
+
+- **No API Dependencies**: No API keys, rate limits, or CORS issues
+- **Always Up-to-Date**: Uses official financial websites with the most current symbol information
+- **User-Controlled**: You research and verify symbols on professional financial sites
+- **Educational**: Learn about different financial data sources and their coverage
+- **Flexible**: Works with any symbol that Yahoo Finance supports for price fetching
+
+This approach provides a reliable, user-friendly way to configure automated price sources for your Beancount commodities without the complexity of API management.
+
 ## Usage Guide
 
 ---
@@ -159,11 +194,15 @@ If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
 - View balances at each account level
 - Drill down to individual account details
 
-#### **Commodities Tab**
-- Manage investment and currency tracking
-- View price metadata status (🟢 automated, ⚪ manual)
-- Access detailed commodity information
-- Configure price sources for automated fetching
+#### **Commodities Tab** ⭐ **ENHANCED**
+- **Compact Grid Layout**: Optimized card sizes that fit content better without excessive whitespace
+- **Yahoo Finance Symbol Search**: Simplified workflow with direct links to major financial websites
+- **Quick Symbol Entry**: Manual symbol input with helpful examples organized by category
+- **Common Symbol Library**: Pre-populated examples for popular stocks (AAPL, GOOGL, MSFT), ETFs (SPY, QQQ, VTI), and cryptocurrencies (BTC-USD, ETH-USD)
+- **Financial Website Integration**: One-click access to Yahoo Finance, Google Finance, Bloomberg, MarketWatch, Investing.com, and Morningstar
+- **Price Metadata Configuration**: Easy setup of automated price sources in `USD:yahoo/SYMBOL` format
+- **Status Indicators**: Visual indicators showing which commodities have automated price fetching (🟢) vs manual entry (⚪)
+- **Mobile Responsive**: Optimized grid layout that works well on all screen sizes
 
 #### **Journal Tab** ⭐ **ENHANCED**
 - View complete Beancount transactions in ledger format with all postings

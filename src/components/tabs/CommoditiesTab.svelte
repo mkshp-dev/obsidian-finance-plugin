@@ -455,8 +455,8 @@
 
     .commodities-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
         margin-top: 8px;
     }
 
@@ -478,18 +478,18 @@
         text-align: left;
         background: none;
         border: none;
-        padding: 16px;
+        padding: 12px;
         cursor: pointer;
         transition: all 0.2s ease;
         border-radius: 8px;
         font-family: inherit;
         font-size: inherit;
         color: inherit;
-        min-height: 120px;
+        min-height: auto;
         height: auto;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
+        justify-content: flex-start;
         overflow: visible;
     }
 
@@ -506,8 +506,8 @@
     .commodity-header {
         display: flex;
         align-items: center;
-        margin-bottom: 12px;
-        gap: 8px;
+        margin-bottom: 8px;
+        gap: 6px;
     }
 
     .commodity-icon {
@@ -536,12 +536,12 @@
     }
 
     .current-price {
-        margin: 8px 0;
-        padding: 8px 0;
+        margin: 4px 0;
+        padding: 4px 0;
         flex-grow: 1;
         display: flex;
         align-items: center;
-        min-height: 24px;
+        min-height: 20px;
         border-top: 1px solid var(--background-modifier-border-focus);
     }
 
@@ -560,7 +560,7 @@
     .view-details-hint {
         text-align: right;
         margin-top: auto;
-        padding-top: 8px;
+        padding-top: 4px;
         border-top: 1px solid var(--background-modifier-border-focus);
     }
 
@@ -827,7 +827,7 @@
 
         .commodities-grid {
             grid-template-columns: 1fr;
-            gap: 20px;
+            gap: 12px;
         }
 
         .commodity-modal {

@@ -255,15 +255,15 @@
 
     .websites-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.5rem;
     }
 
     .website-button {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        padding: 1rem;
+        padding: 0.75rem;
         border: 1px solid var(--background-modifier-border);
         border-radius: 6px;
         background: var(--background-secondary);
@@ -271,6 +271,7 @@
         text-align: left;
         cursor: pointer;
         transition: all 0.2s ease;
+        min-height: auto;
     }
 
     .website-button:hover {
@@ -282,15 +283,15 @@
 
     .website-name {
         font-weight: 600;
-        font-size: 1rem;
+        font-size: 0.95rem;
         color: var(--text-accent);
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
     }
 
     .website-desc {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: var(--text-muted);
-        line-height: 1.3;
+        line-height: 1.2;
     }
 
     .category-group {
@@ -303,15 +304,15 @@
 
     .symbols-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 0.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.4rem;
     }
 
     .symbol-button {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        padding: 0.75rem;
+        padding: 0.5rem 0.6rem;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
         background: var(--background-secondary);
@@ -319,6 +320,7 @@
         text-align: left;
         cursor: pointer;
         transition: all 0.2s ease;
+        min-height: auto;
     }
 
     .symbol-button:hover {
@@ -334,15 +336,15 @@
 
     .symbol-code {
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         font-family: var(--font-monospace);
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.1rem;
     }
 
     .symbol-name {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-muted);
-        line-height: 1.2;
+        line-height: 1.1;
     }
 
     .symbol-button.selected .symbol-name {
@@ -429,7 +431,7 @@
         }
         
         .symbols-grid {
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         }
         
         .action-buttons {
@@ -437,7 +439,15 @@
         }
         
         .website-button, .symbol-button {
-            padding: 0.6rem;
+            padding: 0.5rem;
+        }
+
+        .website-name {
+            font-size: 0.9rem;
+        }
+
+        .website-desc {
+            font-size: 0.75rem;
         }
     }
 </style>

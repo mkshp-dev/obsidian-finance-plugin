@@ -15,7 +15,9 @@
 - **Unified Dashboard**: 6-tab interface (Overview, Transactions, Balance Sheet, Accounts, Commodities, Journal)
 - **Enhanced Entry Management**: Unified modal system with tabs for transactions, balance assertions, and notes
 - **Full CRUD Operations**: Create, read, update, delete with confirmation dialogs and automatic backups
-- **Commodities Management**: Full price tracking, metadata management, bean-price integration
+- **Commodities Management**: Full price tracking, metadata management, simplified Yahoo Finance integration ⭐ **ENHANCED**
+- **Yahoo Finance Symbol Search**: Streamlined symbol lookup with direct links to major financial websites ⭐ **NEW**
+- **Optimized Grid Layouts**: Compact, content-appropriate card layouts for better screen utilization ⭐ **IMPROVED**
 - **Journal Tab**: Complete Beancount entry viewing with inline editing capabilities
 - **Auto-starting Backend**: Python Flask API with automatic process management
 - **Account Hierarchy**: Interactive account tree with balance drilldown
@@ -40,12 +42,13 @@ src/
     HierarchicalDropdown.svelte # Hierarchical account selector
     TransactionEditModal.svelte # Unified entry modal (transactions, balance, notes) ⭐ ENHANCED
     UnifiedTransactionModal.ts # Modal controller for all entry types ⭐ NEW
+    YahooFinanceSearchComponent.svelte # Simplified Yahoo Finance symbol search ⭐ NEW
     tabs/
       OverviewTab.svelte      # Financial overview with charts
       TransactionsTab.svelte  # Transaction browser with filtering
       BalanceSheetTab.svelte  # Balance sheet reporting
       AccountsTab.svelte      # Account hierarchy explorer
-      CommoditiesTab.svelte   # Commodity & price management
+      CommoditiesTab.svelte   # Commodity & price management ⭐ ENHANCED
       JournalTab.svelte       # Complete Beancount entry management ⭐ ENHANCED
   controllers/
     OverviewController.ts     # Overview data & state management
@@ -105,20 +108,43 @@ npm run lint
 
 ## Recent Major Updates
 
-### **Unified Entry Modal System** ⭐ **LATEST**
-- **UnifiedTransactionModal.ts**: Single modal controller replacing old transaction-modal.ts
-- **TransactionEditModal.svelte**: Enhanced with tab-based entry types (Transaction, Balance, Note)
-- **Entry Type Support**: Complete support for all major Beancount directive types
-- **Smart Validation**: Type-specific validation for each entry type
-- **No Flag Field**: Removed confusing flag field, auto-handled for proper Beancount syntax
-- **Full CRUD**: Create, read, update, delete operations with confirmation dialogs
+### **Simplified Yahoo Finance Integration** ⭐ **LATEST**
+- **YahooFinanceSearchComponent.svelte**: Clean, simplified component with direct website links
+- **No API Dependencies**: Removed complex API calls, CORS handling, and error management
+- **Financial Website Links**: Direct access to Yahoo Finance, Google Finance, Bloomberg, MarketWatch, Investing.com, and Morningstar
+- **Symbol Examples**: Pre-populated common stocks, ETFs, and cryptocurrency symbols organized by category
+- **Manual Symbol Entry**: Simple text input for any ticker symbol with real-time metadata preview
+- **User-Friendly Workflow**: Users research symbols on professional sites and configure price sources manually
 
-### **Journal Tab Enhancement** ⭐
-- **JournalController.ts**: Complete CRUD operations with backend integration
-- **Backend API**: Enhanced journal_api.py with PUT/DELETE endpoints for all entry types
-- **Entry Management**: View, edit, delete transactions, balance assertions, and notes
-- **Auto-backup**: Automatic file backups before any modifications
-- **Real-time Updates**: Immediate reflection of changes across all views
+### **Optimized Grid Layouts** ⭐ **NEW**
+- **Commodities Tab**: Reduced card minimum width from 280px to 220px, optimized padding and spacing
+- **Compact Cards**: Removed fixed minimum heights, content now auto-sizes appropriately
+- **Yahoo Finance Modal**: Improved website buttons (280px → 220px) and symbol examples (180px → 140px)
+- **Mobile Responsive**: Better utilization of screen space on all devices
+- **Visual Improvements**: Tighter spacing, smaller gaps, and more content-appropriate sizing
+
+### **Yahoo Finance Integration Enhancement** ⭐
+- **YahooFinanceSearchComponent.svelte**: Simple, practical component with direct financial website access
+- **Financial Website Integration**: One-click access to major financial data sources for symbol lookup
+- **Pre-populated Examples**: Common stocks (AAPL, GOOGL, MSFT), ETFs (SPY, QQQ, VTI), crypto (BTC-USD, ETH-USD)
+- **Manual Symbol Configuration**: Easy text input with real-time Beancount metadata preview
+- **No External Dependencies**: Eliminated API keys, rate limits, and CORS complications
+- **User-Controlled Research**: Professional financial websites for accurate, up-to-date symbol information
+
+### **Grid Layout Optimizations** ⭐
+- **CommoditiesTab.svelte**: Compact commodity cards with optimized spacing and content-appropriate sizing
+- **Reduced Card Sizes**: Minimum widths reduced (280px → 220px) with dynamic height adjustment
+- **Improved Spacing**: Tighter gaps (16px → 12px) and padding (16px → 12px) for better space utilization
+- **Mobile Enhancements**: Consistent gap sizes and responsive grid adjustments
+- **Visual Polish**: Better content flow and reduced whitespace while maintaining readability
+
+### **Recent Operations Summary**
+- **Yahoo Finance Simplification**: Completely redesigned Yahoo Finance integration to remove API complexity
+- **Grid Layout Optimization**: Enhanced both CommoditiesTab and YahooFinanceSearchComponent layouts
+- **Card Size Optimization**: Reduced minimum widths and heights for more content-appropriate sizing
+- **Mobile Responsiveness**: Improved mobile layouts with better space utilization
+- **Build System**: Fixed Svelte compilation issues and maintained clean build process
+- **Documentation Updates**: Comprehensive README and AGENTS.md updates reflecting all improvements
 
 ### **Backend Architecture** ⭐
 - **BackendManager.ts**: Auto-starting Python backend with WSL support
@@ -133,10 +159,12 @@ npm run lint
 - **Clean Command Palette**: Commands appear without confusing hotkey indicators
 
 ### **Code Quality Improvements**
-- **Build Warnings**: Reduced from 27 to 28 non-blocking accessibility warnings
-- **Accessibility**: Added ARIA labels, keyboard navigation, focus management
+- **Build Warnings**: Maintained at 28 non-blocking accessibility warnings
+- **Single Style Tags**: Fixed Svelte component style tag issues for proper compilation
+- **Grid Layout Optimizations**: Enhanced visual density while maintaining accessibility
 - **TypeScript Strict**: Full strict mode compliance with comprehensive type definitions
 - **Error Handling**: Graceful degradation for missing data and backend failures
+- **Mobile Responsiveness**: Consistent responsive design patterns across all components
 
 ## File & Folder Conventions
 

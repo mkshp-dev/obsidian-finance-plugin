@@ -1,6 +1,56 @@
 /* styles.css */
 
 /* --- Settings Tab Styles --- */
+
+/* LED Status Panel */
+.beancount-status-panel {
+	background: var(--background-secondary) !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-radius: 8px !important;
+	padding: 16px !important;
+	margin: 16px 0 !important;
+	font-family: var(--font-monospace) !important;
+	font-size: 0.9em !important;
+}
+
+.beancount-status-panel .status-row {
+	display: flex;
+	align-items: center;
+	padding: 6px 0;
+	cursor: help;
+}
+
+.beancount-status-panel .status-led {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	margin-right: 8px;
+	border: 1px solid rgba(0,0,0,0.2);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.beancount-status-panel .status-led.ok {
+	background: radial-gradient(circle at 30% 30%, #4CAF50, #2E7D32);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #4CAF50;
+}
+
+.beancount-status-panel .status-led.warning {
+	background: radial-gradient(circle at 30% 30%, #FF9800, #F57C00);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #FF9800;
+}
+
+.beancount-status-panel .status-led.error {
+	background: radial-gradient(circle at 30% 30%, #F44336, #C62828);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #F44336;
+}
+
+.beancount-status-panel .status-led.unknown {
+	background: radial-gradient(circle at 30% 30%, #9E9E9E, #616161);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Test Results */
 .beancount-test-results {
 	font-size: var(--font-ui-small);
 	padding: 10px;
