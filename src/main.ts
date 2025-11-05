@@ -6,13 +6,21 @@ import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view';
 import { UnifiedTransactionModal } from './components/UnifiedTransactionModal';
 import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './views/unified-dashboard-view';
+import { BQLCodeBlockProcessor } from './components/BQLCodeBlockProcessor';
 // --------------------------------------------------
 
 export default class BeancountPlugin extends Plugin {
 	settings: BeancountPluginSettings;
+	private bqlProcessor: BQLCodeBlockProcessor;
 
 	async onload() {
 		await this.loadSettings();
+
+		// Initialize BQL code block processor
+		this.bqlProcessor = new BQLCodeBlockProcessor(this);
+		
+		// Register BQL code block processor
+		this.registerMarkdownCodeBlockProcessor('bql', this.bqlProcessor.getProcessor());
 
 		// Register Views
 		// this.registerView(
@@ -48,6 +56,20 @@ export default class BeancountPlugin extends Plugin {
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount Transaction',
 			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
+		});
+		this.addCommand({
+			id: 'insert-bql-query',
+			name: 'Insert BQL Query Block',
+			editorCallback: (editor) => {
+				const cursor = editor.getCursor();
+				const template = '```bql\nSELECT account GROUP BY account ORDER BY account\n```\n';
+				editor.replaceRange(template, cursor);
+				// Position cursor inside the query
+				editor.setCursor({
+					line: cursor.line + 1,
+					ch: 0
+				});
+			}
 		});
 		this.addCommand({
 			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view

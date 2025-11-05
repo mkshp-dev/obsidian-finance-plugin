@@ -24,6 +24,7 @@
 - **Multi-Currency Support**: Proper currency formatting and conversion
 - **Search & Filtering**: Real-time search across all data types with server-side filtering
 - **Responsive Design**: Mobile-friendly responsive layouts with accessibility improvements
+- **BQL Code Blocks**: Native Beancount Query Language integration with live results ⭐ **NEW**
 
 ### 🏗️ **Architecture**
 
@@ -43,6 +44,7 @@ src/
     TransactionEditModal.svelte # Unified entry modal (transactions, balance, notes) ⭐ ENHANCED
     UnifiedTransactionModal.ts # Modal controller for all entry types ⭐ NEW
     YahooFinanceSearchComponent.svelte # Simplified Yahoo Finance symbol search ⭐ NEW
+    BQLCodeBlockProcessor.ts  # BQL code block processor for live query results ⭐ NEW
     tabs/
       OverviewTab.svelte      # Financial overview with charts
       TransactionsTab.svelte  # Transaction browser with filtering
@@ -107,6 +109,28 @@ npm run lint
 - **Responsive Design**: Mobile-first approach
 
 ## Recent Major Updates
+
+### **Native BQL Code Block Integration** ⭐ **LATEST**
+- **BQLCodeBlockProcessor.ts**: Complete code block processor for executing BQL queries directly in notes
+- **Live Query Results**: Automatic execution and formatted table display of Beancount Query Language statements
+- **Interactive Features**: Refresh, copy, and export functionality with collapsible query display
+- **Obsidian-Native Workflow**: Perfect integration with note-taking using familiar code block syntax
+- **Template Command**: "Insert BQL Query Block" command for quick query template insertion
+- **Professional Styling**: Comprehensive CSS styling with responsive design and proper table formatting
+- **Error Handling**: Graceful error display with fallback to raw CSV output
+
+### **Usage Example**:
+```markdown
+## Account Balances
+​```bql
+SELECT account, sum(position) GROUP BY account ORDER BY account
+​```
+
+## Recent Transactions  
+​```bql
+SELECT date, payee, narration ORDER BY date DESC LIMIT 10
+​```
+```
 
 ### **Simplified Yahoo Finance Integration** ⭐ **LATEST**
 - **YahooFinanceSearchComponent.svelte**: Clean, simplified component with direct website links

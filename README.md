@@ -46,6 +46,14 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 - **Real-time API Status**: Visual connection indicator and automatic backend management
 - **Fava-style Interface**: Clean, expandable transaction cards with proper formatting
 
+### 🔍 **BQL Code Blocks** ⭐ **NEW**
+- **Native Query Integration**: Execute Beancount Query Language (BQL) directly in your notes
+- **Live Results**: Queries execute automatically and display formatted results inline
+- **Interactive Tables**: Sortable, responsive tables with proper formatting
+- **Export Capabilities**: Copy results to clipboard or download as CSV
+- **Query Templates**: Pre-built examples for common financial queries
+- **Real-time Data**: Always shows current data from your Beancount ledger
+
 ---
 
 ## 🔧 Requirements
@@ -118,6 +126,77 @@ The backend will automatically install Flask and flask-cors when first started.
 - **Error Recovery**: Automatic retry on startup failures
 
 ### Troubleshooting
+
+If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
+
+---
+
+## 🔍 Using BQL Code Blocks
+
+The plugin includes powerful **BQL (Beancount Query Language) code block** functionality that lets you execute queries directly in your notes and see live results.
+
+### Creating BQL Code Blocks
+
+1. **Insert Code Block**: Use the command `Insert BQL Query Block` or manually type:
+   ````markdown
+   ```bql
+   SELECT account GROUP BY account ORDER BY account
+   ```
+   ````
+
+2. **Query Executes Automatically**: The query runs immediately and displays formatted results
+
+3. **Interactive Results**: 
+   - **Refresh** (⟳): Re-run query with latest data
+   - **Copy** (📋): Copy raw CSV results to clipboard
+   - **Export** (📤): Download results as CSV file
+   - **View Query**: Toggle query visibility
+
+### Common BQL Examples
+
+**List All Accounts:**
+```bql
+SELECT account GROUP BY account ORDER BY account
+```
+
+**Recent Transactions:**
+```bql
+SELECT date, payee, narration, account, position ORDER BY date DESC LIMIT 20
+```
+
+**Account Balances:**
+```bql
+SELECT account, sum(position) GROUP BY account ORDER BY account
+```
+
+**Asset Accounts:**
+```bql
+SELECT account, sum(position) WHERE account ~ '^Assets' GROUP BY account
+```
+
+**Income This Year:**
+```bql
+SELECT account, sum(position) WHERE account ~ '^Income' AND year = YEAR(TODAY()) GROUP BY account
+```
+
+**Monthly Expenses:**
+```bql
+SELECT year, month, sum(position) WHERE account ~ '^Expenses' GROUP BY year, month ORDER BY year DESC, month DESC
+```
+
+### BQL Integration Benefits
+
+- **Live Data**: Always shows current data from your Beancount ledger
+- **Note-Taking Workflow**: Perfect for financial analysis and reporting
+- **No External Tools**: Execute queries directly within Obsidian
+- **Formatted Output**: Professional tables with proper number formatting
+- **Export Ready**: Easy data export for further analysis
+
+---
+
+## 🛠️ Troubleshooting
+
+### Backend Issues
 
 If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
 
