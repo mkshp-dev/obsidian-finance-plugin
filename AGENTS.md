@@ -15,11 +15,14 @@
 - **Unified Dashboard**: 6-tab interface (Overview, Transactions, Balance Sheet, Accounts, Commodities, Journal)
 - **Enhanced Entry Management**: Unified modal system with tabs for transactions, balance assertions, and notes
 - **Full CRUD Operations**: Create, read, update, delete with confirmation dialogs and automatic backups
+- **Connection Validation Panel**: Comprehensive 4-command testing suite with real-time status indicators ⭐ **ENHANCED**
+- **Professional Testing Interface**: Individual and batch command testing with transparent error reporting ⭐ **NEW**
+- **Cross-Platform Path Handling**: Automatic Windows/WSL path format conversion with proper separators ⭐ **NEW**
 - **Commodities Management**: Full price tracking, metadata management, simplified Yahoo Finance integration ⭐ **ENHANCED**
 - **Yahoo Finance Symbol Search**: Streamlined symbol lookup with direct links to major financial websites ⭐ **NEW**
 - **Optimized Grid Layouts**: Compact, content-appropriate card layouts for better screen utilization ⭐ **IMPROVED**
 - **Journal Tab**: Complete Beancount entry viewing with inline editing capabilities
-- **Auto-starting Backend**: Python Flask API with automatic process management
+- **Auto-starting Backend**: Python Flask API with automatic process management and validation mode
 - **Account Hierarchy**: Interactive account tree with balance drilldown
 - **Multi-Currency Support**: Proper currency formatting and conversion
 - **Search & Filtering**: Real-time search across all data types with server-side filtering
@@ -28,6 +31,7 @@
 - **Inline BQL Queries**: Live financial data embedded directly in text with `bql:query` syntax ⭐ **NEW**
 - **Template Shorthand System**: User-defined shortcuts with `bql-sh:SHORTHAND` syntax ⭐ **NEW**
 - **Template File Management**: No built-in defaults, all shortcuts from customizable template files ⭐ **NEW**
+- **Streamlined Settings**: Clean, focused settings panel without system status clutter ⭐ **IMPROVED**
 
 ### 🏗️ **Architecture**
 
@@ -44,6 +48,7 @@ src/
     ChartComponent.svelte     # Chart visualization component
     DropdownItem.svelte       # Dropdown menu items
     HierarchicalDropdown.svelte # Hierarchical account selector
+    ConnectionSettings.svelte   # Comprehensive connection validation panel ⭐ ENHANCED
     TransactionEditModal.svelte # Unified entry modal (transactions, balance, notes) ⭐ ENHANCED
     UnifiedTransactionModal.ts # Modal controller for all entry types ⭐ NEW
     YahooFinanceSearchComponent.svelte # Simplified Yahoo Finance symbol search ⭐ NEW
@@ -221,21 +226,28 @@ SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND YEAR(date) 
 
 ### **Recent Major Updates**
 
-#### **Complete Inline BQL System** ⭐ **LATEST**
+#### **Streamlined Settings Interface** ⭐ **LATEST**
+- **Removed System Status Section**: Eliminated LED status indicators and system diagnostic panel for cleaner UI
+- **Removed Debug Sections**: Completely removed "Debug & System Commands" and command debug modal
+- **Clean Settings Flow**: Settings now start directly with Connection panel, followed by essential configuration
+- **Focused User Experience**: No system status clutter, just actionable configuration options
+- **Maintained Functionality**: All essential features preserved, just cleaner presentation
+
+#### **Enhanced Connection Validation Panel** ⭐ **ENHANCED**
+- **4-Command Testing Suite**: Comprehensive validation for Bean Check, Bean Query, Bean Query CSV, and Backend API Server
+- **Professional Testing Interface**: Individual test buttons with real-time status indicators (⭕ pending, 🔄 running, ✅ success, ❌ failed)
+- **Cross-Platform Path Handling**: Automatic Windows/WSL path format conversion with proper separators
+- **Backend Validation Mode**: --validate-only flag implementation for non-hanging Flask server testing
+- **Transparent Command Display**: Shows exactly what commands will be executed for debugging
+- **Batch Testing**: "Test All Commands" button for comprehensive system validation
+
+#### **Complete BQL Integration System**
 - **Template-Only Architecture**: Removed all built-in shorthand defaults for complete user control
 - **Dual Query Modes**: Code blocks for detailed analysis, inline queries for embedded values
 - **Advanced Template System**: User-defined shortcuts with automatic file path resolution
 - **Clean Production Code**: Removed all debug console.log statements for silent operation
 - **Professional UX**: Enhanced error messages with helpful tooltips and guidance
 - **File Picker Enhancement**: Sophisticated autocomplete and browse functionality for template files
-
-#### **Previous Operations Summary**
-- **Yahoo Finance Simplification**: Completely redesigned Yahoo Finance integration to remove API complexity
-- **Grid Layout Optimization**: Enhanced both CommoditiesTab and YahooFinanceSearchComponent layouts
-- **Card Size Optimization**: Reduced minimum widths and heights for more content-appropriate sizing
-- **Mobile Responsiveness**: Improved mobile layouts with better space utilization
-- **Build System**: Fixed Svelte compilation issues and maintained clean build process
-- **Documentation Updates**: Comprehensive README and AGENTS.md updates reflecting all improvements
 
 ### **Backend Architecture** ⭐
 - **BackendManager.ts**: Auto-starting Python backend with WSL support
@@ -249,10 +261,44 @@ SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND YEAR(date) 
 - **User Customizable**: Users can set their own preferred hotkeys in Obsidian settings
 - **Clean Command Palette**: Commands appear without confusing hotkey indicators
 
+### **Current Settings Architecture**
+
+The settings panel has been streamlined to provide a clean, focused configuration experience:
+
+#### **Settings Panel Structure**
+1. **Connection** ⭐ **FIRST SECTION**
+   - Comprehensive connection validation and testing
+   - 4-command testing suite with real-time status indicators
+   - File selection from vault or absolute path entry
+   - Cross-platform path handling (Windows/WSL/Unix)
+   
+2. **Transaction Form**
+   - Default currency configuration with validation
+   - Reporting currency for multi-currency conversions
+   
+3. **Performance**
+   - Max transaction results (pagination limits)
+   - Max journal results (performance optimization)
+   
+4. **BQL Code Blocks**
+   - Show query tools toggle (refresh, copy, export buttons)
+   - Show query text toggle (collapsible query display)
+   
+5. **BQL Shortcuts Template** ⭐ **FINAL SECTION**
+   - Template file path configuration with autocomplete
+   - Browse functionality for markdown files
+   - Create template button for getting started
+
+#### **Removed Sections**
+- ✅ **System Status Panel**: LED indicators, refresh button, diagnostic information
+- ✅ **Debug & System Commands**: Command audit panel, debug modal functionality  
+- ✅ **All System Check Methods**: Python, Beancount, Flask detection logic
+- ✅ **Status Update Calls**: Automatic status refresh functionality
+
 ### **Code Quality Improvements**
-- **Build Warnings**: Maintained at 28 non-blocking accessibility warnings
-- **Single Style Tags**: Fixed Svelte component style tag issues for proper compilation
-- **Grid Layout Optimizations**: Enhanced visual density while maintaining accessibility
+- **Build Warnings**: Maintained at 40 non-blocking accessibility warnings
+- **Clean Interface**: Removed system status clutter and debug functionality
+- **Focused UX**: Settings start directly with actionable configuration
 - **TypeScript Strict**: Full strict mode compliance with comprehensive type definitions
 - **Error Handling**: Graceful degradation for missing data and backend failures
 - **Mobile Responsiveness**: Consistent responsive design patterns across all components

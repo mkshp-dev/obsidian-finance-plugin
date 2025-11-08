@@ -2,31 +2,15 @@
 
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
-import { getTestConnectionQuery } from './queries/index';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import ConnectionSettings from './components/ConnectionSettings.svelte';
 
 const execAsync = promisify(exec);
 
-// Status types for LED display
-interface SystemStatus {
-    status: 'ok' | 'warning' | 'error' | 'unknown';
-    message: string;
-    details?: string;
-}
 
-interface SystemCheckResult {
-    python: SystemStatus;
-    beancount: SystemStatus;
-    beanQuery: SystemStatus;
-    beanPrice: SystemStatus;
-    flask: SystemStatus;
-    flaskCors: SystemStatus;
-    beancountFile: SystemStatus;
-    beancountSyntax: SystemStatus;
-}
 
 export interface BeancountPluginSettings {
     beancountFilePath: string;
@@ -58,357 +42,15 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
 
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
-    private statusContainer: HTMLElement | null = null;
 
     constructor(app: App, plugin: BeancountPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
 
-    /**
-     * Check if Python is available
-     */
-    private async checkPython(): Promise<SystemStatus> {
-        try {
-            const { stdout } = await execAsync('python --version', { timeout: 5000 });
-            const version = stdout.trim();
-            if (version.includes('Python 3.')) {
-                const versionMatch = version.match(/Python (\d+\.\d+)/);
-                const versionNum = versionMatch ? parseFloat(versionMatch[1]) : 0;
-                if (versionNum >= 3.8) {
-                    return { status: 'ok', message: 'Python Available', details: version };
-                } else {
-                    return { status: 'warning', message: 'Python < 3.8', details: `${version} (3.8+ recommended)` };
-                }
-            }
-            return { status: 'error', message: 'Python 2 Detected', details: `${version} (Python 3.8+ required)` };
-        } catch (error) {
-            try {
-                const { stdout } = await execAsync('python3 --version', { timeout: 5000 });
-                const version = stdout.trim();
-                return { status: 'ok', message: 'Python3 Available', details: version };
-            } catch (error2) {
-                return { status: 'error', message: 'Python Not Found', details: 'Install Python 3.8+' };
-            }
-        }
-    }
 
-    /**
-     * Check if Beancount is available
-     */
-    private async checkBeancount(): Promise<SystemStatus> {
-        try {
-            const { stdout } = await execAsync('python -c "import beancount; print(beancount.__version__)"', { timeout: 5000 });
-            const version = stdout.trim();
-            return { status: 'ok', message: 'Beancount Available', details: `v${version}` };
-        } catch (error) {
-            try {
-                const { stdout } = await execAsync('python3 -c "import beancount; print(beancount.__version__)"', { timeout: 5000 });
-                const version = stdout.trim();
-                return { status: 'ok', message: 'Beancount Available', details: `v${version}` };
-            } catch (error2) {
-                return { status: 'error', message: 'Beancount Not Found', details: 'Run: pip install beancount' };
-            }
-        }
-    }
 
-    /**
-     * Check if bean-query command is available
-     */
-    private async checkBeanQuery(): Promise<SystemStatus> {
-        const command = this.plugin.settings.beancountCommand || 'bean-query';
-        try {
-            const testCommand = command.includes('wsl') ? 
-                `${command} --help` : 
-                `"${command}" --help`;
-            
-            await execAsync(testCommand, { timeout: 5000 });
-            return { status: 'ok', message: 'Bean-Query Available', details: command };
-        } catch (error) {
-            if (error.code === 'ENOENT' || error.message.includes('not found')) {
-                return { status: 'error', message: 'Bean-Query Not Found', details: 'Check command path' };
-            }
-            // Command exists but returns error (which is normal for --help in some versions)
-            return { status: 'ok', message: 'Bean-Query Available', details: command };
-        }
-    }
 
-    /**
-     * Check if bean-price command is available
-     */
-    private async checkBeanPrice(): Promise<SystemStatus> {
-        try {
-            await execAsync('bean-price --help', { timeout: 5000 });
-            return { status: 'ok', message: 'Bean-Price Available', details: 'For automated pricing' };
-        } catch (error) {
-            if (error.code === 'ENOENT' || error.message.includes('not found')) {
-                return { status: 'warning', message: 'Bean-Price Not Found', details: 'Optional for price fetching' };
-            }
-            return { status: 'ok', message: 'Bean-Price Available', details: 'For automated pricing' };
-        }
-    }
-
-    /**
-     * Check if Flask is available
-     */
-    private async checkFlask(): Promise<SystemStatus> {
-        try {
-            const { stdout } = await execAsync('python -c "import flask; print(flask.__version__)"', { timeout: 5000 });
-            const version = stdout.trim();
-            return { status: 'ok', message: 'Flask Available', details: `v${version}` };
-        } catch (error) {
-            try {
-                const { stdout } = await execAsync('python3 -c "import flask; print(flask.__version__)"', { timeout: 5000 });
-                const version = stdout.trim();
-                return { status: 'ok', message: 'Flask Available', details: `v${version}` };
-            } catch (error2) {
-                return { status: 'warning', message: 'Flask Not Found', details: 'Auto-install on first use' };
-            }
-        }
-    }
-
-    /**
-     * Check if Flask-CORS is available
-     */
-    private async checkFlaskCors(): Promise<SystemStatus> {
-        try {
-            const { stdout } = await execAsync('python -c "import flask_cors; print(flask_cors.__version__)"', { timeout: 5000 });
-            const version = stdout.trim();
-            return { status: 'ok', message: 'Flask-CORS Available', details: `v${version}` };
-        } catch (error) {
-            try {
-                const { stdout } = await execAsync('python3 -c "import flask_cors; print(flask_cors.__version__)"', { timeout: 5000 });
-                const version = stdout.trim();
-                return { status: 'ok', message: 'Flask-CORS Available', details: `v${version}` };
-            } catch (error2) {
-                return { status: 'warning', message: 'Flask-CORS Not Found', details: 'Auto-install on first use' };
-            }
-        }
-    }
-
-    /**
-     * Check if Beancount file exists and is readable
-     */
-    private async checkBeancountFile(): Promise<SystemStatus> {
-        const filePath = this.plugin.settings.beancountFilePath;
-        if (!filePath) {
-            return { status: 'warning', message: 'No File Configured', details: 'Set beancount file path' };
-        }
-
-        try {
-            const resolvedPath = resolve(filePath);
-            if (!existsSync(resolvedPath)) {
-                return { status: 'error', message: 'File Not Found', details: filePath };
-            }
-
-            if (!filePath.toLowerCase().endsWith('.beancount') && !filePath.toLowerCase().endsWith('.bean')) {
-                return { status: 'warning', message: 'Unexpected Extension', details: 'Should be .beancount or .bean' };
-            }
-
-            return { status: 'ok', message: 'File Found', details: filePath };
-        } catch (error) {
-            return { status: 'error', message: 'File Access Error', details: error.message };
-        }
-    }
-
-    /**
-     * Check if Beancount file has valid syntax by running a simple query
-     */
-    private async checkBeancountSyntax(): Promise<SystemStatus> {
-        if (!this.plugin.settings.beancountCommand || !this.plugin.settings.beancountFilePath) {
-            return { status: 'warning', message: 'Cannot Test Syntax', details: 'Configure command and file first' };
-        }
-
-        try {
-            const query = getTestConnectionQuery();
-            const result = await this.plugin.runQuery(query);
-            
-            if (result && result.trim().length > 0) {
-                return { status: 'ok', message: 'Valid Beancount File', details: 'Syntax check passed' };
-            } else {
-                return { status: 'warning', message: 'Empty Result', details: 'File parsed but no data' };
-            }
-        } catch (error) {
-            const errorMsg = error.message.toLowerCase();
-            if (errorMsg.includes('syntax') || errorMsg.includes('parse') || errorMsg.includes('lexer')) {
-                return { status: 'error', message: 'Syntax Error', details: 'Check beancount file syntax' };
-            } else if (errorMsg.includes('not found') || errorMsg.includes('no such file')) {
-                return { status: 'error', message: 'File Not Found', details: 'Check file path' };
-            } else {
-                return { status: 'error', message: 'Query Failed', details: error.message };
-            }
-        }
-    }
-
-    /**
-     * Run all system checks
-     */
-    private async runSystemChecks(): Promise<SystemCheckResult> {
-        const checks = await Promise.allSettled([
-            this.checkPython(),
-            this.checkBeancount(),
-            this.checkBeanQuery(),
-            this.checkBeanPrice(),
-            this.checkFlask(),
-            this.checkFlaskCors(),
-            this.checkBeancountFile(),
-            this.checkBeancountSyntax()
-        ]);
-
-        const getResult = (result: PromiseSettledResult<SystemStatus>): SystemStatus => {
-            if (result.status === 'fulfilled') {
-                return result.value;
-            } else {
-                return { status: 'error', message: 'Check Failed', details: result.reason?.message || 'Unknown error' };
-            }
-        };
-
-        return {
-            python: getResult(checks[0]),
-            beancount: getResult(checks[1]),
-            beanQuery: getResult(checks[2]),
-            beanPrice: getResult(checks[3]),
-            flask: getResult(checks[4]),
-            flaskCors: getResult(checks[5]),
-            beancountFile: getResult(checks[6]),
-            beancountSyntax: getResult(checks[7])
-        };
-    }
-
-    /**
-     * Create LED-style status indicator
-     */
-    private createStatusLED(status: 'ok' | 'warning' | 'error' | 'unknown'): HTMLElement {
-        const led = document.createElement('span');
-        led.style.cssText = `
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-            border: 1px solid rgba(0,0,0,0.2);
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-        `;
-
-        switch (status) {
-            case 'ok':
-                led.style.background = 'radial-gradient(circle at 30% 30%, #4CAF50, #2E7D32)';
-                led.style.boxShadow += ', 0 0 4px #4CAF50';
-                break;
-            case 'warning':
-                led.style.background = 'radial-gradient(circle at 30% 30%, #FF9800, #F57C00)';
-                led.style.boxShadow += ', 0 0 4px #FF9800';
-                break;
-            case 'error':
-                led.style.background = 'radial-gradient(circle at 30% 30%, #F44336, #C62828)';
-                led.style.boxShadow += ', 0 0 4px #F44336';
-                break;
-            default:
-                led.style.background = 'radial-gradient(circle at 30% 30%, #9E9E9E, #616161)';
-                break;
-        }
-
-        return led;
-    }
-
-    /**
-     * Create status display panel
-     */
-    private createStatusPanel(container: HTMLElement): HTMLElement {
-        const panel = container.createEl('div', {
-            cls: 'beancount-status-panel'
-        });
-
-        panel.style.cssText = `
-            background: var(--background-secondary);
-            border: 1px solid var(--background-modifier-border);
-            border-radius: 8px;
-            padding: 16px;
-            margin: 16px 0;
-            font-family: var(--font-monospace);
-            font-size: 0.9em;
-        `;
-
-        const header = panel.createEl('div', {
-            text: '🖥️ System Status',
-            attr: {
-                style: 'font-weight: 600; margin-bottom: 12px; font-size: 1.1em; font-family: var(--font-ui);'
-            }
-        });
-
-        const statusGrid = panel.createEl('div', {
-            attr: {
-                style: 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;'
-            }
-        });
-
-        return statusGrid;
-    }
-
-    /**
-     * Update status display
-     */
-    private async updateStatusDisplay(): Promise<void> {
-        if (!this.statusContainer) return;
-
-        // Show loading state
-        this.statusContainer.empty();
-        const loadingEl = this.statusContainer.createEl('div', {
-            text: '🔄 Checking system status...',
-            attr: { style: 'text-align: center; padding: 20px; color: var(--text-muted);' }
-        });
-
-        try {
-            const results = await this.runSystemChecks();
-            
-            // Clear loading and show results
-            this.statusContainer.empty();
-            
-            const statusItems = [
-                { label: 'Python', status: results.python },
-                { label: 'Beancount', status: results.beancount },
-                { label: 'Bean-Query', status: results.beanQuery },
-                { label: 'Bean-Price', status: results.beanPrice },
-                { label: 'Flask', status: results.flask },
-                { label: 'Flask-CORS', status: results.flaskCors },
-                { label: 'Beancount File', status: results.beancountFile },
-                { label: 'File Syntax', status: results.beancountSyntax }
-            ];
-
-            statusItems.forEach(item => {
-                const statusRow = this.statusContainer!.createEl('div', {
-                    attr: {
-                        style: 'display: flex; align-items: center; padding: 6px 0; cursor: help;'
-                    }
-                });
-
-                const led = this.createStatusLED(item.status.status);
-                statusRow.appendChild(led);
-
-                const labelEl = statusRow.createEl('span', {
-                    text: item.label,
-                    attr: { style: 'flex: 1; font-weight: 500;' }
-                });
-
-                const messageEl = statusRow.createEl('span', {
-                    text: item.status.message,
-                    attr: { style: 'font-size: 0.8em; opacity: 0.8;' }
-                });
-
-                // Add tooltip with details
-                if (item.status.details) {
-                    statusRow.title = `${item.label}: ${item.status.details}`;
-                }
-            });
-
-        } catch (error) {
-            this.statusContainer.empty();
-            this.statusContainer.createEl('div', {
-                text: `❌ Status check failed: ${error.message}`,
-                attr: { style: 'color: var(--text-error); text-align: center; padding: 20px;' }
-            });
-        }
-    }
 
     /**
      * Validates if the beancount file path exists and is accessible
@@ -505,173 +147,8 @@ export class BeancountSettingTab extends PluginSettingTab {
         containerEl.empty();
         containerEl.createEl('h2', {text: 'Beancount Settings'});
 
-        // --- System Status Panel ---
-        containerEl.createEl('h3', { text: 'System Status' });
-        this.statusContainer = this.createStatusPanel(containerEl);
-        
-        // Add refresh button
-        new Setting(containerEl)
-            .setName('System diagnostics')
-            .setDesc('Check if all required dependencies are properly installed and configured.')
-            .addButton(button => button
-                .setButtonText('🔄 Refresh Status')
-                .onClick(async () => {
-                    await this.updateStatusDisplay();
-                }));
-
-        // Initial status check
-        this.updateStatusDisplay();
-
-        // --- Connection Settings ---
-        containerEl.createEl('h3', { text: 'Connection' });
-
-        new Setting(containerEl)
-            .setName('Beancount command')
-            .setDesc('How to run bean-query. (e.g., "bean-query", "wsl bean-query", or a full path)')
-            .addText(text => {
-                const validationEl = this.createValidationElement(containerEl);
-                
-                text
-                    .setPlaceholder('bean-query')
-                    .setValue(this.plugin.settings.beancountCommand)
-                    .onChange(async (value) => {
-                        this.plugin.settings.beancountCommand = value;
-                        await this.plugin.saveSettings();
-                        
-                        // Real-time validation
-                        if (value.trim()) {
-                            validationEl.textContent = 'Validating command...';
-                            validationEl.style.color = '#666';
-                            
-                            const validation = await this.validateCommand(value);
-                            this.updateValidationDisplay(validationEl, validation);
-                        } else {
-                            validationEl.textContent = '';
-                        }
-                        
-                        // Auto-refresh status when command changes
-                        setTimeout(() => this.updateStatusDisplay(), 500);
-                    });
-
-                // Initial validation
-                if (this.plugin.settings.beancountCommand) {
-                    this.validateCommand(this.plugin.settings.beancountCommand)
-                        .then(result => this.updateValidationDisplay(validationEl, result));
-                }
-                
-                return text;
-            });
-
-        new Setting(containerEl)
-            .setName('Path to beancount file')
-            .setDesc('Enter the absolute path to your main .beancount file.')
-            .addText(text => {
-                const validationEl = this.createValidationElement(containerEl);
-                
-                text
-                    .setPlaceholder('C:/Users/User/finances.beancount or /mnt/c/...')
-                    .setValue(this.plugin.settings.beancountFilePath)
-                    .onChange(async (value) => {
-                        this.plugin.settings.beancountFilePath = value;
-                        await this.plugin.saveSettings();
-                        
-                        // Real-time validation
-                        if (value.trim()) {
-                            const validation = this.validateFilePath(value);
-                            this.updateValidationDisplay(validationEl, validation);
-                        } else {
-                            validationEl.textContent = '';
-                        }
-                        
-                        // Auto-refresh status when file path changes
-                        setTimeout(() => this.updateStatusDisplay(), 500);
-                    });
-
-                // Initial validation
-                if (this.plugin.settings.beancountFilePath) {
-                    const validation = this.validateFilePath(this.plugin.settings.beancountFilePath);
-                    this.updateValidationDisplay(validationEl, validation);
-                }
-                // Give the input element a stable id so other parts of the settings UI can update it
-                try {
-                    // TextComponent exposes 'inputEl' at runtime
-                    (text as any).inputEl.id = 'beancount-file-input';
-                } catch (e) {
-                    // Ignore if not present
-                }
-
-                return text;
-            });
-
-        // Add a helper button to choose a .beancount file from the current vault (if any)
-        new Setting(containerEl)
-            .setName('Choose from vault')
-            .setDesc('Pick a .beancount/.bean file that exists inside this Obsidian vault.')
-            .addButton(btn => btn
-                .setButtonText('Choose file in vault')
-                .onClick(() => {
-                    this.showVaultBeancountPicker();
-                })
-            );
-
-        // --- Test Connection Button ---
-        const testResultEl = containerEl.createEl('div', { cls: 'beancount-test-results' });
-
-        new Setting(containerEl)
-            .setName('Test connection')
-            .setDesc('Run a test query to verify the command and file path.')
-            .addButton(button => button
-                .setButtonText('Test')
-                .onClick(async () => {
-                    // 1. Clear previous results
-                    testResultEl.empty();
-                    testResultEl.setText('Testing...');
-                    testResultEl.removeClass('beancount-test-success');
-                    testResultEl.removeClass('beancount-test-error');
-
-                    // 2. Check if settings are configured
-                    if (!this.plugin.settings.beancountCommand || !this.plugin.settings.beancountFilePath) {
-                        testResultEl.setText(`❌ Failed: Please configure both Beancount command and file path.`);
-                        testResultEl.addClass('beancount-test-error');
-                        return;
-                    }
-
-                    // 3. Run the test using imported query function
-                    try {
-                        // --- Use imported query function ---
-                        const query = getTestConnectionQuery();
-                        const result = await this.plugin.runQuery(query); // Calls runQuery from main.ts
-                        
-                        // Check if result contains actual data
-                        if (result && result.trim().length > 0) {
-                            testResultEl.setText('✅ Success! Your command and file path are correct.');
-                            testResultEl.addClass('beancount-test-success');
-                        } else {
-                            testResultEl.setText('⚠️ Warning: Connection works but no data returned. Check your beancount file.');
-                            testResultEl.addClass('beancount-test-error');
-                        }
-                        // -----------------------------------
-
-                    } catch (error) {
-                        // 5. Handle Failure with more specific error messages
-                        let errorMessage = error.message;
-                        if (errorMessage.includes('command not found') || errorMessage.includes('not recognized')) {
-                            errorMessage = 'Command not found. Please check your Beancount command path.';
-                        } else if (errorMessage.includes('No such file') || errorMessage.includes('cannot find')) {
-                            errorMessage = 'File not found. Please check your beancount file path.';
-                        } else if (errorMessage.includes('Permission denied')) {
-                            errorMessage = 'Permission denied. Please check file permissions.';
-                        }
-                        
-                        testResultEl.setText(`❌ Failed: ${errorMessage}`);
-                        testResultEl.addClass('beancount-test-error');
-                        // Optional: Log full error for debugging
-                        console.error("Beancount connection test failed:", error);
-                    }
-                    
-                    // Auto-refresh status after test
-                    setTimeout(() => this.updateStatusDisplay(), 1000);
-                }));
+        // --- Enhanced Connection Settings ---
+        this.createConnectionSection(containerEl);
 
         // --- Transaction Form Settings ---
         containerEl.createEl('h3', { text: 'Transaction Form' });
@@ -1217,8 +694,6 @@ export class BeancountSettingTab extends PluginSettingTab {
                         // Trigger the input event so the existing onChange handler updates validation
                         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
                     }
-                    // Refresh status display and close modal
-                    setTimeout(() => this.updateStatusDisplay(), 300);
                     modal.remove();
                 });
             });
@@ -1231,4 +706,170 @@ export class BeancountSettingTab extends PluginSettingTab {
 
         document.body.appendChild(modal);
     }
+
+    /**
+     * Show command suggestion modal with detected beancount commands
+     */
+    private async showCommandSuggestionModal(suggestions: string[]) {
+        const modal = document.createElement('div');
+        modal.className = 'beancount-command-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+
+        const content = modal.createEl('div', { cls: 'beancount-command-modal-content' });
+        content.style.cssText = `
+            background: var(--background-primary);
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80%;
+            overflow-y: auto;
+            border: 1px solid var(--background-modifier-border);
+        `;
+
+        content.createEl('h3', { text: 'Detected Beancount Commands' });
+        content.createEl('p', { 
+            text: 'Select a command that works on your system:', 
+            cls: 'setting-item-description' 
+        });
+
+        const list = content.createEl('div', { cls: 'beancount-command-list' });
+        list.style.cssText = `max-height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px; margin: 12px 0;`;
+
+        if (suggestions.length === 0) {
+            list.createEl('div', { 
+                text: 'No beancount commands detected. Please install beancount and ensure it\'s in your PATH.', 
+                cls: 'beancount-no-commands',
+                attr: { style: 'padding: 20px; text-align: center; color: var(--text-muted);' }
+            });
+        } else {
+            for (const [index, suggestion] of suggestions.entries()) {
+                const item = list.createEl('div', { cls: 'beancount-command-item' });
+                item.style.cssText = `
+                    display: flex; 
+                    align-items: center; 
+                    padding: 12px; 
+                    cursor: pointer; 
+                    border-bottom: 1px solid var(--background-modifier-border-hover);
+                    gap: 12px;
+                `;
+
+                const radio = item.createEl('input', { type: 'radio', attr: { name: 'beancount-command', value: suggestion } });
+                if (index === 0) radio.checked = true;
+
+                const label = item.createEl('label', { 
+                    text: suggestion,
+                    attr: { style: 'flex: 1; cursor: pointer; font-family: var(--font-monospace);' }
+                });
+
+                const testBtn = item.createEl('button', { 
+                    text: 'Test',
+                    attr: { style: 'padding: 4px 8px; font-size: 0.8em;' }
+                });
+
+                label.addEventListener('click', () => {
+                    radio.checked = true;
+                });
+
+                testBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    testBtn.textContent = 'Testing...';
+                    testBtn.disabled = true;
+
+                    try {
+                        const { SystemDetector } = await import('./utils/SystemDetector');
+                        const detector = SystemDetector.getInstance();
+                        const result = await detector.testCommand(`${suggestion} --help`);
+                        
+                        if (result.success) {
+                            testBtn.textContent = '✅ Works';
+                            testBtn.style.color = 'var(--text-success)';
+                        } else {
+                            testBtn.textContent = '❌ Failed';
+                            testBtn.style.color = 'var(--text-error)';
+                            testBtn.title = result.error || 'Command failed';
+                        }
+                    } catch (error) {
+                        testBtn.textContent = '❌ Error';
+                        testBtn.style.color = 'var(--text-error)';
+                        testBtn.title = error.message;
+                    } finally {
+                        testBtn.disabled = false;
+                    }
+                });
+
+                item.addEventListener('mouseenter', () => item.style.background = 'var(--background-modifier-hover)');
+                item.addEventListener('mouseleave', () => item.style.background = '');
+            }
+        }
+
+        const btnRow = content.createEl('div');
+        btnRow.style.cssText = 'display:flex; justify-content:flex-end; gap:8px; margin-top:12px;';
+        
+        const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
+        const useBtn = btnRow.createEl('button', { text: 'Use Selected', cls: 'mod-cta' });
+
+        cancelBtn.addEventListener('click', () => modal.remove());
+        
+        useBtn.addEventListener('click', () => {
+            const selected = list.querySelector('input[name="beancount-command"]:checked') as HTMLInputElement;
+            if (selected) {
+                this.plugin.settings.beancountCommand = selected.value;
+                this.plugin.saveSettings();
+                
+                // Update the input element if it exists
+                const inputEl = document.getElementById('beancount-command-input') as HTMLInputElement | null;
+                if (inputEl) {
+                    inputEl.value = selected.value;
+                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                
+                new Notice(`Command set to: ${selected.value}`);
+                modal.remove();
+            }
+        });
+
+        document.body.appendChild(modal);
+    }
+
+    /**
+     * Create the enhanced connection section with Svelte component
+     */
+    private createConnectionSection(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'Connection' });
+        
+        // Create container for the Svelte component
+        const connectionContainer = containerEl.createEl('div', {
+            cls: 'connection-settings-container'
+        });
+
+        // Create and mount the Svelte component
+        const connectionSettings = new ConnectionSettings({
+            target: connectionContainer,
+            props: {
+                plugin: this.plugin
+            }
+        });
+
+        // Listen for settings changes from the component
+        connectionSettings.$on('settingsChanged', (event) => {
+            // Settings changed - no additional action needed
+        });
+
+        // Store reference for cleanup (if needed)
+        (containerEl as any)._connectionSettings = connectionSettings;
+    }
+
+
 }

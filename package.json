@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-finance-plugin",
-	"version": "0.1.0",
-	"description": "Comprehensive financial dashboard with Beancount integration. Features unified entry management, commodity tracking, interactive account hierarchies, and real-time price data.",
+	"version": "1.0.0",
+	"description": "Comprehensive financial dashboard with Beancount integration. Features unified entry management, live BQL queries, connection validation, auto-starting backend, and streamlined settings.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

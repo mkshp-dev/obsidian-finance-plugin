@@ -915,12 +915,42 @@ def main():
     parser.add_argument('--port', type=int, default=5001, help='Port to run the server on')
     parser.add_argument('--host', default='localhost', help='Host to bind the server to')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    parser.add_argument('--validate-only', action='store_true', help='Only validate the setup and exit (for testing)')
     
     args = parser.parse_args()
     
     if not os.path.exists(args.beancount_file):
         print(f"Error: Beancount file '{args.beancount_file}' not found")
         sys.exit(1)
+    
+    # If validate-only mode, just test the setup and exit
+    if args.validate_only:
+        try:
+            print(f"Validating Beancount Journal API setup...")
+            print(f"[OK] Beancount file found: {args.beancount_file}")
+            
+            # Test loading the Beancount data
+            api = BeancountJournalAPI(args.beancount_file)
+            entries_count = len(api.entries) if api.entries else 0
+            errors_count = len(api.errors) if api.errors else 0
+            
+            print(f"[OK] Beancount data loaded successfully")
+            print(f"[OK] Found {entries_count} entries")
+            if errors_count > 0:
+                print(f"[WARN] {errors_count} parsing errors found")
+            else:
+                print(f"[OK] No parsing errors")
+            
+            # Test Flask app creation
+            app = create_app(args.beancount_file)
+            print(f"[OK] Flask application created successfully")
+            print(f"[OK] Server would run on: http://{args.host}:{args.port}")
+            print("[OK] Backend validation completed successfully!")
+            sys.exit(0)
+            
+        except Exception as e:
+            print(f"[ERROR] Backend validation failed: {e}")
+            sys.exit(1)
     
     print(f"Starting Beancount Journal API server...")
     print(f"Beancount file: {args.beancount_file}")

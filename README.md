@@ -90,18 +90,26 @@ This plugin integrates with your existing Beancount setup:
 
 ### Basic Setup
 1. **Open Plugin Settings**: Settings → Plugin Options → Finance Plugin
-2. **Set Beancount File Path**: Enter the absolute path to your main `.beancount` file
+2. **Connection Panel**: The first section provides comprehensive setup and testing
+   - **System Detection**: Automatic detection of Python, Beancount, and required tools
+   - **File Selection**: Choose your Beancount file from vault or enter absolute path
+   - **Command Testing**: Individual test buttons for all 4 critical commands:
+     - **Bean Check**: Validates Beancount file syntax
+     - **Bean Query**: Tests BQL query execution  
+     - **Bean Query CSV**: Validates CSV output format
+     - **Backend API Server**: Tests Python backend connectivity
+   - **Batch Testing**: "Test All Commands" button for comprehensive validation
+3. **Path Configuration**: 
    - Windows: `C:\Users\YourName\Documents\finances.beancount`
    - macOS/Linux: `/home/username/finances.beancount`
    - WSL: `/mnt/c/Users/YourName/Documents/finances.beancount`
-3. **Configure Command Paths**: 
-   - Set paths to `bean-query` and `bean-price` (usually auto-detected)
-   - For WSL users: Enable WSL mode in settings
 
-### Advanced Configuration
-- **Default Currency**: Set your primary reporting currency
-- **Update Intervals**: Configure automatic data refresh rates
-- **Display Options**: Customize number formatting and decimal places
+### Configuration Sections
+- **Connection**: Comprehensive system setup and command testing
+- **Transaction Form**: Default and reporting currency settings
+- **Performance**: Max results and pagination limits
+- **BQL Code Blocks**: Display preferences for query results  
+- **BQL Shortcuts Template**: Custom shorthand query configuration
 
 ## Python Backend (Auto-starting)
 
@@ -275,7 +283,36 @@ Important: Beancount often stores liabilities as negative numbers (this is stand
 
 This presentation makes the Snapshot easier to read while preserving accounting semantics under the hood.
 
-Selecting a Beancount file from the vault
+### Connection Validation & Testing ⭐ **ENHANCED**
+
+The plugin includes a comprehensive connection validation panel that ensures all components work correctly:
+
+**4-Command Testing Suite**:
+- **Bean Check**: Validates Beancount file syntax and reports errors
+- **Bean Query**: Tests BQL query execution with sample queries
+- **Bean Query CSV**: Validates CSV output format for data export
+- **Backend API Server**: Tests Python backend startup with --validate-only mode
+
+**Smart System Detection**:
+- Platform detection (Windows, macOS, Linux, WSL)
+- Python executable and version detection  
+- Automatic path format handling (Windows vs WSL)
+- Real-time command validation with detailed error reporting
+
+**Professional Testing Interface**:
+- Individual test buttons for each command with real-time status indicators
+- "Test All Commands" for comprehensive batch validation
+- Transparent command display showing exactly what will be executed
+- Detailed error messages and success confirmations
+- No external dependencies or hanging processes
+
+**Benefits**:
+- **Confidence**: Know your setup works before using the plugin
+- **Debugging**: Clear error messages help resolve configuration issues
+- **Cross-Platform**: Handles Windows, WSL, macOS, and Linux environments seamlessly
+- **User-Friendly**: Visual status indicators (⭕ pending, 🔄 running, ✅ success, ❌ failed)
+
+### Selecting a Beancount file from the vault
 
 If your `.beancount` file lives inside your Obsidian vault, you can choose it directly from the plugin Settings using the "Choose from vault" button next to the Beancount file path input. The plugin will set the absolute filesystem path (so external tools like `bean-query` can read it) and validate the file automatically.
 
