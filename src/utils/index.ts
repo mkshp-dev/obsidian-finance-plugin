@@ -17,7 +17,33 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
 			if (error) return reject(error);
 			if (stderr) return reject(new Error(stderr));
-			resolve(stdout);
+			
+			// Clean the output to remove any potential query echoes
+			let cleanOutput = stdout;
+			const lines = stdout.split('\n');
+			
+			// Remove lines that look like query echoes
+			const filteredLines = lines.filter(line => {
+				const trimmed = line.trim();
+				// Skip empty lines
+				if (!trimmed) return false;
+				// Skip lines that contain query fragments
+				if (trimmed.includes('SELECT') || 
+					trimmed.includes('WHERE') || 
+					trimmed.includes('convert(') || 
+					trimmed.includes('sum(') ||
+					trimmed === query.trim()) {
+					return false;
+				}
+				return true;
+			});
+			
+			// If we filtered out some lines, use the filtered result
+			if (filteredLines.length < lines.length && filteredLines.length > 0) {
+				cleanOutput = filteredLines.join('\n');
+			}
+			
+			resolve(cleanOutput);
 		});
 	});
 }
@@ -25,14 +51,64 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 // --- CSV PARSER HELPER ---
 export function parseSingleValue(csv: string): string {
 	try {
-		const records: string[][] = parseCsv(csv, { columns: false, skip_empty_lines: true });
+		// First, try to clean and process the raw CSV data
+		const lines = csv.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+		
+		// If we have lines, try to find the data line (skip query echo if present)
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			
+			// Skip lines that look like query echoes (contain SELECT, WHERE, etc.)
+			if (line.includes('SELECT') || line.includes('WHERE') || line.includes('convert(') || line.includes('sum(')) {
+				continue;
+			}
+			
+			// If line starts with a quote and contains data, extract the content
+			if (line.startsWith('"') && line.length > 2) {
+				// Remove leading/trailing quotes and return the content
+				let content = line.substring(1);
+				if (content.endsWith('"')) {
+					content = content.substring(0, content.length - 1);
+				}
+				return content.trim();
+			}
+			
+			// If line doesn't start with quote but contains data, return as-is
+			if (line.length > 0 && !line.startsWith('"')) {
+				return line.trim();
+			}
+		}
+		
+		// Fallback: try traditional CSV parsing
+		const records: string[][] = parseCsv(csv, { columns: false, skip_empty_lines: true, relax_column_count: true });
 		if (records.length > 1 && records[1].length > 0 && records[1][0] && records[1][0].trim() !== '') {
 			return records[1][0].trim();
 		}
+		
 		console.warn("parseSingleValue: No valid data found, returning '0 USD'. CSV:", csv);
 		return '0 USD';
 	} catch (e) {
 		console.error("Error parsing single value CSV:", e, "CSV:", csv);
+		
+		// Emergency fallback: try to extract any quoted content manually
+		try {
+			const lines = csv.split('\n');
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed.startsWith('"') && trimmed.length > 2) {
+					let content = trimmed.substring(1);
+					if (content.endsWith('"')) {
+						content = content.substring(0, content.length - 1);
+					}
+					if (content.trim().length > 0) {
+						return content.trim();
+					}
+				}
+			}
+		} catch (fallbackError) {
+			console.error("Fallback parsing also failed:", fallbackError);
+		}
+		
 		return '0 USD';
 	}
 }
