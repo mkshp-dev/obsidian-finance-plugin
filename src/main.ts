@@ -41,6 +41,9 @@ export default class BeancountPlugin extends Plugin {
 			UNIFIED_DASHBOARD_VIEW_TYPE,
 			(leaf) => new UnifiedDashboardView(leaf, this)
 		);
+
+		// Register file extensions so Obsidian shows .beancount and .bean files in file explorer
+		this.registerExtensions(['beancount', 'bean'], 'markdown');
 		// Add Ribbon Icons
 		this.addRibbonIcon('plus-circle', 'Add Transaction', () => {
 			new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open();

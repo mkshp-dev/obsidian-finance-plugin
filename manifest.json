@@ -7,5 +7,6 @@
   "author": "Mukund Shelake",
   "authorUrl": "https://mukundshelake.me",
   "fundingUrl": "https://github.com/mukundshelake/obsidian-finance-plugin",
+  "fileExtensions": ["beancount", "bean"],
   "isDesktopOnly": true
 }
