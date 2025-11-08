@@ -103,11 +103,23 @@ export class BeancountView extends ItemView {
 			// Calculate net worth: assets - liabilities
 			const assetsNum = parseFloat(assets.split(" ")[0]) || 0;
 			const liabilitiesNum = parseFloat(liabilities.split(" ")[0]) || 0;
-			const netWorthNum = assetsNum - liabilitiesNum;
+			// Present liabilities as a positive magnitude in the UI. Beancount
+			// often represents liabilities as negative numbers; showing the
+			// absolute value improves readability for users.
+			const liabilitiesDisplay = `${Math.abs(liabilitiesNum).toFixed(2)} ${reportingCurrency}`;
+
+			// For net worth calculation we want: NetWorth = Assets - Liabilities
+			// Liabilities from Beancount may be negative (normal) or positive
+			// (e.g. overpaid credit card). Using multiplication by -1 preserves
+			// the sign semantics: liabilitiesEffective = liabilitiesNum * -1.
+			// Example: liabilitiesNum = -200 -> liabilitiesEffective = 200
+			//          liabilitiesNum = 50   -> liabilitiesEffective = -50
+			const liabilitiesEffective = liabilitiesNum * -1;
+			const netWorthNum = assetsNum - liabilitiesEffective;
 
 			this.updateProps({
-				assets, 
-				liabilities, 
+				assets,
+				liabilities: liabilitiesDisplay,
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
 				hasUnconvertedCommodities,
 				kpiError: null, 
