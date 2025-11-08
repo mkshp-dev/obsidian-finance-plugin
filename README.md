@@ -266,6 +266,15 @@ If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
 
 **Note**: Other tabs work independently. The Journal tab requires Python 3.8+ and Beancount, but handles all setup automatically.
 
+### Liabilities & Net Worth Presentation
+
+Important: Beancount often stores liabilities as negative numbers (this is standard). To make the Snapshot/Sidebar clearer for users:
+
+- Liabilities are displayed as a positive magnitude in the UI (e.g. `200 USD` instead of `-200 USD`).
+- Net Worth is calculated as Assets - Liabilities (where Liabilities is treated as the positive magnitude). The UI preserves overpaid/credit balances correctly (if a liability becomes positive in Beancount, the net worth calculation accounts for that).
+
+This presentation makes the Snapshot easier to read while preserving accounting semantics under the hood.
+
 ### Yahoo Finance Symbol Search
 
 The **Commodities tab** includes a simplified Yahoo Finance integration that helps you find and configure ticker symbols for automated price fetching.
