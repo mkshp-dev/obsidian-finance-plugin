@@ -5,6 +5,7 @@ import type BeancountPlugin from '../main';
 
 export class BQLCodeBlockProcessor {
 	private plugin: BeancountPlugin;
+	private activeBlocks: Set<HTMLElement> = new Set();
 
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
@@ -15,46 +16,99 @@ export class BQLCodeBlockProcessor {
 			await this.processCodeBlock(source, el, ctx);
 		};
 	}
+	
+	// Method to refresh all active BQL blocks
+	public refreshAllBlocks() {
+		this.activeBlocks.forEach(element => {
+			// Get the stored source
+			const source = (element as any)._bqlSource;
+			if (source) {
+				// Reprocess the block with current settings
+				this.processCodeBlock(source, element, {} as MarkdownPostProcessorContext);
+			}
+		});
+	}
 
 	private async processCodeBlock(source: string, element: HTMLElement, context: MarkdownPostProcessorContext) {
 		const query = source.trim();
 		if (!query) return;
 
+		// Store the original source in the element for refresh capability
+		(element as any)._bqlSource = query;
+		
+		// Register this block for future refreshes
+		this.activeBlocks.add(element);
+		
+		// Clean up when element is removed
+		const observer = new MutationObserver((mutations) => {
+			mutations.forEach((mutation) => {
+				mutation.removedNodes.forEach((node) => {
+					if (node === element || (node instanceof HTMLElement && node.contains(element))) {
+						this.activeBlocks.delete(element);
+						observer.disconnect();
+					}
+				});
+			});
+		});
+		
+		if (element.parentElement) {
+			observer.observe(element.parentElement, { childList: true, subtree: true });
+		}
+
 		// Create container for the BQL result
 		const container = document.createElement('div');
 		container.className = 'bql-query-container';
 		
-		// Create header with query and controls
-		const header = container.createEl('div', { cls: 'bql-query-header' });
+		// Get user preferences (with fallback to defaults if undefined)
+		const showTools = this.plugin.settings.bqlShowTools ?? true;
+		const showQuery = this.plugin.settings.bqlShowQuery ?? false;
 		
-		const queryLabel = header.createEl('div', { cls: 'bql-query-label' });
-		queryLabel.createEl('span', { text: 'BQL Query', cls: 'bql-label' });
+		// Create header with query and controls (only if tools or query should be shown)
+		let header: HTMLElement | null = null;
+		let controls: HTMLElement | null = null;
+		let refreshBtn: HTMLButtonElement | null = null;
+		let copyBtn: HTMLButtonElement | null = null;
+		let exportBtn: HTMLButtonElement | null = null;
 		
-		const controls = header.createEl('div', { cls: 'bql-query-controls' });
-		
-		const refreshBtn = controls.createEl('button', { 
-			text: '⟳', 
-			cls: 'bql-refresh-btn',
-			title: 'Refresh query results'
-		});
-		
-		const copyBtn = controls.createEl('button', { 
-			text: '📋', 
-			cls: 'bql-copy-btn',
-			title: 'Copy results to clipboard'
-		});
+		if (showTools || showQuery) {
+			header = container.createEl('div', { cls: 'bql-query-header' });
+			
+			if (showQuery) {
+				const queryLabel = header.createEl('div', { cls: 'bql-query-label' });
+				queryLabel.createEl('span', { text: 'BQL Query', cls: 'bql-label' });
+			}
+			
+			if (showTools) {
+				controls = header.createEl('div', { cls: 'bql-query-controls' });
+				
+				refreshBtn = controls.createEl('button', { 
+					text: '⟳', 
+					cls: 'bql-refresh-btn',
+					title: 'Refresh query results'
+				});
+				
+				copyBtn = controls.createEl('button', { 
+					text: '📋', 
+					cls: 'bql-copy-btn',
+					title: 'Copy results to clipboard'
+				});
 
-		const exportBtn = controls.createEl('button', { 
-			text: '📤', 
-			cls: 'bql-export-btn',
-			title: 'Export as CSV'
-		});
+				exportBtn = controls.createEl('button', { 
+					text: '📤', 
+					cls: 'bql-export-btn',
+					title: 'Export as CSV'
+				});
+			}
+		}
 		
-		// Create query display (collapsible)
-		const queryDisplay = container.createEl('details', { cls: 'bql-query-details' });
-		const querySummary = queryDisplay.createEl('summary', { text: 'View Query', cls: 'bql-query-summary' });
-		const queryCode = queryDisplay.createEl('pre', { cls: 'bql-query-code' });
-		queryCode.createEl('code', { text: query });
+		// Create query display (collapsible) - only if showQuery is enabled
+		let queryDisplay: HTMLDetailsElement | null = null;
+		if (showQuery) {
+			queryDisplay = container.createEl('details', { cls: 'bql-query-details' });
+			const querySummary = queryDisplay.createEl('summary', { text: 'View Query', cls: 'bql-query-summary' });
+			const queryCode = queryDisplay.createEl('pre', { cls: 'bql-query-code' });
+			queryCode.createEl('code', { text: query });
+		}
 		
 		// Create result area
 		const resultArea = container.createEl('div', { cls: 'bql-result-area' });
@@ -62,11 +116,18 @@ export class BQLCodeBlockProcessor {
 		// Function to execute query and update results
 		const executeQuery = async () => {
 			try {
-				// Show loading state
+				// Show loading state (only if tools are shown, otherwise show minimal loading)
 				resultArea.empty();
-				const loadingEl = resultArea.createEl('div', { cls: 'bql-loading' });
-				loadingEl.createEl('span', { text: '⟳', cls: 'bql-loading-spinner' });
-				loadingEl.createEl('span', { text: 'Executing query...', cls: 'bql-loading-text' });
+				
+				if (showTools) {
+					const loadingEl = resultArea.createEl('div', { cls: 'bql-loading' });
+					loadingEl.createEl('span', { text: '⟳', cls: 'bql-loading-spinner' });
+					loadingEl.createEl('span', { text: 'Executing query...', cls: 'bql-loading-text' });
+				} else {
+					// Minimal loading for clean mode
+					const loadingEl = resultArea.createEl('div', { cls: 'bql-loading-minimal' });
+					loadingEl.textContent = 'Loading...';
+				}
 				
 				// Execute the query
 				const csvResult = await this.plugin.runQuery(query);
@@ -107,26 +168,32 @@ export class BQLCodeBlockProcessor {
 			}
 		};
 		
-		// Wire up controls
-		refreshBtn.addEventListener('click', executeQuery);
+		// Wire up controls (only if they exist)
+		if (refreshBtn) {
+			refreshBtn.addEventListener('click', executeQuery);
+		}
 		
-		copyBtn.addEventListener('click', () => {
-			const result = (container as any)._lastResult;
-			if (result) {
-				navigator.clipboard.writeText(result);
-				copyBtn.textContent = '✓';
-				setTimeout(() => copyBtn.textContent = '📋', 1000);
-			}
-		});
+		if (copyBtn) {
+			copyBtn.addEventListener('click', () => {
+				const result = (container as any)._lastResult;
+				if (result) {
+					navigator.clipboard.writeText(result);
+					copyBtn.textContent = '✓';
+					setTimeout(() => copyBtn.textContent = '📋', 1000);
+				}
+			});
+		}
 		
-		exportBtn.addEventListener('click', () => {
-			const result = (container as any)._lastResult;
-			if (result) {
-				this.downloadCSV(result, 'bql-query-result.csv');
-				exportBtn.textContent = '✓';
-				setTimeout(() => exportBtn.textContent = '📤', 1000);
-			}
-		});
+		if (exportBtn) {
+			exportBtn.addEventListener('click', () => {
+				const result = (container as any)._lastResult;
+				if (result) {
+					this.downloadCSV(result, 'bql-query-result.csv');
+					exportBtn.textContent = '✓';
+					setTimeout(() => exportBtn.textContent = '📤', 1000);
+				}
+			});
+		}
 		
 		// Replace the original element with our container
 		element.empty();

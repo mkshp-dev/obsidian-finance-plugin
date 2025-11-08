@@ -25,6 +25,9 @@
 - **Search & Filtering**: Real-time search across all data types with server-side filtering
 - **Responsive Design**: Mobile-friendly responsive layouts with accessibility improvements
 - **BQL Code Blocks**: Native Beancount Query Language integration with live results ⭐ **NEW**
+- **Inline BQL Queries**: Live financial data embedded directly in text with `bql:query` syntax ⭐ **NEW**
+- **Template Shorthand System**: User-defined shortcuts with `bql-sh:SHORTHAND` syntax ⭐ **NEW**
+- **Template File Management**: No built-in defaults, all shortcuts from customizable template files ⭐ **NEW**
 
 ### 🏗️ **Architecture**
 
@@ -45,6 +48,7 @@ src/
     UnifiedTransactionModal.ts # Modal controller for all entry types ⭐ NEW
     YahooFinanceSearchComponent.svelte # Simplified Yahoo Finance symbol search ⭐ NEW
     BQLCodeBlockProcessor.ts  # BQL code block processor for live query results ⭐ NEW
+    InlineBQLProcessor.ts     # Inline BQL processor for embedding live financial data ⭐ NEW
     tabs/
       OverviewTab.svelte      # Financial overview with charts
       TransactionsTab.svelte  # Transaction browser with filtering
@@ -64,6 +68,7 @@ src/
   types/                      # TypeScript type definitions for all entry types
   utils/
     index.ts                  # Utility functions (parsing, formatting)
+    shorthandParser.ts        # Template file parser for BQL shortcuts ⭐ NEW
   views/
     sidebar-view.ts           # Legacy sidebar implementation
     SidebarView.svelte        # Sidebar Svelte component
@@ -110,7 +115,9 @@ npm run lint
 
 ## Recent Major Updates
 
-### **Native BQL Code Block Integration** ⭐ **LATEST**
+### **Complete BQL Integration System** ⭐ **LATEST**
+
+#### **BQL Code Blocks**
 - **BQLCodeBlockProcessor.ts**: Complete code block processor for executing BQL queries directly in notes
 - **Live Query Results**: Automatic execution and formatted table display of Beancount Query Language statements
 - **Interactive Features**: Refresh, copy, and export functionality with collapsible query display
@@ -119,7 +126,19 @@ npm run lint
 - **Professional Styling**: Comprehensive CSS styling with responsive design and proper table formatting
 - **Error Handling**: Graceful error display with fallback to raw CSV output
 
-### **Usage Example**:
+#### **Inline BQL Queries** ⭐ **LATEST**
+- **InlineBQLProcessor.ts**: DOM-based processor for inline financial data embedding
+- **Dual Syntax Support**: Direct queries (`bql:SELECT...`) and shortcuts (`bql-sh:WORTH`)
+- **Template File System**: User-defined shortcuts in markdown template files with `bql-shorthand` code blocks
+- **ShorthandParser.ts**: Robust parser for reading shortcuts from markdown template files
+- **No Built-in Defaults**: Complete template-only approach for maximum user control
+- **Real-time Processing**: Live financial values embedded directly in text
+- **Smart Caching**: 30-second cache refresh for template file changes
+- **Error Handling**: Clear error messages with helpful tooltips showing available shortcuts
+
+### **Usage Examples**:
+
+#### **BQL Code Blocks:**
 ```markdown
 ## Account Balances
 ​```bql
@@ -130,6 +149,44 @@ SELECT account, sum(position) GROUP BY account ORDER BY account
 ​```bql
 SELECT date, payee, narration ORDER BY date DESC LIMIT 10
 ​```
+```
+
+#### **Inline BQL Integration:**
+```markdown
+# Daily Financial Journal - November 8, 2025
+
+Today I spent `bql:SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND date = TODAY()` on various expenses.
+
+My current financial position:
+- **Net Worth**: `bql-sh:WORTH`
+- **Checking Balance**: `bql-sh:CHECKING`  
+- **Savings**: `bql-sh:SAVINGS`
+- **Emergency Fund**: `bql-sh:EMERGENCY_FUND`
+
+This month's spending is at `bql-sh:EXPENSES_MTD` out of my `bql-sh:BUDGET_LIMIT` budget.
+
+## Investment Performance
+My portfolio is worth `bql-sh:INVESTMENTS` with a YTD return of `bql-sh:INVESTMENT_RETURN_YTD`.
+```
+
+#### **Template File Example:**
+```markdown
+# BQL Shortcuts Template
+
+## WORTH: Total net worth in USD
+```bql-shorthand
+SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'
+```
+
+## CHECKING: Checking account balance
+```bql-shorthand
+SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets:Checking'
+```
+
+## EXPENSES_MTD: Month-to-date expenses
+```bql-shorthand
+SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND YEAR(date) = YEAR(TODAY()) AND MONTH(date) = MONTH(TODAY())
+```
 ```
 
 ### **Simplified Yahoo Finance Integration** ⭐ **LATEST**
@@ -162,7 +219,17 @@ SELECT date, payee, narration ORDER BY date DESC LIMIT 10
 - **Mobile Enhancements**: Consistent gap sizes and responsive grid adjustments
 - **Visual Polish**: Better content flow and reduced whitespace while maintaining readability
 
-### **Recent Operations Summary**
+### **Recent Major Updates**
+
+#### **Complete Inline BQL System** ⭐ **LATEST**
+- **Template-Only Architecture**: Removed all built-in shorthand defaults for complete user control
+- **Dual Query Modes**: Code blocks for detailed analysis, inline queries for embedded values
+- **Advanced Template System**: User-defined shortcuts with automatic file path resolution
+- **Clean Production Code**: Removed all debug console.log statements for silent operation
+- **Professional UX**: Enhanced error messages with helpful tooltips and guidance
+- **File Picker Enhancement**: Sophisticated autocomplete and browse functionality for template files
+
+#### **Previous Operations Summary**
 - **Yahoo Finance Simplification**: Completely redesigned Yahoo Finance integration to remove API complexity
 - **Grid Layout Optimization**: Enhanced both CommoditiesTab and YahooFinanceSearchComponent layouts
 - **Card Size Optimization**: Reduced minimum widths and heights for more content-appropriate sizing

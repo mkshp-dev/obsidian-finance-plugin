@@ -7,20 +7,22 @@ import { UnifiedTransactionModal } from './components/UnifiedTransactionModal';
 import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './views/unified-dashboard-view';
 import { BQLCodeBlockProcessor } from './components/BQLCodeBlockProcessor';
+import { InlineBQLProcessor } from './components/InlineBQLProcessor';
 // --------------------------------------------------
 
 export default class BeancountPlugin extends Plugin {
 	settings: BeancountPluginSettings;
 	private bqlProcessor: BQLCodeBlockProcessor;
+	private inlineBqlProcessor: InlineBQLProcessor;
 
 	async onload() {
 		await this.loadSettings();
 
-		// Initialize BQL code block processor
-		this.bqlProcessor = new BQLCodeBlockProcessor(this);
+		// Initialize and register BQL code block processor
+		this.registerBQLProcessor();
 		
-		// Register BQL code block processor
-		this.registerMarkdownCodeBlockProcessor('bql', this.bqlProcessor.getProcessor());
+		// Initialize and register inline BQL processor
+		this.registerInlineBQLProcessor();
 
 		// Register Views
 		// this.registerView(
@@ -157,6 +159,40 @@ export default class BeancountPlugin extends Plugin {
 	}
 
 	onunload() {}
+	
+	// Register BQL processor
+	private registerBQLProcessor() {
+		// Create processor instance
+		this.bqlProcessor = new BQLCodeBlockProcessor(this);
+		
+		// Register the processor
+		this.registerMarkdownCodeBlockProcessor('bql', this.bqlProcessor.getProcessor());
+	}
+	
+	// Register inline BQL processor
+	private registerInlineBQLProcessor() {
+		// Create processor instance
+		this.inlineBqlProcessor = new InlineBQLProcessor(this);
+		
+		// Register the processor for all markdown content with high priority
+		this.registerMarkdownPostProcessor(this.inlineBqlProcessor.getProcessor(), -100);
+	}
+	
 	async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
-	async saveSettings() { await this.saveData(this.settings); }
+	
+	async saveSettings() { 
+		await this.saveData(this.settings); 
+		// Refresh all BQL code blocks with new settings
+		if (this.bqlProcessor) {
+			this.refreshBQLBlocks();
+		}
+	}
+	
+	// Force refresh all BQL code blocks
+	private refreshBQLBlocks() {
+		// Use setTimeout to ensure settings are fully saved before refreshing
+		setTimeout(() => {
+			this.bqlProcessor?.refreshAllBlocks();
+		}, 50);
+	}
 }

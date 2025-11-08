@@ -46,12 +46,16 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 - **Real-time API Status**: Visual connection indicator and automatic backend management
 - **Fava-style Interface**: Clean, expandable transaction cards with proper formatting
 
-### 🔍 **BQL Code Blocks** ⭐ **NEW**
+### 🔍 **BQL Code Blocks & Inline Queries** ⭐ **NEW**
 - **Native Query Integration**: Execute Beancount Query Language (BQL) directly in your notes
-- **Live Results**: Queries execute automatically and display formatted results inline
+- **Dual Query Modes**: 
+  - **Code Blocks**: `​```bql` for formatted table results with export capabilities
+  - **Inline Queries**: `bql:query` for live financial values embedded in text
+- **Template Shorthand System**: Create custom shortcuts like `bql-sh:WORTH` for frequently used queries
+- **Live Results**: Queries execute automatically and display current data from your ledger  
 - **Interactive Tables**: Sortable, responsive tables with proper formatting
 - **Export Capabilities**: Copy results to clipboard or download as CSV
-- **Query Templates**: Pre-built examples for common financial queries
+- **Template File Management**: All shortcuts defined in user-customizable template files
 - **Real-time Data**: Always shows current data from your Beancount ledger
 
 ---
@@ -131,11 +135,13 @@ If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
 
 ---
 
-## 🔍 Using BQL Code Blocks
+## 🔍 Using BQL Queries
 
-The plugin includes powerful **BQL (Beancount Query Language) code block** functionality that lets you execute queries directly in your notes and see live results.
+The plugin includes powerful **BQL (Beancount Query Language)** functionality with two distinct modes for different use cases.
 
-### Creating BQL Code Blocks
+### 📊 **BQL Code Blocks** - For Detailed Analysis
+
+Create formatted tables with full query results:
 
 1. **Insert Code Block**: Use the command `Insert BQL Query Block` or manually type:
    ````markdown
@@ -144,15 +150,53 @@ The plugin includes powerful **BQL (Beancount Query Language) code block** funct
    ```
    ````
 
-2. **Query Executes Automatically**: The query runs immediately and displays formatted results
-
-3. **Interactive Results**: 
+2. **Interactive Results**: 
    - **Refresh** (⟳): Re-run query with latest data
    - **Copy** (📋): Copy raw CSV results to clipboard
    - **Export** (📤): Download results as CSV file
    - **View Query**: Toggle query visibility
 
-### Common BQL Examples
+### 💰 **Inline BQL Queries** - For Live Financial Data ⭐ **NEW**
+
+Embed live financial values directly in your text using single backticks:
+
+#### **Direct Queries:**
+```markdown
+My current net worth is `bql:SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'`
+
+Today I have `bql:SELECT convert(sum(position), 'USD') WHERE account ~ 'Checking'` in my checking account.
+```
+
+#### **Shorthand System:**
+First, configure shortcuts in your template file, then use them:
+
+```markdown
+My total worth: `bql-sh:WORTH`
+Checking balance: `bql-sh:CHECKING`  
+Monthly expenses: `bql-sh:EXPENSES_MTD`
+```
+
+### ⚙️ **Template File System**
+
+All shortcuts are defined in a **user-customizable template file**:
+
+1. **Configure Template Path**: Settings → Finance Plugin → BQL Shortcuts Template Path
+2. **Example Template Format**:
+   ```markdown
+   ## WORTH: Total net worth in USD
+   ```bql-shorthand
+   SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'
+   ```
+   
+   ## CHECKING: Checking account balance
+   ```bql-shorthand
+   SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets:Checking'
+   ```
+   ```
+
+3. **Completely Customizable**: Create any shortcuts you want with your preferred currencies and account patterns
+
+### Common BQL Query Examples
 
 **List All Accounts:**
 ```bql
@@ -184,13 +228,28 @@ SELECT account, sum(position) WHERE account ~ '^Income' AND year = YEAR(TODAY())
 SELECT year, month, sum(position) WHERE account ~ '^Expenses' GROUP BY year, month ORDER BY year DESC, month DESC
 ```
 
+### 🎯 **Use Cases**
+
+**Code Blocks** - Perfect for:
+- Financial analysis and reporting
+- Detailed account breakdowns  
+- Data export for spreadsheets
+- Complex multi-column queries
+
+**Inline Queries** - Perfect for:
+- Daily journal entries: "Spent `bql-sh:DAILY_EXPENSES` today"
+- Quick financial summaries: "Net worth: `bql-sh:WORTH`"  
+- Status updates: "Emergency fund: `bql-sh:EMERGENCY_FUND`"
+- Goal tracking: "Savings progress: `bql-sh:SAVINGS_GOAL`"
+
 ### BQL Integration Benefits
 
 - **Live Data**: Always shows current data from your Beancount ledger
-- **Note-Taking Workflow**: Perfect for financial analysis and reporting
+- **Template System**: No built-in defaults - everything is user-defined
+- **Note-Taking Workflow**: Perfect for financial journaling and analysis
 - **No External Tools**: Execute queries directly within Obsidian
-- **Formatted Output**: Professional tables with proper number formatting
-- **Export Ready**: Easy data export for further analysis
+- **Dual Modes**: Choose the right format for your needs
+- **Custom Shortcuts**: Create personalized financial shortcuts
 
 ---
 
