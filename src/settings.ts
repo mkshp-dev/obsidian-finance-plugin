@@ -592,9 +592,27 @@ export class BeancountSettingTab extends PluginSettingTab {
                     const validation = this.validateFilePath(this.plugin.settings.beancountFilePath);
                     this.updateValidationDisplay(validationEl, validation);
                 }
-                
+                // Give the input element a stable id so other parts of the settings UI can update it
+                try {
+                    // TextComponent exposes 'inputEl' at runtime
+                    (text as any).inputEl.id = 'beancount-file-input';
+                } catch (e) {
+                    // Ignore if not present
+                }
+
                 return text;
             });
+
+        // Add a helper button to choose a .beancount file from the current vault (if any)
+        new Setting(containerEl)
+            .setName('Choose from vault')
+            .setDesc('Pick a .beancount/.bean file that exists inside this Obsidian vault.')
+            .addButton(btn => btn
+                .setButtonText('Choose file in vault')
+                .onClick(() => {
+                    this.showVaultBeancountPicker();
+                })
+            );
 
         // --- Test Connection Button ---
         const testResultEl = containerEl.createEl('div', { cls: 'beancount-test-results' });
@@ -1132,5 +1150,85 @@ export class BeancountSettingTab extends PluginSettingTab {
         
         document.body.appendChild(modal);
         searchInput.focus();
+    }
+
+    /**
+     * Show a modal to pick a .beancount or .bean file from the current vault
+     */
+    private showVaultBeancountPicker() {
+        const modal = document.createElement('div');
+        modal.className = 'beancount-vault-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+
+        const content = modal.createEl('div', { cls: 'beancount-vault-modal-content' });
+        content.style.cssText = `
+            background: var(--background-primary);
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80%;
+            overflow-y: auto;
+            border: 1px solid var(--background-modifier-border);
+        `;
+
+        content.createEl('h3', { text: 'Select Beancount File in Vault' });
+
+        const list = content.createEl('div', { cls: 'beancount-file-list' });
+        list.style.cssText = `max-height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px;`;
+
+        // Gather files from vault with .beancount or .bean extensions
+        const allFiles = this.app.vault.getFiles();
+        const beancountFiles = allFiles.filter(f => f.path.toLowerCase().endsWith('.beancount') || f.path.toLowerCase().endsWith('.bean'));
+
+        if (beancountFiles.length === 0) {
+            list.createEl('div', { text: 'No .beancount/.bean files found in this vault', cls: 'beancount-no-files' });
+        } else {
+            beancountFiles.forEach(file => {
+                const item = list.createEl('div', { text: file.path, cls: 'beancount-file-item' });
+                item.style.cssText = `padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--background-modifier-border-hover);`;
+                item.addEventListener('mouseenter', () => item.style.background = 'var(--background-modifier-hover)');
+                item.addEventListener('mouseleave', () => item.style.background = '');
+                item.addEventListener('click', async () => {
+                    // Compute absolute path by combining vault base path and relative path
+                    // @ts-ignore
+                    const vaultBase: string = (this.app.vault.adapter as any).getBasePath();
+                    // Normalize separators to forward slashes and remove trailing slash from vaultBase
+                    const baseNormalized = vaultBase.replace(/\\/g, '/').replace(/\/$/, '');
+                    const rel = file.path.replace(/\\/g, '/');
+                    const absolutePath = `${baseNormalized}/${rel}`;
+                    this.plugin.settings.beancountFilePath = absolutePath;
+                    await this.plugin.saveSettings();
+                    // Update the visible input element in settings (if present)
+                    const inputEl = document.getElementById('beancount-file-input') as HTMLInputElement | null;
+                    if (inputEl) {
+                        inputEl.value = absolutePath;
+                        // Trigger the input event so the existing onChange handler updates validation
+                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    // Refresh status display and close modal
+                    setTimeout(() => this.updateStatusDisplay(), 300);
+                    modal.remove();
+                });
+            });
+        }
+
+        const btnRow = content.createEl('div');
+        btnRow.style.cssText = 'display:flex; justify-content:flex-end; gap:8px; margin-top:12px;';
+        const cancel = btnRow.createEl('button', { text: 'Cancel' });
+        cancel.addEventListener('click', () => modal.remove());
+
+        document.body.appendChild(modal);
     }
 }

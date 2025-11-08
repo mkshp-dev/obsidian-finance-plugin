@@ -275,6 +275,10 @@ Important: Beancount often stores liabilities as negative numbers (this is stand
 
 This presentation makes the Snapshot easier to read while preserving accounting semantics under the hood.
 
+Selecting a Beancount file from the vault
+
+If your `.beancount` file lives inside your Obsidian vault, you can choose it directly from the plugin Settings using the "Choose from vault" button next to the Beancount file path input. The plugin will set the absolute filesystem path (so external tools like `bean-query` can read it) and validate the file automatically.
+
 ### Yahoo Finance Symbol Search
 
 The **Commodities tab** includes a simplified Yahoo Finance integration that helps you find and configure ticker symbols for automated price fetching.

@@ -5,6 +5,7 @@
 1. **Install Plugin**: Enable in Settings → Community Plugins
 2. **Configure**: Settings → Plugin Options → Finance Plugin
 3. **Set Beancount File**: Enter path to your `.beancount` file
+   - Or click **Choose file in vault** in the plugin Settings to pick a `.beancount`/`.bean` file stored inside your vault (the plugin will set the absolute path automatically).
 4. **Open Dashboard**: Click 💰 icon or use Command Palette
 
 ---
