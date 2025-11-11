@@ -405,9 +405,7 @@ export class CommoditiesController {
             this.commodities.set(updatedCommodities);
             this.loading.set(false);
 
-            // TODO: Implement actual Beancount file modification
-            // This would involve calling a backend service or direct file manipulation
-            console.log(`Updated ${symbol} with Yahoo Finance source: ${priceMetadata}`);
+
             
         } catch (error) {
             console.error('Error updating price metadata:', error);
@@ -460,7 +458,7 @@ export class CommoditiesController {
             this.commodities.set(updatedCommodities);
             this.loading.set(false);
 
-            console.log(`Removed price metadata for ${symbol}`);
+
             
         } catch (error) {
             console.error('Error removing price metadata:', error);

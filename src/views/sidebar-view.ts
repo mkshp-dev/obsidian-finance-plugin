@@ -154,7 +154,6 @@ export class BeancountView extends ItemView {
 		// --- Use imported query function ---
 		const command = queries.getBeanCheckCommand(filePath, commandBase);
 
-		// console.log("Running bean-check:", command);
 		return new Promise((resolve) => {
 			// --- Need exec import from child_process ---
 			exec(command, (error, stdout, stderr) => {
@@ -165,7 +164,6 @@ export class BeancountView extends ItemView {
 					const errorLines = this.parseErrorLines(errorMessage);
 					const errorCount = errorLines.length;
 					
-					// console.error("bean-check failed:", errorMessage); 
 					resolve({ 
 						status: "error", 
 						message: errorMessage,
@@ -173,7 +171,6 @@ export class BeancountView extends ItemView {
 						errorList: errorLines
 					});
 				} else {
-					// console.log("bean-check successful"); 
 					resolve({ 
 						status: "ok", 
 						message: "File OK",

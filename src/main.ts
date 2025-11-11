@@ -25,18 +25,10 @@ export default class BeancountPlugin extends Plugin {
 		this.registerInlineBQLProcessor();
 
 		// Register Views
-		// this.registerView(
-		// 	OVERVIEW_VIEW_TYPE,
-		// 	(leaf) => new OverviewView(leaf, this)
-		// );
 		this.registerView(
 			BEANCOUNT_VIEW_TYPE, // Sidebar Snapshot
 			(leaf) => new BeancountView(leaf, this)
 		);
-		// this.registerView(
-		// 	DASHBOARD_VIEW_TYPE, // Main Dashboard (Transactions)
-		// 	(leaf) => new DashboardView(leaf, this)
-		// );
 		this.registerView(
 			UNIFIED_DASHBOARD_VIEW_TYPE,
 			(leaf) => new UnifiedDashboardView(leaf, this)
@@ -51,10 +43,6 @@ export default class BeancountPlugin extends Plugin {
 		this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
 			this.activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab'); // Open the NEW view
 		});
-		// Consider adding one for the main Dashboard too
-		// this.addRibbonIcon('layout-dashboard', 'Open Beancount Dashboard', () => {
-		// 	this.activateView(DASHBOARD_VIEW_TYPE, 'tab'); // Specify type and location
-		// });
 
 		// Add Commands
 		this.addCommand({

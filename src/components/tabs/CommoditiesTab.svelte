@@ -57,7 +57,7 @@
         if ($selectedCommodityStore) {
             try {
                 await controller.updatePriceMetadata($selectedCommodityStore.symbol, yahooSymbol);
-                console.log(`Applied Yahoo Finance source for ${$selectedCommodityStore.symbol}: ${metadata}`);
+
             } catch (error) {
                 console.error('Failed to apply Yahoo Finance source:', error);
             }
@@ -66,14 +66,14 @@
 
     function handleYahooFinanceCancel() {
         // Just log for now, no special handling needed
-        console.log('Yahoo Finance search cancelled');
+
     }
 
     async function handleRemovePriceMetadata() {
         if ($selectedCommodityStore) {
             try {
                 await controller.removePriceMetadata($selectedCommodityStore.symbol);
-                console.log(`Removed price metadata for ${$selectedCommodityStore.symbol}`);
+
             } catch (error) {
                 console.error('Failed to remove price metadata:', error);
             }

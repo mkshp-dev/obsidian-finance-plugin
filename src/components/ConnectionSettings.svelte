@@ -54,12 +54,7 @@
         }, 100);
     });
 
-    // Debug reactive statement to track availableFiles changes
-    $: {
-        console.log('Reactive update - availableFiles:', availableFiles);
-        console.log('availableFiles.length:', availableFiles.length);
-        console.log('Should show dropdown:', availableFiles.length > 0);
-    }
+
 
     async function detectSystemAndFiles() {
         const systemDetector = SystemDetector.getInstance();
@@ -68,9 +63,8 @@
         try {
             systemInfo = await systemDetector.getSystemInfo();
             platform = systemInfo.platform;
-            console.log('System info loaded:', systemInfo);
         } catch (error) {
-            console.log('System info detection failed:', error);
+            // Silently handle system info detection errors
             platform = process.platform;
         }
         
@@ -78,9 +72,8 @@
         if (platform === 'win32') {
             try {
                 isWSLAvailable = await systemDetector.detectWSLAvailability();
-                console.log('WSL availability check result:', isWSLAvailable);
             } catch (error) {
-                console.log('WSL availability check failed:', error);
+                // Silently handle WSL availability check errors
                 isWSLAvailable = false;
             }
         }
@@ -88,17 +81,17 @@
         // Auto-set WSL usage if running in WSL environment
         if (systemInfo?.isWSL) {
             useWSL = true;
-            console.log('Auto-enabled WSL usage (running in WSL environment)');
+
         }
 
         // Get beancount files from vault
-        console.log('Loading vault files...');
+
         loadVaultFiles();
         
         // Suggest beancount command based on system
         await suggestBeancountCommand();
         
-        console.log('detectSystemAndFiles completed, availableFiles:', availableFiles);
+
     }
 
     function loadCurrentSettings() {
@@ -118,33 +111,21 @@
         try {
             // Get all files from vault
             const allFiles = plugin.app.vault.getFiles();
-            console.log('Total files in vault:', allFiles.length);
-            console.log('All files:', allFiles.map(f => `${f.path} (ext: ${f.extension})`));
-            
             // Filter for beancount files
             const beancountFiles = allFiles.filter(file => {
-                const isBeancount = file.extension === 'beancount' || file.extension === 'bean';
-                if (isBeancount) {
-                    console.log('Found beancount file:', file.path, 'extension:', file.extension);
-                }
-                return isBeancount;
+                return file.extension === 'beancount' || file.extension === 'bean';
             });
             
             // Also check for files with .beancount in the name (fallback)
             const additionalFiles = allFiles.filter(file => {
                 const hasBeancountInName = file.name.includes('.beancount') || file.name.includes('.bean');
                 const notAlreadyIncluded = !beancountFiles.some(bf => bf.path === file.path);
-                if (hasBeancountInName && notAlreadyIncluded) {
-                    console.log('Found additional beancount file by name:', file.path);
-                }
                 return hasBeancountInName && notAlreadyIncluded;
             });
             
             // Combine both results
             const allBeancountFiles = [...beancountFiles, ...additionalFiles];
             availableFiles = allBeancountFiles.map(file => file.path).sort();
-            
-            console.log('Final detected beancount files:', availableFiles);
             
         } catch (error) {
             console.error('Error loading vault files:', error);

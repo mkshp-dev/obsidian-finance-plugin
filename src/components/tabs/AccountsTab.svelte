@@ -356,7 +356,7 @@
 																		class:clickable={grandChildCardData.accountDetail}
 																		on:click|stopPropagation={() => {
 																			if (grandChildCardData.accountDetail && grandChildCardData.node.fullName) {
-																				console.log('Grandchild account clicked:', grandChildCardData.node.fullName);
+
 																				handleAccountClick(grandChildCardData.node.fullName);
 																			}
 																		}}
@@ -393,7 +393,7 @@
 																							<button 
 																								class="expand-button"
 																								on:click|stopPropagation={() => {
-																									console.log('Expanding great-grandchild:', greatGrandChildCardData.node.fullName);
+
 																									handleExpandToggle(greatGrandChildCardData.node.fullName);
 																								}}
 																								aria-label={greatGrandChildCardData.isExpanded ? 'Collapse' : 'Expand'}
@@ -409,7 +409,7 @@
 																							class:clickable={greatGrandChildCardData.accountDetail}
 																							on:click|stopPropagation={() => {
 																								if (greatGrandChildCardData.accountDetail && greatGrandChildCardData.node.fullName) {
-																									console.log('Great-grandchild account clicked:', greatGrandChildCardData.node.fullName);
+
 																									handleAccountClick(greatGrandChildCardData.node.fullName);
 																								}
 																							}}
@@ -447,7 +447,7 @@
 																												class="card-content clickable"
 																												on:click|stopPropagation={() => {
 																													if (level5CardData.accountDetail && level5CardData.node.fullName) {
-																														console.log('Level 5 account clicked:', level5CardData.node.fullName);
+
 																														handleAccountClick(level5CardData.node.fullName);
 																													}
 																												}}

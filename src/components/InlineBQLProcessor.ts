@@ -145,96 +145,11 @@ export class InlineBQLProcessor {
 	}
 
 	private extractSingleValue(csvResult: string): string {
-		if (!csvResult || csvResult.trim() === '') {
-			return '0';
-		}
-
-		try {
-			const lines = csvResult.trim().split('\n');
-			if (lines.length < 2) {
-				return '0';
-			}
-
-			// Get the first data row (skip header)
-			const dataLine = lines[1];
-			
-			// Parse CSV value (handle quoted values)
-			let value = dataLine.trim();
-			
-			// Remove quotes if present
-			if (value.startsWith('"') && value.endsWith('"')) {
-				value = value.slice(1, -1);
-			}
-			
-			// Handle comma-separated values (take first column)
-			if (value.includes(',')) {
-				const parts = this.parseCSVLine(dataLine);
-				value = parts[0] || '0';
-				if (value.startsWith('"') && value.endsWith('"')) {
-					value = value.slice(1, -1);
-				}
-			}
-			
-			// Format the value nicely
-			return this.formatValue(value);
-			
-		} catch (error) {
-			console.error('Error extracting single value:', error);
-			return '❌';
-		}
+		// Use the same robust CSV parsing logic from utils/index.ts
+		return this.plugin.parseSingleValue(csvResult);
 	}
 
-	private parseCSVLine(line: string): string[] {
-		const result: string[] = [];
-		let current = '';
-		let inQuotes = false;
-		
-		for (let i = 0; i < line.length; i++) {
-			const char = line[i];
-			
-			if (char === '"' && (i === 0 || line[i-1] === ',')) {
-				inQuotes = true;
-			} else if (char === '"' && inQuotes && (i === line.length - 1 || line[i+1] === ',')) {
-				inQuotes = false;
-			} else if (char === ',' && !inQuotes) {
-				result.push(current.trim());
-				current = '';
-			} else {
-				current += char;
-			}
-		}
-		
-		result.push(current.trim());
-		return result;
-	}
 
-	private formatValue(value: string): string {
-		// Check if it's a number
-		const numMatch = value.match(/^([+-]?\d+\.?\d*)\s*([A-Z]{3})?$/);
-		if (numMatch) {
-			const number = parseFloat(numMatch[1]);
-			const currency = numMatch[2];
-			
-			if (currency) {
-				// Format as currency
-				return new Intl.NumberFormat('en-US', {
-					style: 'currency',
-					currency: currency,
-					minimumFractionDigits: 0,
-					maximumFractionDigits: 2,
-				}).format(Math.abs(number));
-			} else {
-				// Format as number
-				return new Intl.NumberFormat('en-US', {
-					minimumFractionDigits: 0,
-					maximumFractionDigits: 2,
-				}).format(number);
-			}
-		}
-		
-		// Return as-is if not a number
-		return value;
-	}
 
 	// Method to refresh all inline BQL values
 	public refreshAllInlineValues() {

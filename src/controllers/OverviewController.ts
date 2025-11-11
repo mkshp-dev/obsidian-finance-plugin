@@ -73,24 +73,10 @@ export class OverviewController {
 			const incomeInventoryStr = this.plugin.parseSingleValue(incomeResult);
 			const expensesInventoryStr = this.plugin.parseSingleValue(expensesResult);
 
-			console.log('Raw query results:', {
-				assets: assetsInventoryStr,
-				liabilities: liabilitiesInventoryStr,
-				income: incomeInventoryStr,
-				expenses: expensesInventoryStr
-			});
-
 			const assetsStr = extractConvertedAmount(assetsInventoryStr, reportingCurrency);
 			const liabilitiesStr = extractConvertedAmount(liabilitiesInventoryStr, reportingCurrency);
 			const incomeStr = extractConvertedAmount(incomeInventoryStr, reportingCurrency);
 			const expensesStr = extractConvertedAmount(expensesInventoryStr, reportingCurrency);
-			
-			console.log('Extracted amounts:', {
-				assets: assetsStr,
-				liabilities: liabilitiesStr,
-				income: incomeStr,
-				expenses: expensesStr
-			});
 			
 			const assetsData = parseAmount(assetsStr);
 			const liabilitiesData = parseAmount(liabilitiesStr);
@@ -105,26 +91,11 @@ export class OverviewController {
 			const expensesAmount = expensesData.amount; // Expenses are already positive
 			const liabilitiesAmount = Math.abs(liabilitiesData.amount); // Convert negative liabilities to positive
 			
-			console.log('Parsed amounts:', {
-				assets: assetsData,
-				liabilities: liabilitiesData,
-				income: incomeData,
-				expenses: expensesData,
-				incomeAmount: incomeAmount,
-				expensesAmount: expensesAmount,
-				liabilitiesAmount: liabilitiesAmount
-			});
-			
+			// Calculate financial metrics
 			const netWorthNum = assetsData.amount - liabilitiesAmount;
 			const savingsNum = incomeAmount - expensesAmount;
 
-			console.log('Calculations:', {
-				netWorth: netWorthNum,
-				savings: savingsNum,
-				income: incomeAmount,
-				expenses: expensesAmount,
-				savingsRate: incomeAmount > 0 ? ((savingsNum / incomeAmount) * 100).toFixed(0) : 'N/A'
-			});
+
 
 			const newState: Partial<OverviewState> = {
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
@@ -134,7 +105,7 @@ export class OverviewController {
 				currency: reportingCurrency,
 			};
 
-			console.log('Final state to be set:', newState);
+
 
 			// Process Historical Data for Chart
 			try {
@@ -211,12 +182,7 @@ export class OverviewController {
 					dataPoints.push(cumulativeNetWorth);
 				}
 
-				console.log('Chart data processed:', {
-					monthlyChanges,
-					labels,
-					dataPoints,
-					finalNetWorth: cumulativeNetWorth
-				});
+
 
 				newState.chartConfig = {
 					type: 'line',

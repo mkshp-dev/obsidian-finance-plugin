@@ -143,7 +143,7 @@ export class SystemDetector {
                 await execAsync('wsl --help', { timeout: 3000 });
                 return true;
             } catch (fallbackError) {
-                console.log('WSL not available:', error.message);
+                // WSL not available
                 return false;
             }
         }
