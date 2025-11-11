@@ -4,7 +4,8 @@ import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
-import { buildAccountTree, type AccountNode } from '../utils/index';
+import { buildAccountTree } from '../utils/index';
+import type { AccountNode } from '../types/index';
 
 // Define the shape of our state
 export interface TransactionState {

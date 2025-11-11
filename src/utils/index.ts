@@ -124,11 +124,8 @@ export function convertWslPathToWindows(wslPath: string): string {
 }
 
 // --- ACCOUNT TREE BUILDER ---
-export interface AccountNode {
-	name: string;
-	fullName: string | null;
-	children: AccountNode[];
-}
+import type { AccountNode } from '../types/index';
+
 export function buildAccountTree(accounts: string[]): AccountNode[] {
 	const root: AccountNode = { name: 'Root', fullName: '', children: [] };
 	accounts.sort();

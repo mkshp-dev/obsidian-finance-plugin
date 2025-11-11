@@ -4,7 +4,7 @@ import { writable, type Writable, get } from 'svelte/store';
 import type { ChartConfiguration } from 'chart.js/auto';
 import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
-import { parseAmount, extractConvertedAmount, getCurrentMonthRange, parseSingleValue } from '../utils/index'; // Import helpers
+import { parseAmount, extractConvertedAmount, getCurrentMonthRange } from '../utils/index'; // Import helpers
 import { parse as parseCsv } from 'csv-parse/sync';
 
 // Define the shape of our state

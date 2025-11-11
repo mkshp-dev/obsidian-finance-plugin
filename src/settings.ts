@@ -2,13 +2,7 @@
 
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
 import ConnectionSettings from './components/ConnectionSettings.svelte';
-
-const execAsync = promisify(exec);
 
 
 
@@ -48,62 +42,21 @@ export class BeancountSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-
-
-
-
     /**
-     * Validates if the beancount file path exists and is accessible
+     * Validates currency code format
      */
-    private validateFilePath(filePath: string): { isValid: boolean; message: string } {
-        if (!filePath.trim()) {
-            return { isValid: false, message: 'File path is required' };
+    private validateCurrency(currency: string): { isValid: boolean; message: string } {
+        if (!currency.trim()) {
+            return { isValid: false, message: 'Currency is required' };
         }
 
-        try {
-            const resolvedPath = resolve(filePath);
-            if (!existsSync(resolvedPath)) {
-                return { isValid: false, message: 'File does not exist' };
-            }
-
-            // Check if it's a .beancount file
-            if (!filePath.toLowerCase().endsWith('.beancount') && !filePath.toLowerCase().endsWith('.bean')) {
-                return { isValid: false, message: 'File should have .beancount or .bean extension' };
-            }
-
-            return { isValid: true, message: '✅ Valid file path' };
-        } catch (error) {
-            return { isValid: false, message: 'Invalid file path format' };
-        }
-    }
-
-    /**
-     * Validates if the beancount command is available
-     */
-    private async validateCommand(command: string): Promise<{ isValid: boolean; message: string }> {
-        if (!command.trim()) {
-            return { isValid: false, message: 'Command is required' };
+        // Check if it's a valid 3-letter currency code
+        const currencyRegex = /^[A-Z]{3}$/;
+        if (!currencyRegex.test(currency.toUpperCase())) {
+            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
         }
 
-        try {
-            // Test if command exists by running with --help
-            const testCommand = command.includes('wsl') ? 
-                `${command} --help` : 
-                `"${command}" --help`;
-            
-            await execAsync(testCommand, { timeout: 5000 });
-            return { isValid: true, message: '✅ Command is available' };
-        } catch (error) {
-            if (error.code === 'ENOENT' || error.message.includes('not found') || error.message.includes('not recognized')) {
-                return { isValid: false, message: 'Command not found in PATH' };
-            } else if (error.killed) {
-                return { isValid: false, message: 'Command timeout (>5s)' };
-            } else {
-                // If it fails with other errors but the command exists, it might still be valid
-                // (e.g., bean-query might exit with error code when called with --help)
-                return { isValid: true, message: '⚠️ Command found (but returned error)' };
-            }
-        }
+        return { isValid: true, message: '✅ Valid currency code' };
     }
 
     /**
@@ -123,23 +76,6 @@ export class BeancountSettingTab extends PluginSettingTab {
     private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
         element.textContent = result.message;
         element.style.color = result.isValid ? '#4CAF50' : '#f44336';
-    }
-
-    /**
-     * Validates currency code format
-     */
-    private validateCurrency(currency: string): { isValid: boolean; message: string } {
-        if (!currency.trim()) {
-            return { isValid: false, message: 'Currency is required' };
-        }
-
-        // Check if it's a valid 3-letter currency code
-        const currencyRegex = /^[A-Z]{3}$/;
-        if (!currencyRegex.test(currency.toUpperCase())) {
-            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
-        }
-
-        return { isValid: true, message: '✅ Valid currency code' };
     }
 
     display(): void {
@@ -629,219 +565,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         searchInput.focus();
     }
 
-    /**
-     * Show a modal to pick a .beancount or .bean file from the current vault
-     */
-    private showVaultBeancountPicker() {
-        const modal = document.createElement('div');
-        modal.className = 'beancount-vault-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        `;
 
-        const content = modal.createEl('div', { cls: 'beancount-vault-modal-content' });
-        content.style.cssText = `
-            background: var(--background-primary);
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 700px;
-            max-height: 80%;
-            overflow-y: auto;
-            border: 1px solid var(--background-modifier-border);
-        `;
-
-        content.createEl('h3', { text: 'Select Beancount File in Vault' });
-
-        const list = content.createEl('div', { cls: 'beancount-file-list' });
-        list.style.cssText = `max-height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px;`;
-
-        // Gather files from vault with .beancount or .bean extensions
-        const allFiles = this.app.vault.getFiles();
-        const beancountFiles = allFiles.filter(f => f.path.toLowerCase().endsWith('.beancount') || f.path.toLowerCase().endsWith('.bean'));
-
-        if (beancountFiles.length === 0) {
-            list.createEl('div', { text: 'No .beancount/.bean files found in this vault', cls: 'beancount-no-files' });
-        } else {
-            beancountFiles.forEach(file => {
-                const item = list.createEl('div', { text: file.path, cls: 'beancount-file-item' });
-                item.style.cssText = `padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--background-modifier-border-hover);`;
-                item.addEventListener('mouseenter', () => item.style.background = 'var(--background-modifier-hover)');
-                item.addEventListener('mouseleave', () => item.style.background = '');
-                item.addEventListener('click', async () => {
-                    // Compute absolute path by combining vault base path and relative path
-                    // @ts-ignore
-                    const vaultBase: string = (this.app.vault.adapter as any).getBasePath();
-                    // Normalize separators to forward slashes and remove trailing slash from vaultBase
-                    const baseNormalized = vaultBase.replace(/\\/g, '/').replace(/\/$/, '');
-                    const rel = file.path.replace(/\\/g, '/');
-                    const absolutePath = `${baseNormalized}/${rel}`;
-                    this.plugin.settings.beancountFilePath = absolutePath;
-                    await this.plugin.saveSettings();
-                    // Update the visible input element in settings (if present)
-                    const inputEl = document.getElementById('beancount-file-input') as HTMLInputElement | null;
-                    if (inputEl) {
-                        inputEl.value = absolutePath;
-                        // Trigger the input event so the existing onChange handler updates validation
-                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                    modal.remove();
-                });
-            });
-        }
-
-        const btnRow = content.createEl('div');
-        btnRow.style.cssText = 'display:flex; justify-content:flex-end; gap:8px; margin-top:12px;';
-        const cancel = btnRow.createEl('button', { text: 'Cancel' });
-        cancel.addEventListener('click', () => modal.remove());
-
-        document.body.appendChild(modal);
-    }
-
-    /**
-     * Show command suggestion modal with detected beancount commands
-     */
-    private async showCommandSuggestionModal(suggestions: string[]) {
-        const modal = document.createElement('div');
-        modal.className = 'beancount-command-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        `;
-
-        const content = modal.createEl('div', { cls: 'beancount-command-modal-content' });
-        content.style.cssText = `
-            background: var(--background-primary);
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 700px;
-            max-height: 80%;
-            overflow-y: auto;
-            border: 1px solid var(--background-modifier-border);
-        `;
-
-        content.createEl('h3', { text: 'Detected Beancount Commands' });
-        content.createEl('p', { 
-            text: 'Select a command that works on your system:', 
-            cls: 'setting-item-description' 
-        });
-
-        const list = content.createEl('div', { cls: 'beancount-command-list' });
-        list.style.cssText = `max-height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px; margin: 12px 0;`;
-
-        if (suggestions.length === 0) {
-            list.createEl('div', { 
-                text: 'No beancount commands detected. Please install beancount and ensure it\'s in your PATH.', 
-                cls: 'beancount-no-commands',
-                attr: { style: 'padding: 20px; text-align: center; color: var(--text-muted);' }
-            });
-        } else {
-            for (const [index, suggestion] of suggestions.entries()) {
-                const item = list.createEl('div', { cls: 'beancount-command-item' });
-                item.style.cssText = `
-                    display: flex; 
-                    align-items: center; 
-                    padding: 12px; 
-                    cursor: pointer; 
-                    border-bottom: 1px solid var(--background-modifier-border-hover);
-                    gap: 12px;
-                `;
-
-                const radio = item.createEl('input', { type: 'radio', attr: { name: 'beancount-command', value: suggestion } });
-                if (index === 0) radio.checked = true;
-
-                const label = item.createEl('label', { 
-                    text: suggestion,
-                    attr: { style: 'flex: 1; cursor: pointer; font-family: var(--font-monospace);' }
-                });
-
-                const testBtn = item.createEl('button', { 
-                    text: 'Test',
-                    attr: { style: 'padding: 4px 8px; font-size: 0.8em;' }
-                });
-
-                label.addEventListener('click', () => {
-                    radio.checked = true;
-                });
-
-                testBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    testBtn.textContent = 'Testing...';
-                    testBtn.disabled = true;
-
-                    try {
-                        const { SystemDetector } = await import('./utils/SystemDetector');
-                        const detector = SystemDetector.getInstance();
-                        const result = await detector.testCommand(`${suggestion} --help`);
-                        
-                        if (result.success) {
-                            testBtn.textContent = '✅ Works';
-                            testBtn.style.color = 'var(--text-success)';
-                        } else {
-                            testBtn.textContent = '❌ Failed';
-                            testBtn.style.color = 'var(--text-error)';
-                            testBtn.title = result.error || 'Command failed';
-                        }
-                    } catch (error) {
-                        testBtn.textContent = '❌ Error';
-                        testBtn.style.color = 'var(--text-error)';
-                        testBtn.title = error.message;
-                    } finally {
-                        testBtn.disabled = false;
-                    }
-                });
-
-                item.addEventListener('mouseenter', () => item.style.background = 'var(--background-modifier-hover)');
-                item.addEventListener('mouseleave', () => item.style.background = '');
-            }
-        }
-
-        const btnRow = content.createEl('div');
-        btnRow.style.cssText = 'display:flex; justify-content:flex-end; gap:8px; margin-top:12px;';
-        
-        const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
-        const useBtn = btnRow.createEl('button', { text: 'Use Selected', cls: 'mod-cta' });
-
-        cancelBtn.addEventListener('click', () => modal.remove());
-        
-        useBtn.addEventListener('click', () => {
-            const selected = list.querySelector('input[name="beancount-command"]:checked') as HTMLInputElement;
-            if (selected) {
-                this.plugin.settings.beancountCommand = selected.value;
-                this.plugin.saveSettings();
-                
-                // Update the input element if it exists
-                const inputEl = document.getElementById('beancount-command-input') as HTMLInputElement | null;
-                if (inputEl) {
-                    inputEl.value = selected.value;
-                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                
-                new Notice(`Command set to: ${selected.value}`);
-                modal.remove();
-            }
-        });
-
-        document.body.appendChild(modal);
-    }
 
     /**
      * Create the enhanced connection section with Svelte component
