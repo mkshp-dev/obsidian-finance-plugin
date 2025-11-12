@@ -1075,12 +1075,6 @@
         font-weight: 600;
     }
 
-    .info-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 8px;
-    }
-
     .system-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1728,44 +1722,6 @@
         background: var(--interactive-accent-hover);
     }
 
-    .path-display {
-        margin-top: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 12px;
-        background: var(--background-primary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .path-info {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .path-label {
-        font-size: 11px;
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-
-    .path-value {
-        font-family: var(--font-monospace);
-        font-size: 11px;
-        background: var(--background-secondary);
-        padding: 4px 6px;
-        border-radius: 3px;
-        color: var(--text-normal);
-        word-break: break-all;
-    }
-
-    .path-value.full-path {
-        color: var(--text-accent);
-        font-weight: 500;
-    }
-
     /* Enhanced File Path Display */
     .file-path-display {
         margin-top: 16px;
@@ -2055,10 +2011,6 @@
         font-size: 9px;
         white-space: pre-wrap;
         word-break: break-word;
-    }
-
-    .validation-info {
-        margin-top: 8px;
     }
 
     .info-text {

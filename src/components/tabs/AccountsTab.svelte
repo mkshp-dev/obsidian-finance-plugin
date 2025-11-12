@@ -593,42 +593,6 @@
 		cursor: pointer;
 	}
 
-	.debug-info {
-		padding: 16px;
-		border: 1px solid var(--background-modifier-border);
-		border-radius: 6px;
-		background: var(--background-secondary);
-	}
-
-	.debug-info h3 {
-		margin: 0 0 12px 0;
-		color: var(--text-normal);
-	}
-
-	.debug-info p {
-		margin: 4px 0;
-		color: var(--text-muted);
-	}
-
-	.account-list {
-		margin-top: 16px;
-	}
-
-	.account-list h4 {
-		margin: 0 0 8px 0;
-		color: var(--text-normal);
-	}
-
-	.account-item {
-		padding: 4px 8px;
-		margin: 2px 0;
-		background: var(--background-primary);
-		border-radius: 4px;
-		font-family: var(--font-monospace);
-		font-size: 12px;
-		color: var(--text-normal);
-	}
-
 	.accounts-container {
 		display: flex;
 		flex-direction: column;

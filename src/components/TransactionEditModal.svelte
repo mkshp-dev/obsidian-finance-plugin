@@ -627,8 +627,7 @@
         color: var(--text-normal);
     }
     
-    .form-group input,
-    .form-group select {
+    .form-group input {
         padding: 0.5rem;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
@@ -636,8 +635,7 @@
         color: var(--text-normal);
     }
     
-    .form-group input:focus,
-    .form-group select:focus {
+    .form-group input:focus {
         outline: none;
         border-color: var(--interactive-accent);
     }
@@ -726,17 +724,6 @@
         background: var(--interactive-accent-hover);
     }
     
-    .tags-section {
-        margin-bottom: 1.5rem;
-    }
-    
-    .tags-section label {
-        display: block;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-        color: var(--text-normal);
-    }
-    
     .selected-tags {
         display: flex;
         flex-wrap: wrap;
@@ -762,15 +749,6 @@
         cursor: pointer;
         padding: 0;
         margin-left: 0.25rem;
-    }
-    
-    .tags-section input {
-        width: 100%;
-        padding: 0.5rem;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
     }
     
     .modal-footer {
