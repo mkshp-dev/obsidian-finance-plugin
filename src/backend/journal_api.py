@@ -23,6 +23,7 @@ try:
     from beancount.core.amount import Amount
     from beancount.core.position import Position
     from beancount.core.inventory import Inventory
+    from beancount.core.compare import hash_entry
     from beancount.parser import options
 except ImportError:
     print("Error: Beancount is not installed. Install it with: pip install beancount")
@@ -227,18 +228,10 @@ class BeancountJournalAPI:
             return base_data
     
     def generate_entry_id(self, entry) -> str:
-        """Generate a unique ID for any supported entry"""
-        entry_type = self.get_entry_type(entry)
-        date_str = entry.date.isoformat()
-        
-        if isinstance(entry, data.Transaction):
-            return f"{date_str}_{entry_type}_{hash(entry.narration)}_{len(entry.postings)}"
-        elif isinstance(entry, data.Note):
-            return f"{date_str}_{entry_type}_{hash(entry.account)}_{hash(entry.comment)}"
-        elif isinstance(entry, (data.Balance, data.Pad)):
-            return f"{date_str}_{entry_type}_{hash(entry.account)}"
-        else:
-            return f"{date_str}_{entry_type}_{hash(str(entry))}"
+        """Generate a unique ID using Beancount's official hash_entry function"""
+        # Use Beancount's built-in stable hash function
+        # This includes metadata (filename, lineno) by default for true uniqueness
+        return hash_entry(entry, exclude_meta=False)
     
     def transaction_to_dict_data(self, transaction: data.Transaction) -> Dict[str, Any]:
         """Convert transaction-specific data"""

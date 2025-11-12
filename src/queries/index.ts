@@ -101,7 +101,7 @@ export function getBalanceReportQuery(reportType: 'assets' | 'liabilities' | 'eq
 export function getTransactionsQuery(filters: TransactionFilters, limit: number = 1000): string {
 	const selectPart = `SELECT date, payee, narration, position, balance`; // Added balance column
 	const whereClauses: string[] = [];
-	const orderByPart = `ORDER BY date DESC LIMIT ${limit}`;
+	const orderByPart = `ORDER BY date DESC, lineno DESC LIMIT ${limit}`;
 
 	// Build WHERE clauses based on provided filters
 	if (filters.account) {
@@ -173,7 +173,7 @@ export function getPriceDataAvailabilityQuery(): string {
 
 /** Gets full journal entries with all postings for each transaction */
 export function getJournalTransactionsQuery(limit: number = 1000): string {
-	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC LIMIT ${limit}`;
+	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC, lineno DESC LIMIT ${limit}`;
 }
 
 /** Gets recent journal entries for performance (last 6 months by default) */
@@ -181,5 +181,5 @@ export function getRecentJournalTransactionsQuery(monthsBack: number = 6): strin
 	const startDate = new Date();
 	startDate.setMonth(startDate.getMonth() - monthsBack);
 	const dateStr = startDate.toISOString().split('T')[0];
-	return `SELECT date, flag, payee, narration, tags, account, position WHERE date >= ${dateStr} ORDER BY date DESC LIMIT 2000`;
+	return `SELECT date, flag, payee, narration, tags, account, position WHERE date >= ${dateStr} ORDER BY date DESC, lineno DESC LIMIT 2000`;
 }
