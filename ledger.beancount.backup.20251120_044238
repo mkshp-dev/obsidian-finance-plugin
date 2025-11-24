@@ -5060,5 +5060,3 @@ include "dependencies/events.beancount"
 2025-07-05 * "Amazon" "Masala Chai"
   Liabilities:CreditCard:ICICI
   Expenses:Food:Grocery                              534.43 INR
-
-2024-05-28 commodity AC

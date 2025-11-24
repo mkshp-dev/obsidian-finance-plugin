@@ -60,7 +60,7 @@
 			<AccountsTab accountsController={accountsController} />
 
 		{:else if activeTab === 'Commodities'}
-			<CommoditiesTab controller={commoditiesController} />
+			<CommoditiesTab controller={commoditiesController} on:openCommodity={(e) => dispatch('openCommodity', e.detail)} />
 
 		{:else if activeTab === 'Journal'}
 			<JournalTab controller={journalController} />
