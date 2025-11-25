@@ -2,46 +2,28 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# Obsidian Finance Plugin — Overview
 
-Let's discover **Docusaurus in less than 5 minutes**.
+This documentation covers the **Obsidian Finance Plugin**: a Beancount-integrated dashboard for Obsidian that provides transaction management, commodity metadata editing (logo & price sources), and price updates via `bean-price`.
 
-## Getting Started
+Key features:
+- Unified dashboard for transactions, balances, and charts.
+- Commodity metadata editor (logo URL, price source) with safe file writes.
+- Backend API that operates directly on your Beancount ledger (`src/backend/journal_api.py`).
 
-Get started by **creating a new site**.
+Quick links:
+- Installation: `installation.md`
+- Quick start: `quick-start.md`
+- Commodities & prices: `commodities.md`, `prices.md`
+- Backend API reference: `backend-api.md`
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
-
-### What you'll need
-
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
-
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
+This site is kept with Docusaurus under `docs-site/`. To preview locally:
 
 ```bash
-npm init docusaurus@latest my-website classic
-```
-
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
-
-The command also installs all necessary dependencies you need to run Docusaurus.
-
-## Start your site
-
-Run the development server:
-
-```bash
-cd my-website
+cd docs-site
+npm install
 npm run start
+# Visit http://localhost:3000
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
-
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
-
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+If you are a developer, see `development.md` for the developer workflow and how the plugin loads the Python backend via `src/backend/BackendManager.ts`.
