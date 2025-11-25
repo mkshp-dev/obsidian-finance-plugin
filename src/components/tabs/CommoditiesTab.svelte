@@ -1,14 +1,20 @@
 <!-- src/components/tabs/CommoditiesTab.svelte -->
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, createEventDispatcher } from 'svelte';
     import type { CommoditiesController, CommodityInfo } from '../../controllers/CommoditiesController';
-    import YahooFinanceSearchComponent from '../YahooFinanceSearchComponent.svelte';
+    import CommodityDetailModalComponent from '../CommodityDetailModal.svelte';
 
     export let controller: CommoditiesController;
+
+    const dispatch = createEventDispatcher();
 
     // Extract the stores from the controller
     $: commoditiesStore = controller.commodities;
     $: filteredCommoditiesStore = controller.filteredCommodities;
+        console.debug('[CommoditiesTab] Component loaded');
+        onMount(() => {
+            console.debug('[CommoditiesTab] onMount');
+        });
     $: selectedCommodityStore = controller.selectedCommodity;
     $: searchTermStore = controller.searchTerm;
     $: loadingStore = controller.loading;
@@ -17,10 +23,6 @@
     $: hasCommodityDataStore = controller.hasCommodityData;
 
     // UI state
-    let showDetailModal = false;
-
-    // Watch for selectedCommodity changes to control modal
-    $: showDetailModal = !!$selectedCommodityStore;
 
     onMount(async () => {
         await controller.loadData();
@@ -28,18 +30,24 @@
 
     function handleSearchInput(event: Event) {
         const target = event.target as HTMLInputElement;
+        console.debug('[CommoditiesTab] handleSearchInput ->', target.value);
         controller.setSearchTerm(target.value);
     }
 
     function handleCommodityClick(commodity: CommodityInfo) {
+        console.debug('[CommoditiesTab] handleCommodityClick ->', commodity?.symbol);
+        // Let parent view handle opening the detailed modal (so it can use the app/plugin)
         controller.selectCommodity(commodity);
+        dispatch('openCommodity', { symbol: commodity.symbol, commodity });
     }
 
     function closeDetailModal() {
+        console.debug('[CommoditiesTab] closeDetailModal');
         controller.clearSelection();
     }
 
     function handleRefresh() {
+        console.debug('[CommoditiesTab] handleRefresh');
         controller.refresh();
     }
 
@@ -54,6 +62,7 @@
     async function handleYahooFinanceApply(event: CustomEvent<{ symbol: string; metadata: string; price?: number }>) {
         const { symbol: yahooSymbol, metadata } = event.detail;
         
+        console.debug('[CommoditiesTab] handleYahooFinanceApply', { yahooSymbol, metadata });
         if ($selectedCommodityStore) {
             try {
                 await controller.updatePriceMetadata($selectedCommodityStore.symbol, yahooSymbol);
@@ -226,126 +235,7 @@
     {/if}
 </div>
 
-<!-- Commodity Detail Modal -->
-{#if showDetailModal && $selectedCommodityStore}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div 
-        class="modal-overlay" 
-        on:click={closeDetailModal}
-        role="dialog" 
-        aria-modal="true"
-        aria-labelledby="modal-title"
-    >
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div 
-            class="commodity-modal" 
-            on:click|stopPropagation
-            role="document"
-        >
-            <div class="modal-header">
-                <h3 id="modal-title">
-                    <span class="commodity-icon">{getCommodityTypeIcon($selectedCommodityStore.symbol)}</span>
-                    {$selectedCommodityStore.symbol} Details
-                </h3>
-                <button 
-                    class="close-button" 
-                    on:click={closeDetailModal}
-                    aria-label="Close modal"
-                >×</button>
-            </div>
-            
-            <div class="modal-content">
-                <!-- Summary Info -->
-                <div class="commodity-summary">
-                    <div class="summary-row">
-                        <span class="label">Symbol:</span>
-                        <span class="value">{$selectedCommodityStore.symbol}</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="label">Price Metadata:</span>
-                        <span class="value">
-                            {#if $selectedCommodityStore.hasPriceMetadata}
-                                <span class="has-price-meta">✅ Available</span>
-                                {#if $selectedCommodityStore.priceMetadata}
-                                    <br><small>Source: {$selectedCommodityStore.priceMetadata}</small>
-                                {/if}
-                            {:else}
-                                <span class="no-price-meta">❌ None (prices will not be fetched)</span>
-                            {/if}
-                        </span>
-                    </div>
-                    
-                    {#if $selectedCommodityStore.currentPrice}
-                        <div class="summary-row">
-                            <span class="label">Current Price:</span>
-                            <span class="value">{$selectedCommodityStore.currentPrice}</span>
-                        </div>
-                    {/if}
-                </div>
-
-                <!-- Yahoo Finance Search Component -->
-                <YahooFinanceSearchComponent
-                    currentPriceMetadata={$selectedCommodityStore.priceMetadata || ''}
-                    disabled={$loadingStore}
-                    on:apply={handleYahooFinanceApply}
-                    on:cancel={handleYahooFinanceCancel}
-                />
-
-                <!-- Price Metadata Management -->
-                {#if $selectedCommodityStore.hasPriceMetadata}
-                    <div class="price-metadata-actions">
-                        <button 
-                            class="remove-metadata-button"
-                            on:click={handleRemovePriceMetadata}
-                            disabled={$loadingStore}
-                        >
-                            🗑️ Remove Price Metadata
-                        </button>
-                    </div>
-                {/if}
-
-                <!-- Full Metadata Display -->
-                {#if $selectedCommodityStore.fullMetadata && Object.keys($selectedCommodityStore.fullMetadata).length > 0}
-                    <div class="metadata-section">
-                        <h4>All Metadata</h4>
-                        <div class="metadata-table">
-                            <div class="table-header">
-                                <span>Key</span>
-                                <span>Value</span>
-                            </div>
-                            {#each Object.entries($selectedCommodityStore.fullMetadata) as [key, value]}
-                                <div class="table-row">
-                                    <span class="metadata-key">{key}</span>
-                                    <span class="metadata-value">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
-                                </div>
-                            {/each}
-                        </div>
-                    </div>
-                {:else}
-                    <div class="no-metadata">
-                        <div class="no-metadata-icon">�</div>
-                        <h4>No additional metadata</h4>
-                        <p>This commodity has no additional metadata defined.</p>
-                        <div class="metadata-setup-guide">
-                            <h5>To add metadata:</h5>
-                            <ol>
-                                <li>Add metadata to your commodity declaration:
-                                    <code>2024-01-01 commodity {$selectedCommodityStore.symbol}
-  price: "USD"
-  exchange_symbol: "SYMBOL"</code>
-                                </li>
-                                <li>Use metadata for automated price fetching with bean-price</li>
-                                <li>Refresh this tab to see the updated metadata</li>
-                            </ol>
-                        </div>
-                    </div>
-                {/if}
-            </div>
-        </div>
-    </div>
-{/if}
+<!-- Inline modal removed — use the Obsidian Modal wrapper to show commodity details -->
 
 <style>
     .commodities-tab {
@@ -612,257 +502,5 @@
         margin: 4px 0;
     }
 
-    /* Modal Styles */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        padding: 20px;
-    }
-
-    .commodity-modal {
-        background: var(--background-primary);
-        border-radius: 12px;
-        max-width: 600px;
-        width: 100%;
-        max-height: 80vh;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    }
-
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px;
-        border-bottom: 1px solid var(--background-modifier-border);
-    }
-
-    .modal-header h3 {
-        margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .close-button {
-        background: none;
-        border: none;
-        font-size: 24px;
-        color: var(--text-muted);
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
-    }
-
-    .close-button:hover {
-        background: var(--background-secondary);
-        color: var(--text-normal);
-    }
-
-    .modal-content {
-        padding: 20px;
-        overflow-y: auto;
-        max-height: calc(80vh - 140px);
-    }
-
-    .commodity-summary {
-        margin-bottom: 24px;
-    }
-
-    .summary-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--background-modifier-border-focus);
-    }
-
-    .summary-row .label {
-        font-weight: 500;
-        color: var(--text-muted);
-    }
-
-    .summary-row .value {
-        font-weight: 600;
-        color: var(--text-normal);
-    }
-
-    .has-price-meta {
-        color: var(--text-success);
-        font-weight: 600;
-    }
-
-    .no-price-meta {
-        color: var(--text-error);
-        font-weight: 600;
-    }
-
-    .metadata-section {
-        margin-top: 24px;
-    }
-
-    .metadata-section h4 {
-        margin: 0 0 12px 0;
-        color: var(--text-normal);
-    }
-
-    .metadata-table {
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .metadata-table .table-header {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        background: var(--background-secondary);
-        padding: 12px;
-        font-weight: 600;
-        color: var(--text-normal);
-    }
-
-    .metadata-table .table-row {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        padding: 10px 12px;
-        border-top: 1px solid var(--background-modifier-border-focus);
-    }
-
-    .metadata-table .table-row:nth-child(even) {
-        background: var(--background-secondary-alt);
-    }
-
-    .metadata-key {
-        font-weight: 500;
-        color: var(--text-muted);
-    }
-
-    .metadata-value {
-        color: var(--text-normal);
-        word-break: break-word;
-    }
-
-    .no-metadata {
-        text-align: center;
-        padding: 40px;
-        color: var(--text-muted);
-    }
-
-    .no-metadata-icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-    }
-
-    .no-metadata h4 {
-        margin: 0 0 8px 0;
-        color: var(--text-normal);
-    }
-
-    .metadata-setup-guide {
-        background: var(--background-secondary);
-        border-radius: 8px;
-        padding: 16px;
-        margin-top: 20px;
-        text-align: left;
-    }
-
-    .metadata-setup-guide h5 {
-        margin: 0 0 12px 0;
-        color: var(--text-normal);
-    }
-
-    .metadata-setup-guide ol {
-        margin: 0;
-        padding-left: 20px;
-    }
-
-    .metadata-setup-guide li {
-        margin: 8px 0;
-        color: var(--text-muted);
-    }
-
-    .metadata-setup-guide code {
-        background: var(--background-primary);
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-family: var(--font-monospace);
-        font-size: 12px;
-        display: block;
-        margin: 8px 0;
-        border: 1px solid var(--background-modifier-border);
-        white-space: pre-line;
-    }
-
-    .empty-list code {
-        background: var(--background-primary);
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: var(--font-monospace);
-        font-size: 11px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    @media (max-width: 768px) {
-        .commodities-header {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .header-right {
-            justify-content: space-between;
-        }
-
-        .search-input {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .commodities-grid {
-            grid-template-columns: 1fr;
-            gap: 12px;
-        }
-
-        .commodity-modal {
-            margin: 10px;
-            max-height: 90vh;
-        }
-    }
-
-    /* Price Metadata Actions */
-    .price-metadata-actions {
-        margin: var(--size-4-4) 0;
-        padding: var(--size-4-3);
-        background: var(--background-primary-alt);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: var(--radius-s);
-    }
-
-    .remove-metadata-button {
-        background: var(--color-red);
-        color: var(--text-on-accent);
-        border: none;
-        border-radius: var(--radius-s);
-        padding: var(--size-4-2) var(--size-4-3);
-        cursor: pointer;
-        font-size: 0.9em;
-        font-weight: 500;
-        transition: background-color 0.2s ease;
-    }
-
-    .remove-metadata-button:hover:not(:disabled) {
-        background: var(--color-red-hover);
-    }
-
-    .remove-metadata-button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
+    /* Removed inline modal and metadata-action styles — modal lives in Obsidian Modal component now. */
 </style>

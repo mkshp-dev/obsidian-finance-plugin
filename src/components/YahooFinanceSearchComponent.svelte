@@ -1,7 +1,6 @@
 <!-- src/components/YahooFinanceSearchComponent.svelte -->
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import { YahooFinanceService } from '../services/YahooFinanceService';
 
     export let selectedSymbol: string = '';
     export let currentPriceMetadata: string = '';
@@ -12,63 +11,30 @@
         cancel: void;
     }>();
 
-    const yahooService = new YahooFinanceService();
-    
-    let manualSymbol = selectedSymbol;
-    let showPreview = false;
+    let manualSymbol = selectedSymbol || '';
 
-    // Get financial websites and symbol examples
-    const websites = yahooService.getFinancialWebsites();
-    const symbolExamples = yahooService.getCommonSymbols();
-
-    $: {
-        if (manualSymbol && manualSymbol.trim().length > 0) {
-            showPreview = true;
-        } else {
-            showPreview = false;
-        }
-    }
-
-    $: previewMetadata = manualSymbol ? yahooService.generatePriceMetadata(manualSymbol.toUpperCase()) : '';
+    // Simple preview: use explicit currentPriceMetadata if provided, otherwise derive a nominal preview
+    $: previewMetadata = currentPriceMetadata && currentPriceMetadata.trim().length > 0
+        ? currentPriceMetadata
+        : (manualSymbol ? `${manualSymbol.toUpperCase()}:yahoo/${manualSymbol.toUpperCase()}` : '');
 
     function handleApply() {
-        if (!manualSymbol || manualSymbol.trim().length === 0) return;
-
-        const symbol = manualSymbol.toUpperCase().trim();
-        const metadata = yahooService.generatePriceMetadata(symbol);
-        
-        dispatch('apply', {
-            symbol: symbol,
-            metadata: metadata
-        });
+        dispatch('apply', { symbol: manualSymbol.toUpperCase(), metadata: previewMetadata });
     }
 
     function handleCancel() {
-        manualSymbol = '';
-        showPreview = false;
         dispatch('cancel');
-    }
-
-    function selectExampleSymbol(symbol: string) {
-        manualSymbol = symbol;
-        showPreview = true;
-    }
-
-    function openWebsite(url: string) {
-        window.open(url, '_blank');
     }
 </script>
 
-<div class="yahoo-finance-search" class:disabled>
-    {#if currentPriceMetadata}
-        <div class="current-source">
-            <span class="label">Current source:</span>
-            <code class="current-metadata">{currentPriceMetadata}</code>
-        </div>
-    {/if}
+<div class="yahoo-finance-search {disabled ? 'disabled' : ''}">
+    <div class="current-source">
+        <span class="label">Current source:</span>
+        <code class="current-metadata">{currentPriceMetadata || '—'}</code>
+    </div>
 
+    <!-- Symbol lookup removed: simplified UI only -->
     <div class="symbol-entry">
-        <h4>📈 Enter Stock Symbol</h4>
         <input
             type="text"
             bind:value={manualSymbol}
@@ -76,90 +42,25 @@
             class="symbol-input"
             {disabled}
         />
-        {#if previewMetadata && showPreview}
-            <div class="metadata-preview">
-                <strong>Price Source:</strong> <code>{previewMetadata}</code>
-            </div>
-        {/if}
     </div>
 
-    <div class="websites-section">
-        <h4>🔍 Find Symbols</h4>
-        <p class="help-text">Use these financial websites to look up stock, ETF, or crypto symbols:</p>
-        
-        <div class="websites-grid">
-            {#each websites as site}
-                <button
-                    class="website-button"
-                    on:click={() => openWebsite(site.url)}
-                    title={site.description}
-                    type="button"
-                    {disabled}
-                >
-                    <span class="website-name">{site.name}</span>
-                    <span class="website-desc">{site.description}</span>
-                </button>
-            {/each}
-        </div>
-    </div>
-
-    <div class="examples-section">
-        <h4>💡 Common Examples</h4>
-        <p class="help-text">Click any symbol below to use it quickly:</p>
-        
-        {#each symbolExamples as category}
-            <div class="category-group">
-                <h5>{category.category}</h5>
-                <div class="symbols-grid">
-                    {#each category.symbols as symbol}
-                        <button
-                            class="symbol-button"
-                            on:click={() => selectExampleSymbol(symbol.symbol)}
-                            class:selected={manualSymbol === symbol.symbol}
-                            type="button"
-                            {disabled}
-                        >
-                            <span class="symbol-code">{symbol.symbol}</span>
-                            <span class="symbol-name">{symbol.name}</span>
-                        </button>
-                    {/each}
-                </div>
+    <div class="preview-section">
+        <h4>📋 Configuration Preview</h4>
+        <div class="preview-details">
+            <div class="preview-row">
+                <span class="preview-label">Symbol:</span>
+                <span class="preview-value">{manualSymbol ? manualSymbol.toUpperCase() : '—'}</span>
             </div>
-        {/each}
-    </div>
-
-    {#if showPreview}
-        <div class="preview-section">
-            <h4>📋 Configuration Preview</h4>
-            <div class="preview-details">
-                <div class="preview-row">
-                    <span class="preview-label">Symbol:</span>
-                    <span class="preview-value">{manualSymbol.toUpperCase()}</span>
-                </div>
-                <div class="preview-row">
-                    <span class="preview-label">Price Metadata:</span>
-                    <code class="preview-metadata">{previewMetadata}</code>
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button 
-                    class="apply-button" 
-                    on:click={handleApply}
-                    {disabled}
-                >
-                    ✅ Apply Yahoo Source
-                </button>
-                <button 
-                    class="cancel-button" 
-                    on:click={handleCancel}
-                    {disabled}
-                >
-                    ❌ Cancel
-                </button>
+            <div class="preview-row">
+                <span class="preview-label">Price Metadata:</span>
+                <code class="preview-metadata">{previewMetadata}</code>
             </div>
         </div>
-    {/if}
+        <div class="action-buttons">
+            <button class="apply-button" on:click={handleApply} {disabled}>✅ Apply</button>
+            <button class="cancel-button" on:click={handleCancel} {disabled}>❌ Cancel</button>
+        </div>
+    </div>
 </div>
 
 <style>

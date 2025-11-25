@@ -148,16 +148,22 @@ export class BackendManager {
                 this.isStarting = false;
             });
 
-            // Log stdout and stderr for debugging
+            // Forward backend stdout and stderr to Obsidian developer console
             if (this.backendProcess.stdout) {
                 this.backendProcess.stdout.on('data', (data) => {
-                    console.log('Backend stdout:', data.toString());
+                    // Forward to Obsidian console
+                    // Use chunk splitting for multi-line output
+                    data.toString().split(/\r?\n/).forEach((line: string) => {
+                        if (line.trim().length > 0) console.log('[Backend]', line);
+                    });
                 });
             }
 
             if (this.backendProcess.stderr) {
                 this.backendProcess.stderr.on('data', (data) => {
-                    console.error('Backend stderr:', data.toString());
+                    data.toString().split(/\r?\n/).forEach((line: string) => {
+                        if (line.trim().length > 0) console.error('[Backend]', line);
+                    });
                 });
             }
 
@@ -213,7 +219,9 @@ export class BackendManager {
      */
     public async ensureBackendRunning(): Promise<boolean> {
         // Check if already running
-        if (await this.isBackendHealthy()) {
+        const healthy = await this.isBackendHealthy();
+        console.debug('[BackendManager] isBackendHealthy ->', healthy);
+        if (healthy) {
             return true;
         }
 
@@ -229,10 +237,13 @@ export class BackendManager {
         await this.ensureBackendRunning();
 
         const url = `${this.apiBaseUrl}${endpoint}`;
-        return fetch(url, {
+        console.debug('[BackendManager] apiRequest:', { url, options });
+        const resp = await fetch(url, {
             ...options,
             timeout: 10000
         } as RequestInit);
+        console.debug('[BackendManager] apiRequest response:', { url, status: resp.status, ok: resp.ok });
+        return resp;
     }
 
     /**

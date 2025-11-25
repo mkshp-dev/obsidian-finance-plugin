@@ -3,6 +3,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type BeancountPlugin from '../main';
 import UnifiedDashboardComponent from './UnifiedDashboardView.svelte';
+import { CommodityDetailModal } from '../components/CommodityDetailModal';
 
 // --- Import ALL controllers ---
 import { OverviewController } from '../controllers/OverviewController';
@@ -78,8 +79,12 @@ export class UnifiedDashboardView extends ItemView {
 		});
 
 		// --- Listen for events dispatched from Svelte ---
-		// (We'll update Svelte to dispatch an event with a 'filters' payload)
 		this.component.$on('filtersChange', (e) => this.transactionController.handleFilterChange(e.detail));
+		// When CommoditiesTab requests a detail modal, open it using plugin/app context
+		this.component.$on('openCommodity', (e: any) => {
+			const symbol = e.detail?.symbol || e.detail;
+			new CommodityDetailModal(this.app, this.plugin, this.commoditiesController, symbol).open();
+		});
 		
 		// --- Load initial data via controllers ---
 		this.overviewController.loadData();

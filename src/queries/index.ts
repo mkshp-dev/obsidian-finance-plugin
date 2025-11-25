@@ -183,3 +183,15 @@ export function getRecentJournalTransactionsQuery(monthsBack: number = 6): strin
 	const dateStr = startDate.toISOString().split('T')[0];
 	return `SELECT date, flag, payee, narration, tags, account, position WHERE date >= ${dateStr} ORDER BY date DESC, lineno DESC LIMIT 2000`;
 }
+
+/** Gets all commodities with detailed metadata and latest price (BQL) */
+export function getCommoditiesDetailedQuery(): string {
+	return `SELECT name, meta, meta('price') AS price_meta, meta('logo') AS logo_meta, getprice(name, 'INR') AS latest_price FROM #commodities`;
+}
+
+/** Gets the first directive date for a commodity (best-effort BQL) */
+export function getCommodityFirstDirectiveDateQuery(commodity: string): string {
+	// Backend should treat this as a best-effort helper; precise first-directive
+	// date computation may be done by scanning entries in Python.
+	return `SELECT min(date) AS first_date FROM #commodities WHERE name = '${commodity}'`;
+}
