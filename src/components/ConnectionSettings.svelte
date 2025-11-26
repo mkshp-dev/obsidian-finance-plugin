@@ -438,29 +438,6 @@
         const fileCount = availableFiles.length;
         new Notice(`File list refreshed - found ${fileCount} beancount file${fileCount !== 1 ? 's' : ''}`);
     }
-
-    function createSampleFile() {
-        const samplePath = 'sample.beancount';
-        const sampleContent = `; Sample Beancount file
-; Created by Obsidian Finance Plugin
-
-1900-01-01 open Assets:Cash
-1900-01-01 open Expenses:Food
-1900-01-01 open Income:Salary
-
-2024-01-01 * "Sample Transaction"
-  Assets:Cash         100.00 USD
-  Income:Salary      -100.00 USD
-`;
-
-        plugin.app.vault.create(samplePath, sampleContent).then(() => {
-            new Notice(`Created sample file: ${samplePath}`);
-            loadVaultFiles();
-        }).catch(error => {
-            new Notice(`Failed to create sample file: ${error.message}`);
-        });
-    }
-
     $: {
         // Auto-update when WSL or platform changes
         if (platform && typeof useWSL !== 'undefined') {
@@ -609,9 +586,6 @@
                         <button on:click={refreshFiles} class="refresh-btn" title="Refresh file list">
                             🔄 Refresh
                         </button>
-                        <button on:click={createSampleFile} class="sample-btn" title="Create sample file">
-                            ✨ Create Sample
-                        </button>
                     </div>
                 </div>
                 
@@ -634,15 +608,13 @@
                     <p>No .beancount or .bean files found in vault</p>
                     <p class="help-text">
                         Beancount files should have .beancount or .bean extension.<br>
-                        Click refresh if you just added a file, or create a sample file to get started.
+                        Click refresh if you just added a file.
                     </p>
                     <div class="no-files-actions">
                         <button on:click={refreshFiles} class="refresh-files-btn">
                             🔄 Refresh Files
                         </button>
-                        <button on:click={createSampleFile} class="create-sample-btn">
-                            ✨ Create Sample File
-                        </button>
+                        
                     </div>
                 </div>
             {/if}
@@ -1619,7 +1591,7 @@
         gap: 6px;
     }
 
-    .refresh-btn, .sample-btn {
+    .refresh-btn {
         padding: 4px 8px;
         font-size: 11px;
         background: var(--background-primary);
@@ -1630,7 +1602,7 @@
         transition: background-color 0.2s;
     }
 
-    .refresh-btn:hover, .sample-btn:hover {
+    .refresh-btn:hover {
         background: var(--background-modifier-hover);
     }
 
@@ -1706,22 +1678,6 @@
     .refresh-files-btn:hover {
         background: var(--background-modifier-hover);
     }
-
-    .create-sample-btn {
-        padding: 8px 16px;
-        background: var(--interactive-accent);
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-    }
-
-    .create-sample-btn:hover {
-        background: var(--interactive-accent-hover);
-    }
-
     /* Enhanced File Path Display */
     .file-path-display {
         margin-top: 16px;
@@ -2078,16 +2034,6 @@
             flex-direction: column;
             align-items: stretch;
         }
-
-        .path-info {
-            gap: 6px;
-        }
-
-        .command-info {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
         .packages-list {
             grid-template-columns: 1fr;
             gap: 3px;

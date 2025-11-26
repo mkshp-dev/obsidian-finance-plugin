@@ -529,9 +529,6 @@ export class BeancountSettingTab extends PluginSettingTab {
         document.body.appendChild(modal);
         searchInput.focus();
     }
-
-
-
     /**
      * Create the enhanced connection section with Svelte component
      */
@@ -559,6 +556,4 @@ export class BeancountSettingTab extends PluginSettingTab {
         // Store reference for cleanup (if needed)
         (containerEl as any)._connectionSettings = connectionSettings;
     }
-
-
 }
