@@ -50,20 +50,7 @@ export default class BeancountPlugin extends Plugin {
 			name: 'Add Beancount Transaction',
 			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
 		});
-		this.addCommand({
-			id: 'insert-bql-query',
-			name: 'Insert BQL Query Block',
-			editorCallback: (editor) => {
-				const cursor = editor.getCursor();
-				const template = '```bql\nSELECT account GROUP BY account ORDER BY account\n```\n';
-				editor.replaceRange(template, cursor);
-				// Position cursor inside the query
-				editor.setCursor({
-					line: cursor.line + 1,
-					ch: 0
-				});
-			}
-		});
+		// 'Insert BQL Query Block' command removed — use manual insertion or BQL templates instead
 		this.addCommand({
 			id: 'open-beancount-unified-dashboard', // This ID now opens the new unified view
 			name: 'Open Beancount Unified Dashboard',
@@ -114,22 +101,17 @@ export default class BeancountPlugin extends Plugin {
 			console.error(`Could not get leaf for location: ${location}`);
 		}
 	}
-	// --- REMOVED: Old activateView, activateDashboardView, activateOverviewView ---
-
-	// --- MOVED TO UTILS: runQuery ---
+	
 	// Make runQuery available publicly for view components
 	public runQuery = (query: string): Promise<string> => {
 		// Call the imported utility function, passing 'this' (the plugin instance)
 		return runQuery(this, query);
 	}
 
-	// --- MOVED TO UTILS: parseSingleValue ---
 	// Make parseSingleValue available publicly
 	public parseSingleValue = (csv: string): string => {
 		return parseSingleValue(csv);
 	}
-
-	// --- MOVED TO UTILS: convertWslPathToWindows ---
 	// Make convertWslPathToWindows available publicly
 	public convertWslPathToWindows = (wslPath: string): string => {
 		return convertWslPathToWindows(wslPath);

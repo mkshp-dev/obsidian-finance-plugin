@@ -93,7 +93,6 @@ This release marks the plugin as production-ready with comprehensive features, r
 #### BQL Code Blocks
 - **Enhanced Styling**: Professional CSS with responsive design and proper table formatting
 - **Interactive Controls**: Refresh, copy, and export functionality with collapsible query display
-- **Template Command**: "Insert BQL Query Block" command for quick query insertion
 - **Error Recovery**: Graceful error display with fallback to raw CSV output
 
 ### Fixed

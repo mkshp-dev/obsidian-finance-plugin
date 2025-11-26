@@ -151,7 +151,7 @@ The plugin includes powerful **BQL (Beancount Query Language)** functionality wi
 
 Create formatted tables with full query results:
 
-1. **Insert Code Block**: Use the command `Insert BQL Query Block` or manually type:
+1. **Insert Code Block**: Manually type:
    ````markdown
    ```bql
    SELECT account GROUP BY account ORDER BY account
