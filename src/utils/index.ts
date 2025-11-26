@@ -1,5 +1,6 @@
 // src/utils/index.ts
 import { exec } from 'child_process';
+import type { ExecException } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
 
@@ -14,7 +15,7 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 		const command = `${commandName} -q -f csv "${filePath}" "${query}"`;
 		
 		// Increase maxBuffer to handle large query results (50MB limit)
-		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
 			if (error) return reject(error);
 			if (stderr) return reject(new Error(stderr));
 			

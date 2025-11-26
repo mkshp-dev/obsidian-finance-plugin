@@ -1,6 +1,7 @@
 // src/views/sidebar-view.ts
 import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer, TFile } from 'obsidian';
 import { exec } from 'child_process';
+import type { ExecException } from 'child_process';
 import type BeancountPlugin from '../main';
 import BeancountViewComponent from './SidebarView.svelte'; // Assuming this is the correct Svelte component for the sidebar
 import { runQuery, parseSingleValue, convertWslPathToWindows, extractConvertedAmount } from '../utils/index';
@@ -156,7 +157,7 @@ export class BeancountView extends ItemView {
 
 		return new Promise((resolve) => {
 			// --- Need exec import from child_process ---
-			exec(command, (error, stdout, stderr) => {
+			exec(command, (error: ExecException | null, stdout: string, stderr: string) => {
 				if (error || stdout || stderr) {
 					const errorMessage = stdout || stderr || (error ? error.message : "Unknown check error.");
 					

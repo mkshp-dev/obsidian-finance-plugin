@@ -1,5 +1,6 @@
 // src/backend/BackendManager.ts
 import { exec, spawn, ChildProcess } from 'child_process';
+import type { ExecException } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import type BeancountPlugin from '../main';
@@ -350,7 +351,7 @@ export class BackendManager {
      */
     private runCommand(command: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            exec(command, (error, stdout, stderr) => {
+            exec(command, (error: ExecException | null, stdout: string, stderr: string) => {
                 if (error) {
                     reject(error);
                 } else {
