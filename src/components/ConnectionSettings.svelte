@@ -590,7 +590,7 @@
                 </div>
                 
                 <div class="dropdown-container">
-                    <label for="file-selector" class="dropdown-label">Choose file:</label>
+                    <label for="file-selector" class="dropdown-label">Choose file: <span class="selected-file-inline">{selectedFile ? selectedFile : 'None selected'}</span></label>
                     <select 
                         id="file-selector"
                         bind:value={selectedFile} 
@@ -1620,6 +1620,20 @@
         color: var(--text-normal);
         margin-bottom: 6px;
         font-size: 13px;
+    }
+
+    .dropdown-label .selected-file-inline {
+        margin-left: 8px;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-muted);
+        font-family: var(--font-monospace);
+        max-width: 70%;
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
     }
 
     .file-dropdown {
