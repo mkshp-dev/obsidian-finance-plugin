@@ -9,7 +9,7 @@
     export let tags: string[] = [];
     export let currencies: string[] = []; // Add currencies prop
     export let mode: 'add' | 'edit' = (transaction || entry) ? 'edit' : 'add'; // Auto-detect mode
-    export let defaultCurrency: string = 'INR';
+    export let operatingCurrency: string = 'INR';
     
     const dispatch = createEventDispatcher();
     
@@ -30,8 +30,8 @@
     let payee = transaction?.payee || '';
     let narration = transaction?.narration || '';
     let postings: JournalPosting[] = transaction ? [...transaction.postings] : [
-        { account: '', amount: null, currency: defaultCurrency, price: null, cost: null },
-        { account: '', amount: null, currency: defaultCurrency, price: null, cost: null }
+        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null },
+        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null }
     ];
     let selectedTags: string[] = transaction ? [...transaction.tags] : [];
     let links: string[] = transaction ? [...transaction.links] : [];
@@ -39,7 +39,7 @@
     // Balance-specific fields
     let balanceAccount = (entry?.type === 'balance') ? (entry as JournalBalance).account : '';
     let balanceAmount = (entry?.type === 'balance') ? (entry as JournalBalance).amount : '';
-    let balanceCurrency = (entry?.type === 'balance') ? (entry as JournalBalance).currency : defaultCurrency;
+    let balanceCurrency = (entry?.type === 'balance') ? (entry as JournalBalance).currency : operatingCurrency;
     let balanceTolerance = (entry?.type === 'balance') ? (entry as JournalBalance).tolerance : '';
     
     // Note-specific fields
@@ -57,7 +57,7 @@
         postings = [...postings, {
             account: '',
             amount: null,
-            currency: 'INR',
+            currency: operatingCurrency,
             price: null,
             cost: null
         }];

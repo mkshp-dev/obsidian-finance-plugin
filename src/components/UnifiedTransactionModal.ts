@@ -97,7 +97,7 @@ export class UnifiedTransactionModal extends Modal {
                 tags,
                 currencies, // Add currencies for autocomplete
                 mode: this.mode,
-                defaultCurrency: this.plugin.settings.defaultCurrency
+                operatingCurrency: this.plugin.settings.operatingCurrency
             }
         });
 

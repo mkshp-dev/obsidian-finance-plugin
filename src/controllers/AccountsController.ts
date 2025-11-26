@@ -43,12 +43,12 @@ export class AccountsController {
 	async loadData() {
 		this.state.update(s => ({ ...s, isLoading: true, error: null }));
 
-		const reportingCurrency = this.plugin.settings.reportingCurrency;
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		if (!reportingCurrency) {
 			this.state.update(s => ({
 				...s,
 				isLoading: false,
-				error: "Reporting Currency is not set in plugin settings.",
+				error: "Operating currency is not set in plugin settings.",
 			}));
 			return;
 		}

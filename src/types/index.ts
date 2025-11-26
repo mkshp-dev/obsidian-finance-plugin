@@ -56,8 +56,7 @@ export interface AmountData {
 export interface BeancountPluginSettings {
 	beancountFilePath: string;
 	beancountCommand: string;
-	defaultCurrency: string;
-	reportingCurrency: string;
+	operatingCurrency: string;
 }
 
 // UI State Types

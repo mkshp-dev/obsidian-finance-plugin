@@ -71,11 +71,11 @@ export class BeancountView extends ItemView {
 	async updateView() {
 		this.updateProps({ isLoading: true, kpiError: null, fileStatus: "checking", fileStatusMessage: null });
 		new Notice('Refreshing snapshot...');
-		const reportingCurrency = this.plugin.settings.reportingCurrency;
-        if (!reportingCurrency) {
-            this.updateProps({ kpiError: "Reporting Currency is not set in settings.", isLoading: false });
-            return;
-        }
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
+		if (!reportingCurrency) {
+			this.updateProps({ kpiError: "Operating currency is not set in settings.", isLoading: false });
+			return;
+		}
 		try {
 			// Run KPI queries and bean check concurrently
 			const [

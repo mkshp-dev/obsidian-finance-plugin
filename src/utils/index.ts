@@ -213,7 +213,7 @@ export function extractConvertedAmount(inventoryString: string, targetCurrency: 
 	return `0.00 ${targetCurrency}`;
 }
 
-export function extractNonReportingCurrencies(inventoryString: string, reportingCurrency: string): string {
+export function extractNonReportingCurrencies(inventoryString: string, operatingCurrency: string): string {
 	// Extract all currency amounts from the inventory string
 	const currencyRegex = /(-?[\d,]+\.?\d*)\s*([A-Z]{3,4})/g;
 	const matches = [];
@@ -224,8 +224,8 @@ export function extractNonReportingCurrencies(inventoryString: string, reporting
 		const amount = match[1];
 		const currency = match[2];
 		
-		// Skip the reporting currency - we only want other currencies
-		if (currency !== reportingCurrency) {
+		// Skip the operating currency - we only want other currencies
+		if (currency !== operatingCurrency) {
 			// Only include non-zero amounts
 			const numAmount = parseFloat(amount.replace(/,/g, ''));
 			if (numAmount !== 0) {

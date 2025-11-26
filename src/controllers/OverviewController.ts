@@ -38,7 +38,7 @@ export class OverviewController {
 			savingsRate: '0%',
 			chartConfig: null,
 			chartError: null,
-			currency: plugin.settings.reportingCurrency || 'USD',
+			currency: plugin.settings.operatingCurrency || 'USD',
 		});
 	}
 
@@ -46,12 +46,12 @@ export class OverviewController {
 	async loadData() {
 		this.state.update(s => ({ ...s, isLoading: true, error: null, chartError: null }));
 
-		const reportingCurrency = this.plugin.settings.reportingCurrency;
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		if (!reportingCurrency) {
 			this.state.set({
 				...get(this.state), // Svelte 4/5 way to get current value
 				isLoading: false,
-				error: "Reporting Currency is not set in plugin settings.",
+				error: "Operating currency is not set in plugin settings.",
 			});
 			return;
 		}

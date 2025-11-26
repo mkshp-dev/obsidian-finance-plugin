@@ -151,7 +151,20 @@ export default class BeancountPlugin extends Plugin {
 		this.registerMarkdownPostProcessor(this.inlineBqlProcessor.getProcessor(), -100);
 	}
 	
-	async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
+	async loadSettings() {
+		const raw = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+
+		// Migration: consolidate legacy `reportingCurrency` / `defaultCurrency` into `operatingCurrency`
+		if (!this.settings.operatingCurrency) {
+			const legacyReporting = (raw as any)?.reportingCurrency;
+			const legacyDefault = (raw as any)?.defaultCurrency;
+			const migrated = (legacyReporting || legacyDefault || DEFAULT_SETTINGS.operatingCurrency) as string;
+			this.settings.operatingCurrency = typeof migrated === 'string' ? migrated.toUpperCase() : DEFAULT_SETTINGS.operatingCurrency;
+			// Persist migrated value
+			await this.saveSettings();
+		}
+	}
 	
 	async saveSettings() { 
 		await this.saveData(this.settings); 

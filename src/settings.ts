@@ -4,13 +4,10 @@ import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './components/ConnectionSettings.svelte';
 
-
-
 export interface BeancountPluginSettings {
     beancountFilePath: string;
     beancountCommand: string;
-    defaultCurrency: string;
-    reportingCurrency: string;
+    operatingCurrency: string;
     maxTransactionResults: number;
     maxJournalResults: number;
     // BQL Code Block Settings
@@ -23,8 +20,7 @@ export interface BeancountPluginSettings {
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
-    defaultCurrency: 'USD',
-    reportingCurrency: 'INR',
+    operatingCurrency: 'USD',
     maxTransactionResults: 2000,
     maxJournalResults: 1000,
     // BQL Code Block Settings
@@ -90,18 +86,18 @@ export class BeancountSettingTab extends PluginSettingTab {
         containerEl.createEl('h3', { text: 'Transaction Form' });
 
         new Setting(containerEl)
-            .setName('Default currency')
-            .setDesc('The default currency to use in the transaction form.')
+            .setName('Operating currency')
+            .setDesc('The currency to use for transaction defaults and for consolidating totals (e.g., USD, INR).')
             .addText(text => {
                 const validationEl = this.createValidationElement(containerEl);
-                
+
                 text
                     .setPlaceholder('USD')
-                    .setValue(this.plugin.settings.defaultCurrency)
+                    .setValue(this.plugin.settings.operatingCurrency)
                     .onChange(async (value) => {
-                        this.plugin.settings.defaultCurrency = value.toUpperCase();
+                        this.plugin.settings.operatingCurrency = value.toUpperCase();
                         await this.plugin.saveSettings();
-                        
+
                         // Real-time validation
                         if (value.trim()) {
                             const validation = this.validateCurrency(value);
@@ -109,53 +105,22 @@ export class BeancountSettingTab extends PluginSettingTab {
                         } else {
                             validationEl.textContent = '';
                         }
-                        
+
                         // Update the input field to show uppercase
-                        text.setValue(this.plugin.settings.defaultCurrency);
+                        text.setValue(this.plugin.settings.operatingCurrency);
                     });
 
                 // Initial validation
-                if (this.plugin.settings.defaultCurrency) {
-                    const validation = this.validateCurrency(this.plugin.settings.defaultCurrency);
+                if (this.plugin.settings.operatingCurrency) {
+                    const validation = this.validateCurrency(this.plugin.settings.operatingCurrency);
                     this.updateValidationDisplay(validationEl, validation);
                 }
-                
+
                 return text;
             });
         
         new Setting(containerEl)
-            .setName('Reporting Currency')
-            .setDesc('The currency to consolidate all totals into (e.g., USD, INR). You must have "price" entries for this to work.')
-            .addText(text => {
-                const validationEl = this.createValidationElement(containerEl);
-                
-                text
-                    .setPlaceholder('USD')
-                    .setValue(this.plugin.settings.reportingCurrency)
-                    .onChange(async (value) => {
-                        this.plugin.settings.reportingCurrency = value.toUpperCase();
-                        await this.plugin.saveSettings();
-                        
-                        // Real-time validation
-                        if (value.trim()) {
-                            const validation = this.validateCurrency(value);
-                            this.updateValidationDisplay(validationEl, validation);
-                        } else {
-                            validationEl.textContent = '';
-                        }
-                        
-                        // Update the input field to show uppercase
-                        text.setValue(this.plugin.settings.reportingCurrency);
-                    });
-
-                // Initial validation
-                if (this.plugin.settings.reportingCurrency) {
-                    const validation = this.validateCurrency(this.plugin.settings.reportingCurrency);
-                    this.updateValidationDisplay(validationEl, validation);
-                }
-                
-                return text;
-            });
+            // NOTE: Reporting currency has been consolidated into the single Operating Currency setting above.
 
         // --- Performance Settings ---
         containerEl.createEl('h3', { text: 'Performance' });

@@ -3,7 +3,7 @@
 
 	// Props
 	export let accountList: string[] = [];
-	export let defaultCurrency: string = 'USD';
+	export let operatingCurrency: string = 'USD';
 
 	// State
 	let activeTab: 'transaction' | 'balance' | 'note' = 'transaction';
@@ -40,8 +40,8 @@
 	}
 	// Start with two empty postings
 	let postings: Posting[] = [
-		{ account: localStorage.getItem('beancount-lastTo') || 'Expenses:', amount: '', currency: defaultCurrency }, // Typically the expense
-		{ account: localStorage.getItem('beancount-lastFrom') || 'Assets:Checking', amount: '', currency: defaultCurrency } // Typically the source
+		{ account: localStorage.getItem('beancount-lastTo') || 'Expenses:', amount: '', currency: operatingCurrency }, // Typically the expense
+		{ account: localStorage.getItem('beancount-lastFrom') || 'Assets:Checking', amount: '', currency: operatingCurrency } // Typically the source
 	];
 	// -------------------------------
 
@@ -51,14 +51,14 @@
 	let noteText: string = '';
 	// Amount/Currency used by Balance tab
 	let amount: string = '';
-	let currency: string = defaultCurrency;
+	let currency: string = operatingCurrency;
 
 
 	const dispatch = createEventDispatcher();
 
 	// --- NEW: Functions to manage postings ---
 	function addPosting() {
-		postings = [...postings, { account: '', amount: '', currency: defaultCurrency }];
+		postings = [...postings, { account: '', amount: '', currency: operatingCurrency }];
 	}
 
 	function removePosting(index: number) {

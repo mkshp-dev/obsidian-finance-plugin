@@ -51,7 +51,7 @@ export class BalanceSheetController {
 			totalLiabilities: 0,
 			totalEquity: 0,
 			totalLiabEquity: 0,
-			currency: plugin.settings.reportingCurrency || 'USD',
+			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
 			valuationMethod: 'convert' as const,
@@ -60,7 +60,7 @@ export class BalanceSheetController {
 
 	// Helper method to build hierarchical account structure
 	private buildAccountHierarchy(accounts: [string, string][], accountType: string, valuationMethod: 'convert' | 'cost' | 'units' = 'convert'): AccountItem[] {
-		const reportingCurrency = this.plugin.settings.reportingCurrency;
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		const accountMap = new Map<string, AccountItem>();
 		const rootAccounts: AccountItem[] = [];
 
@@ -188,10 +188,10 @@ export class BalanceSheetController {
 	// The main data-fetching method
 	async loadData(valuationMethod: 'convert' | 'cost' | 'units' = 'convert') {
 		this.state.update(s => ({ ...s, isLoading: true, error: null }));
-		const reportingCurrency = this.plugin.settings.reportingCurrency;
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		
 		if (valuationMethod === 'convert' && !reportingCurrency) {
-			this.state.update(s => ({ ...s, isLoading: false, error: "Reporting Currency not set." }));
+			this.state.update(s => ({ ...s, isLoading: false, error: "Operating currency not set." }));
 			return;
 		}
 
