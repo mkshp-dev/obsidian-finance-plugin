@@ -8,9 +8,7 @@
     const dispatch = createEventDispatcher();
 
     // Extract the stores from the controller
-    $: commoditiesStore = controller.commodities;
     $: filteredCommoditiesStore = controller.filteredCommodities;
-    $: selectedCommodityStore = controller.selectedCommodity;
     $: searchTermStore = controller.searchTerm;
     $: loadingStore = controller.loading;
     $: errorStore = controller.error;
@@ -53,24 +51,9 @@
     // template. Keep logic focused on rendering and delegating actions to the
     // controller to avoid duplication and improve testability.
 
-    function getCommodityTypeIcon(symbol: string): string {
-        // Common currency symbols
-        const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'INR', 'CNY'];
-        if (currencies.includes(symbol)) {
-            return '💱'; // Currency exchange icon
-        }
-        
-        // Cryptocurrency patterns
-        if (symbol.match(/^(BTC|ETH|ADA|DOT|LINK|UNI|AAVE|SOL|AVAX|MATIC)$/)) {
-            return '₿'; // Bitcoin icon for crypto
-        }
-        
-        // Stock/ETF patterns (typically longer symbols)
-        if (symbol.length > 3) {
-            return '📈'; // Stock chart icon
-        }
-        
-        return '🪙'; // Generic commodity icon
+    function getCommodityTypeIcon(_: string): string {
+        // Use a single generic commodity icon for all items.
+        return '🪙';
     }
 </script>
 
