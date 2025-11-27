@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import type { AccountsController } from '../../controllers/AccountsController';
+	import type { AccountDetail, AccountNode } from '../../../models/account';
+	import type { AccountsController } from '../../../controllers/AccountsController';
 	import type { AccountDetail, AccountNode } from '../../types/index';
 
 	export let accountsController: AccountsController;

@@ -1,7 +1,7 @@
 <!-- src/components/tabs/CommoditiesTab.svelte -->
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
-    import type { CommoditiesController, CommodityInfo } from '../../controllers/CommoditiesController';
+    import type { CommoditiesController, CommodityInfo } from '../../../controllers/CommoditiesController';
 
     export let controller: CommoditiesController;
 
