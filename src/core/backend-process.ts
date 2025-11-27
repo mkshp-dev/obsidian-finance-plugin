@@ -33,8 +33,8 @@ export class BackendProcess {
 
         try {
             // Get full path to beancount file
-            const beancountFileRelative = this.plugin.settings.beancountFilePath;
-            if (!beancountFileRelative) {
+            const fullBeancountPath = this.plugin.settings.beancountFilePath;
+            if (!fullBeancountPath) {
                 throw new Error('Beancount file path not configured.');
             }
 
@@ -44,8 +44,6 @@ export class BackendProcess {
             } else {
                 throw new Error('Vault is not file system based');
             }
-
-            const fullBeancountPath = join(vaultPath, beancountFileRelative);
 
             // Use SystemDetector to determine optimal setup
             const systemDetector = SystemDetector.getInstance();
