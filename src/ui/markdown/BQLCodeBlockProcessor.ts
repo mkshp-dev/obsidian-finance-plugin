@@ -1,7 +1,7 @@
 // src/components/BQLCodeBlockProcessor.ts
 
 import type { MarkdownPostProcessorContext } from 'obsidian';
-import type BeancountPlugin from '../main';
+import type BeancountPlugin from '../../main';
 
 export class BQLCodeBlockProcessor {
 	private plugin: BeancountPlugin;

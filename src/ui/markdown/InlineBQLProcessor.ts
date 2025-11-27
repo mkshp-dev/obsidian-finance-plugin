@@ -1,8 +1,8 @@
 // src/components/InlineBQLProcessor.ts
 
 import type { MarkdownPostProcessorContext } from 'obsidian';
-import type BeancountPlugin from '../main';
-import { ShorthandParser } from '../utils/shorthandParser';
+import type BeancountPlugin from '../../main';
+import { ShorthandParser } from '../../utils/shorthandParser';
 
 export class InlineBQLProcessor {
 	private plugin: BeancountPlugin;
