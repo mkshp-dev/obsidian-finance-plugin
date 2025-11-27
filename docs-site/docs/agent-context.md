@@ -62,7 +62,7 @@ The plugin uses a hybrid architecture:
 
 ### System Detection
 - `src/utils/SystemDetector.ts` is the source of truth for paths.
-- Handles `wsl` path conversion (`/mnt/c/...` <-> `C:\...`).
+- Handles `wsl` path conversion (`/mnt/c/...` to/from `C:\...`).
 
 ## 🛠️ Development Tips
 
