@@ -1,17 +1,17 @@
-// src/views/unified-dashboard-view.ts
+// src/ui/views/dashboard/unified-dashboard-view.ts
 
 import { ItemView, WorkspaceLeaf } from 'obsidian';
-import type BeancountPlugin from '../main';
+import type BeancountPlugin from '../../../main';
 import UnifiedDashboardComponent from './UnifiedDashboardView.svelte';
-import { CommodityDetailModal } from '../components/CommodityDetailModal';
+import { CommodityDetailModal } from '../../modals/CommodityDetailModal';
 
 // --- Import ALL controllers ---
-import { OverviewController } from '../controllers/OverviewController';
-import { TransactionController } from '../controllers/TransactionController';
-import { BalanceSheetController } from '../controllers/BalanceSheetController';
-import { AccountsController } from '../controllers/AccountsController';
-import { CommoditiesController } from '../controllers/CommoditiesController';
-import { JournalController } from '../controllers/JournalController';
+import { OverviewController } from '../../../controllers/OverviewController';
+import { TransactionController } from '../../../controllers/TransactionController';
+import { BalanceSheetController } from '../../../controllers/BalanceSheetController';
+import { AccountsController } from '../../../controllers/AccountsController';
+import { CommoditiesController } from '../../../controllers/CommoditiesController';
+// JournalController is replaced by plugin.journalStore
 // -----------------------------
 
 export const UNIFIED_DASHBOARD_VIEW_TYPE = "beancount-unified-dashboard";
@@ -26,8 +26,6 @@ export class UnifiedDashboardView extends ItemView {
 	balanceSheetController: BalanceSheetController;
 	accountsController: AccountsController;
 	commoditiesController: CommoditiesController;
-	journalController: JournalController;
-	// --- REMOVED all state properties ---
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
 		super(leaf);
@@ -38,7 +36,6 @@ export class UnifiedDashboardView extends ItemView {
 		this.balanceSheetController = new BalanceSheetController(this.plugin);
 		this.accountsController = new AccountsController(this.plugin);
 		this.commoditiesController = new CommoditiesController(this.plugin);
-		this.journalController = new JournalController(this.plugin);
 	}
 
 	getViewType(): string { return UNIFIED_DASHBOARD_VIEW_TYPE; }
@@ -50,11 +47,11 @@ export class UnifiedDashboardView extends ItemView {
 		try {
 			await Promise.all([
 				this.overviewController.loadData(),
-				this.transactionController.loadFilterData(), // TransactionController doesn't have loadData
+				this.transactionController.loadFilterData(),
 				this.balanceSheetController.loadData(),
 				this.accountsController.loadData(),
 				this.commoditiesController.loadData(),
-				this.journalController.loadData()
+				this.plugin.journalStore.refresh() // Use new store
 			]);
 		} catch (error) {
 			console.error('Error refreshing dashboard data:', error);
@@ -74,7 +71,7 @@ export class UnifiedDashboardView extends ItemView {
 				balanceSheetController: this.balanceSheetController,
 				accountsController: this.accountsController,
 				commoditiesController: this.commoditiesController,
-				journalController: this.journalController
+				journalStore: this.plugin.journalStore // Pass store instead of controller
 			}
 		});
 
@@ -98,13 +95,5 @@ export class UnifiedDashboardView extends ItemView {
 		if (this.component) {
 			this.component.$destroy();
 		}
-		
-		// Cleanup controllers
-		if (this.journalController) {
-			this.journalController.cleanup();
-		}
 	}
-
-	// --- REMOVED handleFilterChange and loadOverviewData ---
-	// --- REMOVED updateSvelteProps ---
 }

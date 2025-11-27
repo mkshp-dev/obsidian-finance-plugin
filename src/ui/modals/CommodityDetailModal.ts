@@ -1,7 +1,7 @@
 import { App, Modal, Notice } from 'obsidian';
-import type BeancountPlugin from '../main';
+import type BeancountPlugin from '../../main';
 import CommodityDetailModalComponent from './CommodityDetailModal.svelte';
-import type { CommoditiesController } from '../controllers/CommoditiesController';
+import type { CommoditiesController } from '../../controllers/CommoditiesController';
 import { get } from 'svelte/store';
 
 export class CommodityDetailModal extends Modal {

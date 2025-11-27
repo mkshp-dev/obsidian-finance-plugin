@@ -1,8 +1,8 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
     import { Notice } from 'obsidian';
-    import type BeancountPlugin from '../main';
-    import { SystemDetector } from '../utils/SystemDetector';
+    import type BeancountPlugin from '../../../main';
+    import { SystemDetector } from '../../../utils/SystemDetector';
 
     export let plugin: BeancountPlugin;
     

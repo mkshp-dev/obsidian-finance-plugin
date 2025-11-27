@@ -2,12 +2,18 @@
 
 import { Plugin } from 'obsidian';
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
-import { BeancountView, BEANCOUNT_VIEW_TYPE } from './views/sidebar-view'; 
-import { UnifiedTransactionModal } from './components/UnifiedTransactionModal';
+import { BeancountView, BEANCOUNT_VIEW_TYPE } from './ui/views/sidebar/sidebar-view';
+import { UnifiedTransactionModal } from './ui/modals/UnifiedTransactionModal';
 import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/index';
-import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './views/unified-dashboard-view';
-import { BQLCodeBlockProcessor } from './components/BQLCodeBlockProcessor';
-import { InlineBQLProcessor } from './components/InlineBQLProcessor';
+import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
+import { BQLCodeBlockProcessor } from './ui/markdown/BQLCodeBlockProcessor';
+import { InlineBQLProcessor } from './ui/markdown/InlineBQLProcessor';
+
+import { BackendProcess } from './core/backend-process';
+import { ApiClient } from './api/client';
+import { JournalService } from './services/journal.service';
+import { createJournalStore } from './stores/journal.store';
+
 // --------------------------------------------------
 
 export default class BeancountPlugin extends Plugin {
@@ -15,8 +21,20 @@ export default class BeancountPlugin extends Plugin {
 	private bqlProcessor: BQLCodeBlockProcessor;
 	private inlineBqlProcessor: InlineBQLProcessor;
 
+    // Services
+    public backendProcess: BackendProcess;
+    public apiClient: ApiClient;
+    public journalService: JournalService;
+    public journalStore: ReturnType<typeof createJournalStore>;
+
 	async onload() {
 		await this.loadSettings();
+
+        // Initialize Core Services
+        this.backendProcess = new BackendProcess(this);
+        this.apiClient = new ApiClient(this.backendProcess);
+        this.journalService = new JournalService(this.apiClient);
+        this.journalStore = createJournalStore(this.journalService);
 
 		// Initialize and register BQL code block processor
 		this.registerBQLProcessor();
@@ -131,7 +149,9 @@ export default class BeancountPlugin extends Plugin {
 		};
 	}
 
-	onunload() {}
+	onunload() {
+        this.backendProcess?.stop();
+    }
 	
 	// Register BQL processor
 	private registerBQLProcessor() {
