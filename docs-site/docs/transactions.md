@@ -1,33 +1,75 @@
 ---
-sidebar_position: 7
+sidebar_position: 4
 ---
 
 # Transactions
 
-This page explains how the plugin creates, edits and deletes transactions and how those actions map to Beancount file edits.
+The **Transactions** module provides a powerful interface for managing your financial entries. The plugin features a **Unified Entry Modal** that handles Transactions, Balance Assertions, and Notes in a single workflow.
 
-Creating transactions (UI)
-- Use the New Transaction button in the Unified Dashboard or the Transaction modal (`src/components/TransactionForm.svelte`).
-- The frontend validates required fields (date, narration, postings) and sends `POST /transactions` to the backend.
+## ➕ Creating Entries
 
-Backend mapping
-- `POST /transactions` -> `add_entry_to_file` (appends transaction and creates a backup)
-- `PUT /transactions/<id>` -> `update_transaction_in_file` (finds transaction by `entry.meta['lineno']` and replaces the text block)
-- `DELETE /transactions/<id>` -> `delete_transaction_from_file`
+To create a new entry, click the **"Add Transaction"** button in the dashboard or use the command **"Add Beancount Transaction"**.
 
-Safety and backups
-- All modifying operations create a `'ledger.beancount.backup.YYYYmmdd_HHMMSS'` file before writing.
-- When updating, the code finds start/end lines by inspecting indentation and replaces the block atomically.
+### Unified Entry Modal
 
-Example: updating a transaction (client request)
+The modal has three tabs for different entry types:
 
-```json
-PUT /transactions/abc123
-{
-  "date": "2025-01-01",
-  "narration": "Updated",
-  "postings": [ {"account":"Assets:Bank","amount":"100.00","currency":"USD"}, {"account":"Expenses:Food"} ]
-}
-```
+#### 1. 💰 Transaction Tab
+Used for standard double-entry accounting records.
+- **Date**: Defaults to today.
+- **Payee**: Who the transaction is with (auto-completes from existing payees).
+- **Narration**: Description of the transaction.
+- **Tags**: Optional categorization tags.
+- **Postings**:
+    - **Account**: Source or destination account (auto-completes).
+    - **Amount**: Numerical value.
+    - **Currency**: Transaction currency.
+- **Auto-Balancing**: If you leave the amount empty on the last posting, the plugin calculates it automatically to ensure `Sum = 0`.
 
-If the backend cannot locate the transaction by lineno it returns a helpful error. Check backend logs (forwarded to the Obsidian dev console) to diagnose missing lineno or parse issues.
+#### 2. ⚖️ Balance Tab
+Used to assert the balance of an account at a specific point in time (Reconciliation).
+- **Date**: Date of the assertion.
+- **Account**: The account to check.
+- **Amount**: The known correct balance.
+- **Tolerance**: (Optional) Allowable difference before Beancount flags an error.
+
+#### 3. 📝 Note Tab
+Used to add context or documentation to an account.
+- **Date**: Date of the note.
+- **Account**: The relevant account.
+- **Comment**: The text of the note.
+
+---
+
+## ✨ Smart Features
+
+### Validation
+The form includes real-time validation:
+- **Syntax Check**: Ensures amounts are numbers and dates are valid.
+- **Balance Check**: Visual indicator if the transaction creates an imbalance.
+- **Required Fields**: Highlights missing information before saving.
+
+### Auto-Complete
+The form learns from your existing Beancount file:
+- **Accounts**: Suggests accounts from your hierarchy.
+- **Payees**: Suggests payees you've used before.
+- **Tags**: Suggests existing tags.
+
+---
+
+## 📋 Managing Transactions
+
+The **Transactions Tab** in the dashboard lists your recent history.
+
+- **Search**: Real-time filtering by text, account, or amount.
+- **Filter**: Filter by date range or specific accounts.
+- **Edit**: Click any transaction to open the Unified Modal with pre-filled data.
+- **Delete**: Remove transactions with a confirmation dialog.
+
+---
+
+## 🛡️ Data Safety
+
+- **Backups**: The plugin creates a backup of your Beancount file before *every* write operation (Create, Update, Delete).
+- **Atomic Writes**: Edits are performed carefully to preserve the surrounding file structure.
+- **Formatting**: The plugin respects standard Beancount formatting conventions.

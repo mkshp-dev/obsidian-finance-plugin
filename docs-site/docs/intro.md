@@ -2,28 +2,47 @@
 sidebar_position: 1
 ---
 
-# Obsidian Finance Plugin — Overview
+# Introduction
 
-This documentation covers the **Obsidian Finance Plugin**: a Beancount-integrated dashboard for Obsidian that provides transaction management, commodity metadata editing (logo & price sources), and price updates via `bean-price`.
+The **Obsidian Finance Plugin** is a comprehensive financial dashboard for [Obsidian.md](https://obsidian.md) that seamlessly integrates with [Beancount](https://beancount.github.io/docs/), the popular plain-text accounting system.
 
-Key features:
-- Unified dashboard for transactions, balances, and charts.
-- Commodity metadata editor (logo URL, price source) with safe file writes.
-- Backend API that operates directly on your Beancount ledger (`src/backend/journal_api.py`).
+This plugin transforms your Obsidian vault into a powerful financial analysis tool, allowing you to manage transactions, visualize your net worth, and track your portfolio without leaving your note-taking environment.
 
-Quick links:
-- Installation: `installation.md`
-- Quick start: `quick-start.md`
-- Commodities & prices: `commodities.md`, `prices.md`
-- Backend API reference: `backend-api.md`
+## 🌟 Core Value
 
-This site is kept with Docusaurus under `docs-site/`. To preview locally:
+- **Privacy First**: Your financial data stays in your local text files. No cloud servers, no third-party access.
+- **Plain Text Accounting**: Leverages the power and flexibility of Beancount.
+- **Integrated Workflow**: Manage your finances alongside your daily notes and journals.
+- **Visual Analytics**: Beautiful, interactive charts and dashboards.
+- **Powerful Querying**: Native support for Beancount Query Language (BQL) directly in your notes.
 
-```bash
-cd docs-site
-npm install
-npm run start
-# Visit http://localhost:3000
-```
+## 🚀 Key Features
 
-If you are a developer, see `development.md` for the developer workflow and how the plugin loads the Python backend via `src/backend/BackendManager.ts`.
+*   **📊 Overview Dashboard**: Real-time Net Worth, Monthly Trends, and Asset Allocation.
+*   **💸 Transaction Management**: Unified entry modal for Transactions, Balance Assertions, and Notes with smart validation.
+*   **🏦 Account Hierarchy**: Interactive tree view with real-time balances and drill-down capability.
+*   **📋 Journal View**: Full Beancount ledger interface with server-side filtering and Fava-style cards.
+*   **🔍 BQL Integration**: Execute live queries in your notes using Code Blocks or Inline Queries.
+*   **🪙 Commodities & Pricing**: Yahoo Finance integration for easy symbol search and automated price updates.
+*   **⚙️ Smart Connection**: Automatic detection of Python/Beancount environment (including WSL support).
+
+## 📚 Documentation Guide
+
+*   **[Installation](./installation.md)**: How to set up the plugin and its dependencies.
+*   **[Dashboard](./dashboard.md)**: Explore the visual analytics and account views.
+*   **[BQL Queries](./bql.md)**: Learn how to query your data directly in Obsidian notes.
+*   **[Transactions](./transactions.md)**: How to create and manage financial entries.
+*   **[Commodities](./commodities.md)**: Managing assets, currencies, and prices.
+*   **[Journal & Backend](./journal.md)**: Understanding the ledger view and the background process.
+*   **[Settings](./settings.md)**: Configuration and connection management.
+*   **[Troubleshooting](./troubleshooting.md)**: Solutions for common issues.
+*   **[Agent Context](./agent-context.md)**: Technical overview for AI assistants and developers.
+
+## 🔧 Requirements
+
+1.  **Python 3.8+**
+2.  **Beancount v3+** (`pip install beancount`)
+3.  **bean-query** (included with Beancount)
+4.  **bean-price** (optional, for price updates)
+
+The plugin supports Windows, macOS, Linux, and WSL (Windows Subsystem for Linux).
