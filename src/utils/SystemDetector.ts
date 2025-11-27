@@ -684,10 +684,10 @@ export class SystemDetector {
         
         // Define bean-check commands to test in order of preference
         let beanCheckCommands = [
-            'bean-check',
-            'python3 -m beancount.loader',
-            'python -m beancount.loader',
-            'py -m beancount.loader'
+            'bean-check'
+            // 'python3 -m beancount.loader',
+            // 'python -m beancount.loader',
+            // 'py -m beancount.loader'
         ];
         
         // Add WSL prefix if needed
