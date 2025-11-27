@@ -403,6 +403,20 @@ export class SystemDetector {
     }
 
     /**
+     * Convert Windows path to WSL path format
+     */
+    public convertWindowsToWSLPath(windowsPath: string): string {
+        // Convert C:\path\to\file to /mnt/c/path/to/file
+        const match = windowsPath.match(/^([A-Za-z]):(.*)/);
+        if (match) {
+            const driveLetter = match[1].toLowerCase();
+            const restOfPath = match[2].replace(/\\/g, '/');
+            return `/mnt/${driveLetter}${restOfPath}`;
+        }
+        return windowsPath.replace(/\\/g, '/');
+    }
+
+    /**
      * Get appropriate command format for current system
      */
     formatCommand(baseCommand: string, args: string[] = []): string {
@@ -1097,19 +1111,6 @@ export class SystemDetector {
         return results;
     }
 
-    /**
-     * Convert Windows path to WSL path format
-     */
-    private convertWindowsToWSLPath(windowsPath: string): string {
-        // Convert C:\path\to\file to /mnt/c/path/to/file
-        const match = windowsPath.match(/^([A-Za-z]):(.*)/);
-        if (match) {
-            const driveLetter = match[1].toLowerCase();
-            const restOfPath = match[2].replace(/\\/g, '/');
-            return `/mnt/${driveLetter}${restOfPath}`;
-        }
-        return windowsPath;
-    }
 }
 
 export const systemDetector = SystemDetector.getInstance();
