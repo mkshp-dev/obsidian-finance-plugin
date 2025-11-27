@@ -3,6 +3,7 @@ import { exec, spawn, ChildProcess } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import type BeancountPlugin from '../main';
+import { SystemDetector } from '../utils/SystemDetector';
 
 interface BackendStatus {
     isRunning: boolean;
@@ -30,46 +31,87 @@ export class BackendProcess {
         this.isStarting = true;
 
         try {
-            const pluginDir = (this.plugin as any).manifest.dir || '';
-            const backendDir = join(pluginDir, 'src', 'backend');
-            const scriptPath = join(backendDir, 'journal_api.py');
-
-            // Fallback for dev environment
-            if (!existsSync(scriptPath)) {
-                console.warn(`Backend script not found at ${scriptPath}`);
-                // Add fallback logic if necessary, or fail fast
-            }
-
-            const beancountFile = this.plugin.settings.beancountFilePath;
-            if (!beancountFile) {
+            // Get full path to beancount file
+            const beancountFileRelative = this.plugin.settings.beancountFilePath;
+            if (!beancountFileRelative) {
                 throw new Error('Beancount file path not configured.');
             }
 
-            const pythonCmd = await this.detectPythonCommand();
-            if (!pythonCmd) {
-                throw new Error('Python not found.');
+            const vaultPath = this.plugin.app.vault.adapter.getBasePath();
+            const fullBeancountPath = join(vaultPath, beancountFileRelative);
+
+            // Use SystemDetector to determine optimal setup
+            const systemDetector = SystemDetector.getInstance();
+            // Determine preference from existing settings
+            const preferredWSL = this.plugin.settings.beancountCommand?.includes('wsl') || false;
+
+            const setup = await systemDetector.detectOptimalBeancountSetup(fullBeancountPath, preferredWSL);
+
+            if (!setup.python) {
+                throw new Error('Python not found or not configured properly.');
             }
 
-            const useWSL = this.plugin.settings.beancountCommand?.includes('wsl');
+            const pythonCmd = setup.python;
+            const useWSL = setup.useWSL;
 
-            const actualBeancountFile = useWSL ? this.convertToWSLPath(beancountFile) : beancountFile;
-            const actualScriptPath = useWSL ? this.convertToWSLPath(scriptPath) : scriptPath;
+            // Construct path to journal_api.py
+            // We use the same logic as ConnectionSettings to be consistent
+            // But we try to rely on manifest.dir if possible to be robust
+            const pluginDir = (this.plugin as any).manifest.dir; // Relative to vault usually
 
-            await this.ensureDependencies(pythonCmd, useWSL);
+            // Construct absolute path to script
+            let scriptPath = join(vaultPath, pluginDir, 'src', 'backend', 'journal_api.py');
+
+            // If we are in WSL, we need to convert paths
+            let actualScriptPath = scriptPath;
+            let actualBeancountFile = fullBeancountPath;
+
+            if (useWSL && process.platform === 'win32') {
+                actualScriptPath = systemDetector.convertWindowsToWSLPath(scriptPath);
+                actualBeancountFile = systemDetector.convertWindowsToWSLPath(fullBeancountPath);
+            }
+
+            // Ensure dependencies (using the detected python command)
+            await this.ensureDependencies(pythonCmd, useWSL, setup.pythonPackages);
 
             let command: string;
             let args: string[];
 
             if (useWSL) {
                 command = 'wsl';
-                args = [pythonCmd, actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                // When using wsl command, the first arg is the command inside wsl
+                // However, pythonCmd might already be "wsl python3" or similar?
+                // detectOptimalBeancountSetup returns the full command string like "wsl python3"
+                // But spawn expects command and args separately.
+
+                // If pythonCmd is "wsl python3", we split it.
+                // Or we can just use "wsl" as command and ["python3", ...] as args.
+
+                // detectOptimalBeancountSetup returns "wsl python3" or "python3"
+                const parts = pythonCmd.split(' ');
+                if (parts[0] === 'wsl') {
+                    // pythonCmd is "wsl python3"
+                    // command is 'wsl'
+                    // args start with 'python3'
+                    args = [...parts.slice(1), actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                } else {
+                     // Should not happen if useWSL is true based on our logic, unless it's just 'python3' running in WSL?
+                     // If setup.useWSL is true, it means we should run in WSL.
+                     args = [pythonCmd, actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                }
             } else {
                 command = pythonCmd;
                 args = [actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
             }
 
+            // Fix for spawn: command must be the executable
+            // If command is "python3", it's fine.
+            // If command is "wsl", it's fine.
+
+            console.log(`Starting backend: ${command} ${args.join(' ')}`);
+
             this.backendProcess = spawn(command, args, {
-                cwd: useWSL ? undefined : backendDir,
+                cwd: undefined, // We are providing full paths, so cwd shouldn't matter as much, but undefined lets it inherit
                 stdio: ['pipe', 'pipe', 'pipe'],
                 detached: false
             });
@@ -89,10 +131,6 @@ export class BackendProcess {
             // Log stdout/stderr
             this.backendProcess.stdout?.on('data', d => console.log('[Backend]', d.toString()));
             this.backendProcess.stderr?.on('data', d => console.error('[Backend]', d.toString()));
-
-            // Wait for health check in the API Client layer, but here we just wait a bit or assume started
-            // Ideally we should wait for a "Ready" signal or let the API client retry.
-            // For now, let's keep the wait logic here to ensure process stability
 
             this.isStarting = false;
             this.retryCount = 0;
@@ -127,35 +165,31 @@ export class BackendProcess {
         };
     }
 
-    private async detectPythonCommand(): Promise<string | null> {
-        const useWSL = this.plugin.settings.beancountCommand?.includes('wsl');
-        const candidates = useWSL ? ['python3', 'python'] : ['python', 'python3', 'py'];
+    private async ensureDependencies(pythonCmd: string, useWSL: boolean, currentPackages: any): Promise<void> {
+        const requiredPackages = ['beancount', 'flask', 'flask-cors'];
 
-        for (const cmd of candidates) {
-            try {
-                const testCmd = useWSL ? `wsl ${cmd}` : cmd;
-                await this.runCommand(`${testCmd} --version`);
-                return cmd;
-            } catch {
+        for (const pkg of requiredPackages) {
+            const pkgNameInCheck = pkg.replace('-', '_'); // e.g. flask-cors -> flask_cors
+
+            // Check if package was already detected by SystemDetector
+            if (currentPackages && currentPackages[pkgNameInCheck] && currentPackages[pkgNameInCheck] !== 'unknown') {
                 continue;
             }
-        }
-        return null;
-    }
 
-    private async ensureDependencies(pythonCmd: string, useWSL: boolean): Promise<void> {
-        // ... (Simplified for brevity, but should include the logic from BackendManager)
-         const requiredPackages = ['beancount', 'flask', 'flask-cors'];
-         for (const pkg of requiredPackages) {
-             try {
-                 const actualCmd = useWSL ? `wsl ${pythonCmd}` : pythonCmd;
-                 await this.runCommand(`${actualCmd} -c "import ${pkg.replace('-', '_')}"`);
-             } catch {
-                 console.log(`Installing ${pkg}...`);
-                 const actualCmd = useWSL ? `wsl ${pythonCmd}` : pythonCmd;
-                 await this.runCommand(`${actualCmd} -m pip install ${pkg}`);
-             }
-         }
+            try {
+                // Double check if not in the report (or if we want to be sure)
+                const actualCmd = pythonCmd; // pythonCmd already includes 'wsl' prefix if needed? No, see start() logic.
+
+                // We need the raw python command to run with runCommand
+                // If pythonCmd is "wsl python3", runCommand can handle it?
+                // runCommand uses exec.
+
+                await this.runCommand(`${pythonCmd} -c "import ${pkgNameInCheck}"`);
+            } catch {
+                console.log(`Installing ${pkg}...`);
+                await this.runCommand(`${pythonCmd} -m pip install ${pkg}`);
+            }
+        }
     }
 
     private runCommand(command: string): Promise<string> {
@@ -165,16 +199,5 @@ export class BackendProcess {
                 else resolve(stdout.trim());
             });
         });
-    }
-
-    private convertToWSLPath(windowsPath: string): string {
-        if (windowsPath.startsWith('/mnt/') || windowsPath.startsWith('/')) return windowsPath;
-        const match = windowsPath.match(/^([A-Za-z]):(.*)/);
-        if (match) {
-            const drive = match[1].toLowerCase();
-            const path = match[2].replace(/\\/g, '/');
-            return `/mnt/${drive}${path}`;
-        }
-        return windowsPath.replace(/\\/g, '/');
     }
 }
