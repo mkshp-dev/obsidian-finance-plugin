@@ -2,10 +2,10 @@
 import { ItemView, WorkspaceLeaf, Notice, MarkdownRenderer, TFile } from 'obsidian';
 import { exec } from 'child_process';
 import type { ExecException } from 'child_process';
-import type BeancountPlugin from '../main';
+import type BeancountPlugin from '../../../main';
 import BeancountViewComponent from './SidebarView.svelte'; // Assuming this is the correct Svelte component for the sidebar
-import { runQuery, parseSingleValue, convertWslPathToWindows, extractConvertedAmount } from '../utils/index';
-import * as queries from '../queries/index';
+import { runQuery, parseSingleValue, convertWslPathToWindows, extractConvertedAmount } from '../../../utils/index';
+import * as queries from '../../../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 // ----------------------------------------
 

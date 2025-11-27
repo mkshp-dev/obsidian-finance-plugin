@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
-	import type { AccountNode } from '../../types/index';
-	import { parseAmount, debounce } from '../../utils/index';
-	import type { TransactionController } from '../../controllers/TransactionController'; // Import controller type
+	import type { AccountNode } from '../../../models/account';
+	import { parseAmount, debounce } from '../../../utils/index';
+	import type { TransactionController } from '../../../controllers/TransactionController'; // Import controller type
 
 	// --- PROPS ---
 	// Receive the controller

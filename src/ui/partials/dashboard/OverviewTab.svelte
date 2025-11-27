@@ -1,10 +1,10 @@
 <script lang="ts">
-	import CardComponent from '../CardComponent.svelte';
-	import ChartComponent from '../ChartComponent.svelte';
-	import type { OverviewController } from '../../controllers/OverviewController';
+	import CardComponent from '../../common/CardComponent.svelte';
+	import ChartComponent from '../../common/ChartComponent.svelte';
+	import type { OverviewController } from '../../../controllers/OverviewController';
 	import type { ChartConfiguration } from 'chart.js/auto';
 	import { writable, type Writable } from 'svelte/store'; // Import writable
-	import type { OverviewState } from '../../controllers/OverviewController'; // Import the State type
+	import type { OverviewState } from '../../../controllers/OverviewController'; // Import the State type
 
 	// --- Receive the controller ---
 	export let controller: OverviewController;

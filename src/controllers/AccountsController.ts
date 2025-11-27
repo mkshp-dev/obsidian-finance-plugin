@@ -5,7 +5,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { buildAccountTree, parseAmount } from '../utils/index';
 import { parse as parseCsv } from 'csv-parse/sync';
-import type { AccountNode, AccountDetail } from '../types/index';
+import type { AccountNode, AccountDetail } from '../models/account';
 
 // Define the shape of our accounts state
 export interface AccountsState {
