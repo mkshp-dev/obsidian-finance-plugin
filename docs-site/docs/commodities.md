@@ -2,32 +2,93 @@
 sidebar_position: 5
 ---
 
-# Commodities
+# Commodities & Prices
 
-The Commodities page explains how commodity metadata is managed and how the UI maps to file changes.
+The Commodities tab provides tools to manage your assets, currencies, and their prices. It features a simplified integration with Yahoo Finance for easy symbol configuration.
 
-Metadata fields
-- `logo`: URL for the commodity logo
-- `price`: bean-price style source (string) used by `bean-price` or the plugin's validation
+## 🪙 Commodities Management
 
-How editing works
-1. Open the Commodities tab in the Unified Dashboard.
-2. Select a commodity and click Edit — this opens a modal populated from the backend `GET /commodities/<symbol>` which reads the `data.Commodity` directive and filters internal metadata keys (see `filter_user_metadata` in `src/backend/journal_api.py`).
-3. When you Save, the frontend calls `PUT /commodities/<symbol>` with payload `{ "metadata": { ... } }`. The backend's `update_commodity_metadata` will:
-   - Attempt to find the original commodity declaration by `entry.meta['lineno']` and edit in-place.
-   - If lineno is missing or cannot be used, fall back to appending a new declaration using `create_commodity_declaration`.
+The Commodities tab displays all commodities defined in your Beancount file in a compact card layout.
 
-Example payload
+### Visual Status Indicators
+Each card has a visual indicator for its price update status:
+- 🟢 **Automated**: The commodity has a configured price source (e.g., Yahoo Finance).
+- ⚪ **Manual**: The commodity has no automated price source configured.
 
-```json
-{
-  "metadata": { "logo": "https://example.com/logo.png", "price": "bean-price example" }
-}
+### Editing Metadata
+You can edit the metadata for any commodity (e.g., logo, price source) directly from the dashboard:
+1.  Click on a commodity card.
+2.  Click **Edit** to open the metadata modal.
+3.  Update the **Logo URL** or **Price Source**.
+4.  **Save** to update your Beancount file.
+
+*Note: The plugin safely updates the `commodity` directive in your file, preserving other metadata.*
+
+---
+
+## 📈 Yahoo Finance Integration
+
+The plugin simplifies finding and configuring ticker symbols for automated price fetching using `bean-price`.
+
+### Symbol Search Workflow
+
+1.  **Browse Financial Websites**: The "Add Commodity" or "Edit" views provide direct links to major financial sites:
+    - Yahoo Finance
+    - Google Finance
+    - Bloomberg
+    - MarketWatch
+    - Investing.com
+    - Morningstar
+
+2.  **Find Your Symbol**: Search for your stock, ETF, or cryptocurrency on one of these sites (e.g., `AAPL` for Apple, `BTC-USD` for Bitcoin).
+
+3.  **Quick Examples**: The interface provides a library of common symbols:
+    - **Stocks**: AAPL, MSFT, GOOGL, AMZN, TSLA...
+    - **ETFs**: SPY, QQQ, VTI, VOO...
+    - **Crypto**: BTC-USD, ETH-USD, SOL-USD...
+
+4.  **Configure Price Source**:
+    - Enter the symbol manually.
+    - Or click an example to automatically generate the price source string: `USD:yahoo/SYMBOL`.
+
+### Benefits
+- **No API Keys**: Relies on public data sources supported by `bean-price`.
+- **Reliable**: Uses official ticker symbols.
+- **Flexible**: Works with any symbol Yahoo Finance supports (Stocks, Forex, Crypto).
+
+---
+
+## 💸 Price Updates
+
+The plugin can run `bean-price` to fetch the latest prices for your configured commodities.
+
+### Prerequisites
+- **bean-price**: Must be installed (`pip install beancount` usually includes it, or install separately).
+- **Configuration**: Commodities must have a `price` metadata field (e.g., `price: "USD:yahoo/AAPL"`).
+
+### How to Update Prices
+1.  Go to the **Commodities** tab.
+2.  Click the **Update Prices** button (if available/configured).
+3.  The plugin runs `bean-price` in the background and appends the new price directives to your price file (usually `prices.beancount` or similar, depending on your setup).
+
+### Configuration
+In **Settings**, you can configure:
+- **Price File Path**: Where the new price entries should be written.
+- **Timeout**: How long to wait for the price fetch to complete.
+
+---
+
+## 🛠️ Technical Details
+
+### Metadata Format
+The plugin looks for a `price` metadata key in your commodity directive:
+
+```beancount
+2020-01-01 commodity AAPL
+  price: "USD:yahoo/AAPL"
+  logo: "https://logo.clearbit.com/apple.com"
 ```
 
-Safety and backups
-- All write operations create a backup file named `<file>.backup.YYYYmmdd_HHMMSS` before overwriting.
-- Internal Beancount metadata keys like `lineno` and `filename` are filtered out of user metadata and are not written back to the ledger.
-
-Troubleshooting
-- If edits fail with index errors, check the backend logs for `lineno` diagnostics and ensure your ledger file isn't modified concurrently by another tool.
+### Safe File Writes
+- **Backups**: Every write operation creates a timestamped backup of your file before modification.
+- **In-Place Updates**: The plugin attempts to update the existing directive in-place to preserve comments and formatting.
