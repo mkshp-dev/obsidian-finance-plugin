@@ -52,7 +52,10 @@
         {#if activeTab === 'overview'}
             <OverviewTab controller={overviewController} />
         {:else if activeTab === 'transactions'}
-            <TransactionsTab controller={transactionController} />
+            <TransactionsTab 
+                controller={transactionController}
+                on:filtersChange={e => transactionController.handleFilterChange(e.detail)}
+            />
         {:else if activeTab === 'journal'}
             <JournalTab store={journalStore} />
         {:else if activeTab === 'balancesheet'}

@@ -105,8 +105,8 @@
 
 	// Make sure we re-render when state changes
 	$: {
-		if (accountsController && $state) {
-			filteredTree = accountsController.getFilteredAccountTree();
+		if (controller && $state) {
+			filteredTree = controller.getFilteredAccountTree();
 		} else {
 			filteredTree = [];
 		}
