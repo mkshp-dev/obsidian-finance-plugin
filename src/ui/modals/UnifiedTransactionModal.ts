@@ -1,15 +1,14 @@
-// src/components/UnifiedTransactionModal.ts
+// src/ui/modals/UnifiedTransactionModal.ts
 
 import { App, Modal, Notice } from 'obsidian';
-import type BeancountPlugin from '../main';
-import { JournalController, type JournalTransaction, type JournalEntry } from '../controllers/JournalController';
+import type BeancountPlugin from '../../main';
+import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
     private component: any;
-    private journalController: JournalController;
     private transaction: JournalTransaction | null;
     private entry: JournalEntry | null;
     private mode: 'add' | 'edit';
@@ -38,7 +37,6 @@ export class UnifiedTransactionModal extends Modal {
         }
         
         this.mode = entryOrTransaction ? 'edit' : 'add';
-        this.journalController = new JournalController(plugin);
     }
 
     async onOpen() {
@@ -60,18 +58,22 @@ export class UnifiedTransactionModal extends Modal {
         let currencies: string[] = [];
 
         try {
+            // Use ApiClient to fetch data directly or via Service if exposed
+            const { apiClient } = this.plugin;
+
             // Run all requests in parallel for better performance
+            // We can use the apiClient directly here
             const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
-                this.journalController.getAccounts(),
-                this.journalController.getPayees(),
-                this.journalController.getTags(),
-                this.journalController.getCommodities()
+                apiClient.get<{accounts: string[]}>('/accounts'),
+                apiClient.get<{payees: string[]}>('/payees'),
+                apiClient.get<{tags: string[]}>('/tags'),
+                apiClient.get<{commodities: {name: string}[]}>('/commodities')
             ]);
             
-            accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : [];
-            payees = payeesResult.status === 'fulfilled' ? payeesResult.value : [];
-            tags = tagsResult.status === 'fulfilled' ? tagsResult.value : [];
-            currencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value : [];
+            accounts = accountsResult.status === 'fulfilled' ? accountsResult.value.accounts : [];
+            payees = payeesResult.status === 'fulfilled' ? payeesResult.value.payees : [];
+            tags = tagsResult.status === 'fulfilled' ? tagsResult.value.tags : [];
+            currencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.commodities.map(c => c.name) : [];
             
             // Fallback to common currencies if no commodities found
             if (currencies.length === 0) {
@@ -110,17 +112,20 @@ export class UnifiedTransactionModal extends Modal {
 
     async onAdd(entryData: any) {
         try {
-            const success = await this.journalController.addEntry(entryData);
+            // Use JournalService
+            const success = await this.plugin.journalService.createEntry(entryData);
             if (success) {
                 new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} added successfully!`);
                 
-                // Call refresh callback if provided
+                // Refresh the store
+                await this.plugin.journalStore.refresh();
+
+                // Call refresh callback if provided (legacy)
                 if (this.onRefreshCallback) {
                     try {
                         await this.onRefreshCallback();
                     } catch (error) {
                         console.error('Error refreshing dashboard:', error);
-                        // Don't show error to user since transaction was successful
                     }
                 }
                 
@@ -137,17 +142,20 @@ export class UnifiedTransactionModal extends Modal {
         
         try {
             const entryId = this.transaction?.id || this.entry?.id;
-            const success = await this.journalController.updateTransaction(entryId!, entryData);
+            // Use JournalService
+            const success = await this.plugin.journalService.updateTransaction(entryId!, entryData);
             if (success) {
                 new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} updated successfully!`);
                 
+                // Refresh the store
+                await this.plugin.journalStore.refresh();
+
                 // Call refresh callback if provided
                 if (this.onRefreshCallback) {
                     try {
                         await this.onRefreshCallback();
                     } catch (error) {
                         console.error('Error refreshing dashboard:', error);
-                        // Don't show error to user since update was successful
                     }
                 }
                 
@@ -161,17 +169,20 @@ export class UnifiedTransactionModal extends Modal {
 
     async onDelete(entryId: string) {
         try {
-            const success = await this.journalController.deleteTransaction(entryId);
+             // Use JournalService
+            const success = await this.plugin.journalService.deleteTransaction(entryId);
             if (success) {
                 new Notice('Entry deleted successfully!');
                 
+                // Refresh the store
+                await this.plugin.journalStore.refresh();
+
                 // Call refresh callback if provided
                 if (this.onRefreshCallback) {
                     try {
                         await this.onRefreshCallback();
                     } catch (error) {
                         console.error('Error refreshing dashboard:', error);
-                        // Don't show error to user since deletion was successful
                     }
                 }
                 
@@ -189,6 +200,5 @@ export class UnifiedTransactionModal extends Modal {
         if (this.component) {
             this.component.$destroy();
         }
-        this.journalController.cleanup();
     }
 }

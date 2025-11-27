@@ -2,7 +2,7 @@
 
 import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
-import { BackendManager } from '../backend/BackendManager';
+import type { ApiClient } from '../api/client';
 
 export interface CommodityInfo {
     symbol: string;
@@ -25,7 +25,7 @@ export interface CommoditiesState {
 
 export class CommoditiesController {
     private plugin: BeancountPlugin;
-    private backendManager: BackendManager;
+    private apiClient: ApiClient;
     
     // Reactive stores
     public commodities: Writable<CommodityInfo[]> = writable([]);
@@ -41,7 +41,8 @@ export class CommoditiesController {
 
     constructor(plugin: BeancountPlugin) {
         this.plugin = plugin;
-        this.backendManager = new BackendManager(plugin);
+        // Inject ApiClient directly from the plugin instance
+        this.apiClient = plugin.apiClient;
         this.setupReactivity();
         console.debug('[CommoditiesController] initialized');
     }
@@ -83,20 +84,16 @@ export class CommoditiesController {
 
         console.debug('[CommoditiesController] loadData: starting');
         try {
-            // Use backend API for detailed commodity data
-            const connected = await this.backendManager.ensureBackendRunning();
-            console.debug('[CommoditiesController] ensureBackendRunning ->', connected);
+            // Use API Client for detailed commodity data
+            // ensureConnected() will start the backend process if needed
+            const connected = await this.apiClient.ensureConnected();
+            console.debug('[CommoditiesController] ensureConnected ->', connected);
             if (!connected) {
                 throw new Error('Failed to start Python backend for commodities');
             }
 
-            const resp = await this.backendManager.apiRequest('/commodities?detailed=true');
-            console.debug('[CommoditiesController] loadData: apiRequest /commodities?detailed=true status ->', resp.status);
-            if (!resp.ok) {
-                throw new Error(`Failed to fetch commodities: ${resp.status}`);
-            }
-
-            const data = await resp.json();
+            // Using apiClient.get wrapper
+            const data = await this.apiClient.get<{ commodities: any[] }>('/commodities?detailed=true');
             console.debug('[CommoditiesController] loadData: received data', data && { count: (data.commodities || []).length });
             const commoditiesRaw = data.commodities || [];
 
@@ -129,18 +126,9 @@ export class CommoditiesController {
     public async loadCommodityDetails(symbol: string): Promise<void> {
         console.debug('[CommoditiesController] loadCommodityDetails:', symbol);
         try {
-            const connected = await this.backendManager.ensureBackendRunning();
-            console.debug('[CommoditiesController] loadCommodityDetails ensureBackendRunning ->', connected);
-            if (!connected) throw new Error('Backend not available');
+            await this.apiClient.ensureConnected();
 
-            const resp = await this.backendManager.apiRequest(`/commodities/${encodeURIComponent(symbol)}`);
-            console.debug('[CommoditiesController] loadCommodityDetails: apiRequest status ->', resp.status);
-            if (!resp.ok) {
-                console.warn('Could not load commodity details for', symbol, ':', resp.statusText);
-                return;
-            }
-
-            const details = await resp.json();
+            const details = await this.apiClient.get<any>(`/commodities/${encodeURIComponent(symbol)}`);
             console.debug('[CommoditiesController] loadCommodityDetails: details ->', details);
             this.selectedCommodity.set({
                 symbol: details.symbol,
@@ -165,22 +153,14 @@ export class CommoditiesController {
         this.error.set(null);
         try {
             console.debug('[CommoditiesController] saveMetadata:', { symbol, metadata });
-            const connected = await this.backendManager.ensureBackendRunning();
-            console.debug('[CommoditiesController] saveMetadata ensureBackendRunning ->', connected);
-            if (!connected) throw new Error('Backend not available');
+            await this.apiClient.ensureConnected();
 
-            const resp = await this.backendManager.apiRequest(`/commodities/${encodeURIComponent(symbol)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ metadata })
-            });
+            const result = await this.apiClient.put<any>(`/commodities/${encodeURIComponent(symbol)}`, { metadata });
 
-            console.debug('[CommoditiesController] saveMetadata: response status ->', resp.status);
-            const result = await resp.json();
             console.debug('[CommoditiesController] saveMetadata: result ->', result);
 
-            if (!resp.ok || !result.success) {
-                const err = new Error(result.error || `Failed to save metadata (${resp.status})`);
+            if (!result.success) {
+                const err = new Error(result.error || `Failed to save metadata`);
                 // Attach full backend payload for richer diagnostics in the catch block
                 try { (err as any).payload = result; } catch {}
                 throw err;
@@ -226,17 +206,12 @@ export class CommoditiesController {
             const current = get(this.selectedCommodity) || this.getCommodityBySymbol(symbol);
             const priceMeta = current?.priceMetadata || (current?.fullMetadata || {})['price'];
             console.debug('[CommoditiesController] testPriceSource:', { symbol, priceMeta });
-            const connected = await this.backendManager.ensureBackendRunning();
-            console.debug('[CommoditiesController] testPriceSource ensureBackendRunning ->', connected);
-            if (!connected) throw new Error('Backend not available');
 
-            const resp = await this.backendManager.apiRequest(`/commodities/${encodeURIComponent(symbol)}/validate_price`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ price: priceMeta })
-            });
+            await this.apiClient.ensureConnected();
 
-            const result = await resp.json();
+            // Using post for testing price source
+            const result = await this.apiClient.post<any>(`/commodities/${encodeURIComponent(symbol)}/validate_price`, { price: priceMeta });
+
             console.debug('[CommoditiesController] testPriceSource result ->', result);
             return result;
         } catch (error) {
@@ -254,17 +229,10 @@ export class CommoditiesController {
     public async testLogoUrl(symbol: string, url: string): Promise<any> {
         console.debug('[CommoditiesController] testLogoUrl:', { symbol, url });
         try {
-            const connected = await this.backendManager.ensureBackendRunning();
-            console.debug('[CommoditiesController] testLogoUrl ensureBackendRunning ->', connected);
-            if (!connected) throw new Error('Backend not available');
+            await this.apiClient.ensureConnected();
 
-            const resp = await this.backendManager.apiRequest(`/commodities/${encodeURIComponent(symbol)}/validate_logo`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
+            const result = await this.apiClient.post<any>(`/commodities/${encodeURIComponent(symbol)}/validate_logo`, { url });
 
-            const result = await resp.json();
             console.debug('[CommoditiesController] testLogoUrl result ->', result);
             return result;
         } catch (error) {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	// --- REMOVED onMount, parseCsv, queries, plugin imports ---
 	import { writable, type Writable } from 'svelte/store';
-	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../controllers/BalanceSheetController';
+	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../../controllers/BalanceSheetController';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;

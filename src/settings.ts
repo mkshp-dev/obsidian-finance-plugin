@@ -2,7 +2,7 @@
 
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
-import ConnectionSettings from './components/ConnectionSettings.svelte';
+import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 
 export interface BeancountPluginSettings {
     beancountFilePath: string;
