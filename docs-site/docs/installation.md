@@ -1,50 +1,76 @@
 ---
-sidebar_position: 2
+sidebar_position: 8
 ---
 
 # Installation
 
-This page explains how to install and enable the Obsidian Finance Plugin and its backend dependencies.
+This guide covers how to install the Obsidian Finance Plugin and set up the necessary backend environment.
 
-Supported environment
-- Obsidian (desktop) — plugin is `isDesktopOnly` (see `manifest.json`).
-- Node.js and npm required to build the plugin UI; Python 3 and `beancount` are required for the backend.
+## 📦 Plugin Installation
 
-Steps (end users)
-1. Copy or clone the plugin folder into your vault plugins folder:
+### Method 1: Community Plugins (Recommended)
+*Note: Once approved by Obsidian.*
+1.  Open Obsidian **Settings** → **Community Plugins**.
+2.  Turn off "Restricted mode".
+3.  Click **Browse** and search for **"Finance Plugin"**.
+4.  Click **Install** and then **Enable**.
 
-```powershell
-# Windows (PowerShell)
-Copy-Item -Path ".\obsidian-finance-plugin" -Destination "$env:APPDATA\Obsidian\VaultName\.obsidian\plugins" -Recurse
-```
+### Method 2: Manual Installation (BRAT / GitHub)
+1.  Download the latest `main.js`, `manifest.json`, and `styles.css` from the [GitHub Releases](https://github.com/mukundshelake/obsidian-finance-plugin/releases) page.
+2.  Create a folder named `obsidian-finance-plugin` in your vault's plugin directory: `<VaultFolder>/.obsidian/plugins/`.
+3.  Place the downloaded files into this folder.
+4.  Reload Obsidian.
+5.  Go to **Settings** → **Community Plugins** and enable **Finance Plugin**.
 
-2. Open Obsidian -> Settings -> Community plugins -> Enable plugin.
+---
 
-Backend requirements
-- Python 3.10+ recommended.
-- Install Beancount (used by the backend):
+## 🐍 Backend Requirements
 
-```powershell
-# inside plugin workspace virtualenv
-.venv\Scripts\python.exe -m pip install beancount
-```
+The plugin relies on a Python backend to parse Beancount files and run queries.
 
-Bean-price (optional but recommended)
-- `bean-price` is used to generate `dependencies/prices.beancount`.
-- On Windows, use the `bean-price.exe` binary or install via your package manager. On WSL use the Linux `bean-price` installation.
+### 1. Python Environment
+You need **Python 3.8 or newer** installed on your system.
+- **Windows**: Install from the Microsoft Store or python.org.
+- **macOS**: `brew install python`
+- **Linux**: Usually pre-installed.
 
-PowerShell redirection note
-- Avoid using `>>` in PowerShell for `bean-price` output — PowerShell may re-encode or add a BOM. Use the provided Python helper or run via `cmd /c` or `Start-Process`.
-
-Developer installation
-- Clone the repo, create a Python venv and install `beancount`.
-- Install Node dependencies and build the plugin:
+### 2. Beancount
+Install the Beancount package via pip:
 
 ```bash
-cd docs-site # optionally to run docs
-cd <plugin-root>
-npm install
-npm run build
+pip install beancount
 ```
 
-See `development.md` for a full developer setup and recommended versions.
+*Verify installation:*
+Open your terminal and run:
+```bash
+bean-query --version
+```
+If this command works, you are ready to go.
+
+### 3. Optional Dependencies
+- **bean-price**: For fetching online prices. Usually included with Beancount, or install via `pip install bean-price`.
+
+---
+
+## ⚙️ Configuration
+
+After installation, go to the plugin settings to configure your environment.
+
+1.  **Open Settings**: Settings → Community Plugins → Finance Plugin.
+2.  **Connection Panel**: The plugin will attempt to auto-detect your Python and Beancount paths.
+    - If valid, you will see Green checks.
+    - If not, you may need to manually specify the paths (especially on Windows or custom setups).
+3.  **Beancount File**: Select your main ledger file (e.g., `main.beancount` or `ledger.bean`).
+
+### WSL Support
+If you use Windows Subsystem for Linux (WSL), the plugin fully supports it.
+- **Path Format**: Use the WSL path format (e.g., `/mnt/c/Users/Name/Documents/ledger.beancount`).
+- **Python Path**: Point to the python executable inside WSL (e.g., `/usr/bin/python3`).
+
+---
+
+## 🔄 Updating
+To update the plugin:
+- **Community Plugins**: Click "Check for updates" in the Obsidian settings.
+- **Manual**: Download the new release files and replace the old ones.
