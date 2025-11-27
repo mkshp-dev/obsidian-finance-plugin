@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
-    import type { JournalTransaction, JournalPosting, JournalEntry, JournalBalance, JournalNote } from '../../../models/journal';
+    import type { JournalTransaction, JournalPosting, JournalEntry, JournalBalance, JournalNote } from '../../models/journal';
     
     export let transaction: JournalTransaction | null = null; // Now optional for Add mode
     export let entry: JournalEntry | null = null; // Support for any entry type
