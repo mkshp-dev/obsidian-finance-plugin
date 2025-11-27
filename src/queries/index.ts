@@ -25,44 +25,14 @@ export function getAllTagsQuery(): string {
 
 // ... (other query functions)
 
-/** Gets unconverted inventory of all Asset accounts */
-export function getTotalAssetsInventoryQuery(): string { // <-- Renamed
-  return `SELECT sum(position) WHERE account ~ '^Assets'`;
-}
-
 /** Gets converted cost of all Asset accounts */
 export function getTotalAssetsCostQuery(currency: string): string { // <-- NEW
   return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Assets'`;
 }
 
-/** Gets unconverted inventory of all Liability accounts */
-export function getTotalLiabilitiesInventoryQuery(): string { // <-- Renamed
-  return `SELECT sum(position) WHERE account ~ '^Liabilities'`;
-}
-
 /** Gets converted cost of all Liability accounts */
 export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- NEW
    return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Liabilities'`;
-}
-
-/** Gets historical cost of all Asset accounts */
-export function getTotalAssetsCostQueryByCost(): string {
-   return `SELECT sum(cost(position)) WHERE account ~ '^Assets'`;
-}
-
-/** Gets historical cost of all Liability accounts */
-export function getTotalLiabilitiesCostQueryByCost(): string {
-   return `SELECT sum(cost(position)) WHERE account ~ '^Liabilities'`;
-}
-
-/** Gets units of all Asset accounts */
-export function getTotalAssetsCostQueryByUnits(): string {
-   return `SELECT sum(units(position)) WHERE account ~ '^Assets'`;
-}
-
-/** Gets units of all Liability accounts */
-export function getTotalLiabilitiesCostQueryByUnits(): string {
-   return `SELECT sum(units(position)) WHERE account ~ '^Liabilities'`;
 }
 
 export function getBalanceSheetQuery(currency: string): string {
@@ -82,19 +52,6 @@ export function getBalanceSheetQueryByUnits(): string {
 /** Gets balances for ALL account types (Assets, Liabilities, Equity, Income, Expenses) */
 export function getAllAccountBalancesQuery(currency: string): string {
 	return `SELECT account, convert(sum(position), '${currency}') GROUP BY account ORDER BY account`;
-}
-
-/** Gets balances for different account types */
-export function getBalanceReportQuery(reportType: 'assets' | 'liabilities' | 'equity' | 'income' | 'expenses'): string {
-	let accountPrefix = '';
-	switch (reportType) {
-		case 'assets': accountPrefix = '^Assets'; break;
-		case 'liabilities': accountPrefix = '^Liabilities'; break;
-		case 'equity': accountPrefix = '^Equity'; break;
-		case 'income': accountPrefix = '^Income'; break;
-		case 'expenses': accountPrefix = '^Expenses'; break;
-	}
-	return `SELECT account, sum(position) WHERE account ~ '${accountPrefix}' GROUP BY account`;
 }
 
 /** Gets transactions based on filters */
@@ -132,11 +89,6 @@ export function getTransactionsQuery(filters: TransactionFilters, limit: number 
 	}
 }
 
-/** Simple query for connection testing */
-export function getTestConnectionQuery(): string {
-	return `SELECT account LIMIT 1`;
-}
-
 /** Query for bean-check (Note: runQuery expects CSV, bean-check might not output CSV) */
 // This might need a separate function if bean-check output needs different handling
 export function getBeanCheckCommand(filePath: string, commandBase: string): string {
@@ -154,44 +106,4 @@ export function getMonthlyExpensesQuery(startDate: string, endDate: string, curr
 
 export function getHistoricalNetWorthDataQuery(interval: string = 'month', currency: string): string { // Must accept 2 args
 	return `SELECT ${interval}, account, convert(SUM(position), '${currency}') WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
-}
-
-/** Gets all commodities with their metadata from the #commodities table */
-export function getCommoditiesQuery(): string {
-	return `SELECT name, meta, meta('price'), getprice(name, 'INR') FROM #commodities`;
-}
-
-/** Gets specific commodity details by name */
-export function getCommodityDetailsQuery(commodity: string): string {
-	return `SELECT name, meta, meta('price'), getprice(name, 'INR') FROM #commodities WHERE name = '${commodity}'`;
-}
-
-/** Checks if any commodities exist in the ledger */
-export function getPriceDataAvailabilityQuery(): string {
-	return `SELECT COUNT(*) as commodity_count FROM #commodities`;
-}
-
-/** Gets full journal entries with all postings for each transaction */
-export function getJournalTransactionsQuery(limit: number = 1000): string {
-	return `SELECT date, flag, payee, narration, tags, account, position ORDER BY date DESC, lineno DESC LIMIT ${limit}`;
-}
-
-/** Gets recent journal entries for performance (last 6 months by default) */
-export function getRecentJournalTransactionsQuery(monthsBack: number = 6): string {
-	const startDate = new Date();
-	startDate.setMonth(startDate.getMonth() - monthsBack);
-	const dateStr = startDate.toISOString().split('T')[0];
-	return `SELECT date, flag, payee, narration, tags, account, position WHERE date >= ${dateStr} ORDER BY date DESC, lineno DESC LIMIT 2000`;
-}
-
-/** Gets all commodities with detailed metadata and latest price (BQL) */
-export function getCommoditiesDetailedQuery(): string {
-	return `SELECT name, meta, meta('price') AS price_meta, meta('logo') AS logo_meta, getprice(name, 'INR') AS latest_price FROM #commodities`;
-}
-
-/** Gets the first directive date for a commodity (best-effort BQL) */
-export function getCommodityFirstDirectiveDateQuery(commodity: string): string {
-	// Backend should treat this as a best-effort helper; precise first-directive
-	// date computation may be done by scanning entries in Python.
-	return `SELECT min(date) AS first_date FROM #commodities WHERE name = '${commodity}'`;
 }
