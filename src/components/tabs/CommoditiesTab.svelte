@@ -2,7 +2,6 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
     import type { CommoditiesController, CommodityInfo } from '../../controllers/CommoditiesController';
-    import CommodityDetailModalComponent from '../CommodityDetailModal.svelte';
 
     export let controller: CommoditiesController;
 
@@ -11,10 +10,6 @@
     // Extract the stores from the controller
     $: commoditiesStore = controller.commodities;
     $: filteredCommoditiesStore = controller.filteredCommodities;
-        console.debug('[CommoditiesTab] Component loaded');
-        onMount(() => {
-            console.debug('[CommoditiesTab] onMount');
-        });
     $: selectedCommodityStore = controller.selectedCommodity;
     $: searchTermStore = controller.searchTerm;
     $: loadingStore = controller.loading;
@@ -24,7 +19,9 @@
 
     // UI state
 
+    // Load data on mount
     onMount(async () => {
+        console.debug('[CommoditiesTab] onMount — loading commodities');
         await controller.loadData();
     });
 
@@ -51,60 +48,10 @@
         controller.refresh();
     }
 
-    function handleKeydown(event: KeyboardEvent, callback: () => void) {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            callback();
-        }
-    }
-
-    // Yahoo Finance Search Handlers
-    async function handleYahooFinanceApply(event: CustomEvent<{ symbol: string; metadata: string; price?: number }>) {
-        const { symbol: yahooSymbol, metadata } = event.detail;
-        
-        console.debug('[CommoditiesTab] handleYahooFinanceApply', { yahooSymbol, metadata });
-        if ($selectedCommodityStore) {
-            try {
-                await controller.updatePriceMetadata($selectedCommodityStore.symbol, yahooSymbol);
-
-            } catch (error) {
-                console.error('Failed to apply Yahoo Finance source:', error);
-            }
-        }
-    }
-
-    function handleYahooFinanceCancel() {
-        // Just log for now, no special handling needed
-
-    }
-
-    async function handleRemovePriceMetadata() {
-        if ($selectedCommodityStore) {
-            try {
-                await controller.removePriceMetadata($selectedCommodityStore.symbol);
-
-            } catch (error) {
-                console.error('Failed to remove price metadata:', error);
-            }
-        }
-    }
-
-    function formatNumber(num: number | undefined): string {
-        if (num === undefined || num === null || isNaN(num)) return 'N/A';
-        return num.toLocaleString(undefined, { 
-            minimumFractionDigits: 2, 
-            maximumFractionDigits: 6 
-        });
-    }
-
-    function formatDate(dateStr: string | undefined): string {
-        if (!dateStr) return 'N/A';
-        try {
-            return new Date(dateStr).toLocaleDateString();
-        } catch {
-            return dateStr;
-        }
-    }
+    // Note: helper functions like keydown handlers, removal helpers, and formatters
+    // were removed from this component because they are not referenced by the
+    // template. Keep logic focused on rendering and delegating actions to the
+    // controller to avoid duplication and improve testability.
 
     function getCommodityTypeIcon(symbol: string): string {
         // Common currency symbols
