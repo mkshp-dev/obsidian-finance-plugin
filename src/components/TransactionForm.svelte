@@ -119,68 +119,87 @@
 	{/each}
 </datalist>
 
-<div class="beancount-tabs">
-	<button class:active={activeTab === 'transaction'} on:click={() => setTab('transaction')}>Transaction</button>
-	<button class:active={activeTab === 'balance'} on:click={() => setTab('balance')}>Balance</button>
-	<button class:active={activeTab === 'note'} on:click={() => setTab('note')}>Note</button>
-</div>
 
-<form on:submit|preventDefault={handleSubmit}>
+<div class="transaction-form-card">
+	<div class="beancount-tabs">
+		<button class:active={activeTab === 'transaction'} on:click={() => setTab('transaction')}>Transaction</button>
+		<button class:active={activeTab === 'balance'} on:click={() => setTab('balance')}>Balance</button>
+		<button class:active={activeTab === 'note'} on:click={() => setTab('note')}>Note</button>
+	</div>
 
-	{#if activeTab === 'transaction'}
-		<div class="setting-item">
-			<div class="setting-item-info"><div class="setting-item-name">Date</div></div>
-			<div class="setting-item-control"><input type="date" bind:value={date} required /></div>
-		</div>
-		<div class="setting-item">
-			<div class="setting-item-info"><div class="setting-item-name">Payee</div></div>
-			<div class="setting-item-control"><input type="text" bind:this={payeeInput} bind:value={payee} placeholder="e.g., Coffee Shop" required /></div>
-		</div>
-		<div class="setting-item">
-			<div class="setting-item-info"><div class="setting-item-name">Narration</div></div>
-			<div class="setting-item-control"><input type="text" bind:value={narration} placeholder="(Optional)" /></div>
-		</div>
-		<div class="setting-item">
-			<div class="setting-item-info"><div class="setting-item-name">Tag</div></div>
-			<div class="setting-item-control"><input type="text" bind:value={tag} placeholder="(Optional)" /></div>
-		</div>
+	<form on:submit|preventDefault={handleSubmit}>
+		{#if activeTab === 'transaction'}
+			<div class="setting-item">
+				<div class="setting-item-info"><div class="setting-item-name">Date</div></div>
+				<div class="setting-item-control"><input type="date" bind:value={date} required /></div>
+			</div>
+			<div class="setting-item">
+				<div class="setting-item-info"><div class="setting-item-name">Payee</div></div>
+				<div class="setting-item-control"><input type="text" bind:this={payeeInput} bind:value={payee} placeholder="e.g., Coffee Shop" required /></div>
+			</div>
+			<div class="setting-item">
+				<div class="setting-item-info"><div class="setting-item-name">Narration</div></div>
+				<div class="setting-item-control"><input type="text" bind:value={narration} placeholder="(Optional)" /></div>
+			</div>
+			<div class="setting-item">
+				<div class="setting-item-info"><div class="setting-item-name">Tag</div></div>
+				<div class="setting-item-control"><input type="text" bind:value={tag} placeholder="(Optional)" /></div>
+			</div>
 
-		<div class="postings-section">
-			<div class="setting-item-info"><div class="setting-item-name">Postings</div></div>
-			{#each postings as posting, index (index)}
-				<div class="posting-row">
-					<div class="setting-item">
-						<div class="setting-item-control">
-							<input type="text" bind:value={posting.account} list="beancount-accounts" placeholder="Account" required />
+			<div class="postings-section">
+				<div class="setting-item-info"><div class="setting-item-name">Postings</div></div>
+				{#each postings as posting, index (index)}
+					<div class="posting-row">
+						<div class="setting-item">
+							<div class="setting-item-control">
+								<input type="text" bind:value={posting.account} list="beancount-accounts" placeholder="Account" required />
+							</div>
 						</div>
+						<div class="setting-item amount-currency">
+							<input class="amount-input" type="number" step="0.01" bind:value={posting.amount} placeholder="Amount (leave one blank)" />
+							<input class="currency-input" type="text" bind:value={posting.currency} placeholder="Curr" required />
+						</div>
+						<button type="button" class="remove-button" on:click={() => removePosting(index)} disabled={postings.length <= 2}>
+							&#10005; </button>
 					</div>
-					<div class="setting-item amount-currency">
-						<input class="amount-input" type="number" step="0.01" bind:value={posting.amount} placeholder="Amount (leave one blank)" />
-						<input class="currency-input" type="text" bind:value={posting.currency} placeholder="Curr" required />
-					</div>
-					<button type="button" class="remove-button" on:click={() => removePosting(index)} disabled={postings.length <= 2}>
-						&#10005; </button>
-				</div>
-			{/each}
-			<button type="button" class="add-button" on:click={addPosting}>+ Add Posting</button>
-		</div>
+				{/each}
+				<button type="button" class="add-button" on:click={addPosting}>+ Add Posting</button>
+			</div>
 		{:else if activeTab === 'balance'}
-		<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Date</div></div><div class="setting-item-control"><input type="date" bind:value={date} required /></div></div>
-		<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Account</div></div><div class="setting-item-control"><input type="text" bind:value={balanceAccount} list="beancount-accounts" required /></div></div>
-		<div class="form-row"><div class="setting-item" style="flex: 2;"><div class="setting-item-info"><div class="setting-item-name">Amount</div></div><div class="setting-item-control"><input type="number" step="0.01" bind:value={amount} placeholder="e.g., 913.90" required /></div></div><div class="setting-item" style="flex: 1;"><div class="setting-item-info"><div class="setting-item-name">Currency</div></div><div class="setting-item-control"><input type="text" bind:value={currency} required /></div></div></div>
+			<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Date</div></div><div class="setting-item-control"><input type="date" bind:value={date} required /></div></div>
+			<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Account</div></div><div class="setting-item-control"><input type="text" bind:value={balanceAccount} list="beancount-accounts" required /></div></div>
+			<div class="form-row"><div class="setting-item" style="flex: 2;"><div class="setting-item-info"><div class="setting-item-name">Amount</div></div><div class="setting-item-control"><input type="number" step="0.01" bind:value={amount} placeholder="e.g., 913.90" required /></div></div><div class="setting-item" style="flex: 1;"><div class="setting-item-info"><div class="setting-item-name">Currency</div></div><div class="setting-item-control"><input type="text" bind:value={currency} required /></div></div></div>
 
-	{:else if activeTab === 'note'}
-		<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Date</div></div><div class="setting-item-control"><input type="date" bind:value={date} required /></div></div>
-		<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Account</div></div><div class="setting-item-control"><input type="text" bind:value={noteAccount} list="beancount-accounts" required /></div></div>
-		<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Note Text</div></div><div class="setting-item-control"><input type="text" bind:value={noteText} placeholder="e.g., Reconciled" required /></div></div>
-	{/if}
+		{:else if activeTab === 'note'}
+			<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Date</div></div><div class="setting-item-control"><input type="date" bind:value={date} required /></div></div>
+			<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Account</div></div><div class="setting-item-control"><input type="text" bind:value={noteAccount} list="beancount-accounts" required /></div></div>
+			<div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Note Text</div></div><div class="setting-item-control"><input type="text" bind:value={noteText} placeholder="e.g., Reconciled" required /></div></div>
+		{/if}
 
-	<div class="setting-item"><div class="setting-item-control"><button type="submit" class="mod-cta">{#if activeTab === 'transaction'}Add Transaction{:else if activeTab === 'balance'}Add Balance Check{:else if activeTab === 'note'}Add Note{/if}</button></div></div>
-</form>
+		<div class="setting-item"><div class="setting-item-control"><button type="submit" class="mod-cta">{#if activeTab === 'transaction'}Add Transaction{:else if activeTab === 'balance'}Add Balance Check{:else if activeTab === 'note'}Add Note{/if}</button></div></div>
+	</form>
+</div>
 
 <style>
 	/* Tab styles (unchanged) */
-	.beancount-tabs { display: flex; border-bottom: 1px solid var(--background-modifier-border); margin-bottom: 20px; }
+	.transaction-form-card {
+		background: var(--background-primary);
+		border-radius: 10px;
+		border: 1px solid var(--background-modifier-border);
+		box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+		padding: 24px 24px 18px 24px;
+		max-width: 520px;
+		margin: 0 auto;
+	}
+	.beancount-tabs {
+		display: flex;
+		border-bottom: none;
+		margin-bottom: 20px;
+		background: none;
+		border-radius: 0;
+		box-shadow: none;
+		padding: 0;
+	}
 	.beancount-tabs button { padding: 8px 16px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); cursor: pointer; margin-bottom: -1px; }
 	.beancount-tabs button.active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
 	.beancount-tabs button:hover { color: var(--text-normal); }
@@ -193,7 +212,7 @@
 
 	/* --- NEW: Posting Styles --- */
 	.postings-section {
-		border-top: 1px solid var(--background-modifier-border);
+		border-top: none;
 		padding-top: 15px;
 	}
 	.posting-row {
