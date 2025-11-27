@@ -4,10 +4,10 @@
 	import type { AccountsController } from '../../../controllers/AccountsController';
 	import type { AccountDetail, AccountNode } from '../../types/index';
 
-	export let accountsController: AccountsController;
+	export let controller: AccountsController;
 
 	// Subscribe to controller state with null check
-	$: state = accountsController?.state;
+	$: state = controller?.state;
 
 	// Component state
 	let refreshing = false;
@@ -16,7 +16,7 @@
 
 	onMount(() => {
 		// Initial data load only if controller exists
-		if (accountsController) {
+		if (controller) {
 			loadData().catch(err => {
 				initializationError = `Failed to load initial data: ${err.message}`;
 				console.error('AccountsTab initialization error:', err);
@@ -27,17 +27,17 @@
 	});
 
 	async function loadData() {
-		if (!accountsController) return;
-		await accountsController.loadData();
+		if (!controller) return;
+		await controller.loadData();
 		// Force update of filtered tree after data loads
-		filteredTree = accountsController.getFilteredAccountTree();
+		filteredTree = controller.getFilteredAccountTree();
 	}
 
 	async function handleRefresh() {
-		if (!accountsController) return;
+		if (!controller) return;
 		refreshing = true;
 		try {
-			await accountsController.loadData();
+			await controller.loadData();
 		} catch (err) {
 			console.error('Failed to refresh accounts:', err);
 		} finally {
@@ -46,19 +46,19 @@
 	}
 
 	function handleSearch(event: Event) {
-		if (!accountsController) return;
+		if (!controller) return;
 		const target = event.target as HTMLInputElement;
-		accountsController.updateSearchFilter(target.value);
+		controller.updateSearchFilter(target.value);
 	}
 
 	function handleAccountClick(accountFullName: string) {
-		if (!accountsController) return;
-		accountsController.showAccountDetail(accountFullName);
+		if (!controller) return;
+		controller.showAccountDetail(accountFullName);
 	}
 
 	function handleExpandToggle(accountFullName: string) {
-		if (!accountsController) return;
-		accountsController.toggleAccountExpansion(accountFullName);
+		if (!controller) return;
+		controller.toggleAccountExpansion(accountFullName);
 	}
 
 	function getAccountTypeIcon(accountType: AccountDetail['accountType']): string {
@@ -125,7 +125,7 @@
 				</h3>
 				<button 
 					class="close-button" 
-					on:click={() => accountsController?.closeAccountDetail()}
+					on:click={() => controller?.closeAccountDetail()}
 					aria-label="Close"
 				>
 					×
@@ -178,10 +178,10 @@
 				Reload Plugin
 			</button>
 		</div>
-	{:else if !accountsController}
+	{:else if !controller}
 		<div class="error-state">
 			<div class="error-message">
-				❌ AccountsController not initialized. Type: {typeof accountsController}
+				❌ AccountsController not initialized. Type: {typeof controller}
 			</div>
 		</div>
 	{:else if !$state}
@@ -236,7 +236,7 @@
 		{/if}
 
 		<!-- Account hierarchy -->
-		{#if !$state?.isLoading && !$state?.error && accountsController}
+		{#if !$state?.isLoading && !$state?.error && controller}
 			<div class="accounts-container">
 				{#each filteredTree as node (node.fullName || node.name)}
 					{@const cardData = renderAccountNode(node, 0)}
