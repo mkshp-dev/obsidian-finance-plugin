@@ -94,8 +94,8 @@ const config: Config = {
               to: '/docs/installation',
             },
             {
-              label: 'Features',
-              to: '/docs/features',
+              label: 'Dashboard',
+              to: '/docs/dashboard',
             },
           ],
         },
