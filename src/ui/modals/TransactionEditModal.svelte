@@ -23,6 +23,13 @@
         activeTab = 'transaction';
     }
     
+    // Reactive title update
+    $: {
+        const titleMode = mode === 'edit' ? 'Edit' : 'Add';
+        const titleType = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+        dispatch('titleChange', `${titleMode} ${titleType}`);
+    }
+
     // Common fields for all entry types
     let date = (transaction?.date || entry?.date) || new Date().toISOString().split('T')[0];
     
@@ -205,10 +212,7 @@
 </script>
 
 <div class="transaction-edit-modal">
-    <div class="modal-header">
-        <h3>{mode === 'edit' ? `Edit ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` : `Add ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`}</h3>
-        <button class="modal-close" on:click={cancel}>&times;</button>
-    </div>
+    <!-- Header removed to use native Obsidian modal header -->
     
     <div class="modal-content">
         <!-- Entry Type Tabs -->
@@ -499,45 +503,10 @@
 
 <style>
     .transaction-edit-modal {
-        background: var(--background-primary);
-        /* REMOVED: border: 1px solid var(--background-modifier-border); */
-        border-radius: 0; /* Changed from 8px to 0 for seamless fit */
-        max-height: 90vh;
-        overflow-y: auto;
-        /* REMOVED: box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); */
-        margin: 0;
-        width: 100%;
-        height: 100%; /* Ensure it fills the container */
+        /* Removed all container constraints to let Obsidian handle it */
     }
     
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--background-modifier-border);
-        background: var(--background-secondary);
-    }
-    
-    .modal-header h3 {
-        margin: 0;
-        color: var(--text-normal);
-    }
-    
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-        color: var(--text-muted);
-        padding: 0.25rem;
-        border-radius: 4px;
-    }
-    
-    .modal-close:hover {
-        background: var(--background-modifier-hover);
-        color: var(--text-normal);
-    }
+    /* Removed .modal-header and related styles */
     
     .modal-content {
         padding: 1.5rem;

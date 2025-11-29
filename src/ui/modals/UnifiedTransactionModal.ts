@@ -47,6 +47,9 @@ export class UnifiedTransactionModal extends Modal {
         this.modalEl.style.maxWidth = '1200px';
         this.modalEl.style.width = '95vw';
 
+        // Set initial title (fallback, component will update it)
+        this.setTitle(this.mode === 'edit' ? 'Edit Transaction' : 'Add Transaction');
+
         // Initialize with empty data
         const accounts: string[] = [];
         const payees: string[] = [];
@@ -73,6 +76,7 @@ export class UnifiedTransactionModal extends Modal {
         this.component.$on('save', (e: any) => this.onSave(e.detail));
         this.component.$on('delete', (e: any) => this.onDelete(e.detail));
         this.component.$on('cancel', () => this.close());
+        this.component.$on('titleChange', (e: any) => this.setTitle(e.detail)); // Listen for title changes
 
         // Fetch data in background
         this.fetchData();
