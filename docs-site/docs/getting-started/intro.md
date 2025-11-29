@@ -30,10 +30,10 @@ This plugin transforms your Obsidian vault into a powerful financial analysis to
 
 This documentation is structured to help you get the most out of the plugin:
 
-*   **[Getting Started](./getting-started/installation.md)**: Setup instructions and initial configuration.
-*   **[Core Features](./core-features/unified-dashboard/overview.md)**: Deep dive into the Dashboard, Adding Directives, and Snapshot views.
-*   **[Configuration](./configuration/settings.md)**: Detailed explanation of all plugin settings.
-*   **[Queries](./queries/bql.md)**: Master the Beancount Query Language (BQL) within Obsidian.
+*   **[Getting Started](./installation.md)**: Setup instructions and initial configuration.
+*   **[Core Features](../core-features/unified-dashboard/overview.md)**: Deep dive into the Dashboard, Adding Directives, and Snapshot views.
+*   **[Configuration](../configuration/settings.md)**: Detailed explanation of all plugin settings.
+*   **[Queries](../queries/bql.md)**: Master the Beancount Query Language (BQL) within Obsidian.
 
 ## 🔧 Requirements
 

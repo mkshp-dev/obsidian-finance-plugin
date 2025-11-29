@@ -24,6 +24,6 @@ The **Commodities Tab** manages the currencies and assets used in your ledger.
 
 1.  **Controller**: `CommoditiesController.ts`.
 2.  **API Integration**:
-    - **GET /commodities?detailed=true**: Fetches symbol, latest price date, and metadata.
-    - **PUT /commodities/{symbol}**: Updates the `commodity` directive in your file with new metadata.
-    - **POST /commodities/{symbol}/validate_price**: Spawns a `bean-price` process to test the fetcher.
+    - **GET** `/commodities?detailed=true`: Fetches symbol, latest price date, and metadata.
+    - **PUT** `/commodities/{symbol}`: Updates the `commodity` directive in your file with new metadata.
+    - **POST** `/commodities/{symbol}/validate_price`: Spawns a `bean-price` process to test the fetcher.
