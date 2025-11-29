@@ -16,6 +16,10 @@ import { createJournalStore } from './stores/journal.store';
 
 // --------------------------------------------------
 
+/**
+ * Main plugin class for Obsidian Finance (Beancount).
+ * Handles plugin lifecycle, settings, service initialization, and UI registration.
+ */
 export default class BeancountPlugin extends Plugin {
 	settings: BeancountPluginSettings;
 	private bqlProcessor: BQLCodeBlockProcessor;
@@ -27,6 +31,10 @@ export default class BeancountPlugin extends Plugin {
     public journalService: JournalService;
     public journalStore: ReturnType<typeof createJournalStore>;
 
+	/**
+	 * Called when the plugin is loaded by Obsidian.
+	 * Initializes services, processors, views, commands, and settings.
+	 */
 	async onload() {
 		await this.loadSettings();
 
@@ -84,7 +92,12 @@ export default class BeancountPlugin extends Plugin {
 		this.addSettingTab(new BeancountSettingTab(this.app, this));
 	}
 
-	// --- REFACTORED: Generic activateView function ---
+	/**
+	 * Activates a specific view type in the workspace.
+	 *
+	 * @param {string} viewType - The type of view to activate.
+	 * @param {'tab' | 'right' | 'left'} [location='tab'] - Where to open the view.
+	 */
 	async activateView(viewType: string, location: 'tab' | 'right' | 'left' = 'tab') {
 		// Detach existing leaves of this type first to avoid duplicates
 		this.app.workspace.detachLeavesOfType(viewType);
@@ -120,17 +133,30 @@ export default class BeancountPlugin extends Plugin {
 		}
 	}
 	
-	// Make runQuery available publicly for view components
+	/**
+	 * Public wrapper for running BQL queries (used by views).
+	 * @param {string} query - The BQL query.
+	 * @returns {Promise<string>} The CSV output.
+	 */
 	public runQuery = (query: string): Promise<string> => {
 		// Call the imported utility function, passing 'this' (the plugin instance)
 		return runQuery(this, query);
 	}
 
-	// Make parseSingleValue available publicly
+	/**
+	 * Public wrapper for parsing single values from CSV (used by views).
+	 * @param {string} csv - The CSV string.
+	 * @returns {string} The parsed value.
+	 */
 	public parseSingleValue = (csv: string): string => {
 		return parseSingleValue(csv);
 	}
-	// Make convertWslPathToWindows available publicly
+
+	/**
+	 * Public wrapper for converting WSL paths (used by views).
+	 * @param {string} wslPath - The WSL path.
+	 * @returns {string} The Windows path.
+	 */
 	public convertWslPathToWindows = (wslPath: string): string => {
 		return convertWslPathToWindows(wslPath);
 	}
@@ -149,6 +175,10 @@ export default class BeancountPlugin extends Plugin {
 		};
 	}
 
+	/**
+	 * Called when the plugin is unloaded.
+	 * Stops backend processes.
+	 */
 	onunload() {
         this.backendProcess?.stop();
     }

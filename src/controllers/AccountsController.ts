@@ -7,24 +7,45 @@ import { buildAccountTree, parseAmount } from '../utils/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type { AccountNode, AccountDetail } from '../models/account';
 
-// Define the shape of our accounts state
+/**
+ * Interface representing the state of the Accounts view.
+ */
 export interface AccountsState {
+	/** Whether data is currently loading. */
 	isLoading: boolean;
+	/** Error message if loading failed. */
 	error: string | null;
+	/** Hierarchical tree structure of accounts. */
 	accountTree: AccountNode[];
+	/** Map of account full names to detailed account information. */
 	accountDetails: Map<string, AccountDetail>;
+	/** Set of account full names that are currently expanded in the tree view. */
 	expandedAccounts: Set<string>;
+	/** Current search filter string. */
 	searchFilter: string;
+	/** Currently selected account for detailed view. */
 	selectedAccount: AccountDetail | null;
+	/** Whether to show the account details pane. */
 	showAccountDetails: boolean;
 }
 
+/**
+ * AccountsController
+ *
+ * Manages the state and logic for the Accounts tab in the dashboard.
+ * Handles fetching account data, building the account tree, maintaining expansion state,
+ * and filtering the account list.
+ */
 export class AccountsController {
 	private plugin: BeancountPlugin;
 	
 	// Svelte store for all state
 	public state: Writable<AccountsState>;
 
+	/**
+	 * Creates an instance of AccountsController.
+	 * @param {BeancountPlugin} plugin - The main plugin instance.
+	 */
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
 		this.state = writable({
@@ -39,7 +60,10 @@ export class AccountsController {
 		});
 	}
 
-	// Load account data with hierarchy and details
+	/**
+	 * Loads account data from the backend.
+	 * Fetches the list of accounts and their balances, then builds the tree structure.
+	 */
 	async loadData() {
 		this.state.update(s => ({ ...s, isLoading: true, error: null }));
 
@@ -146,7 +170,10 @@ export class AccountsController {
 		}
 	}
 
-	// Toggle account expansion in hierarchy
+	/**
+	 * Toggles the expansion state of a specific account in the tree.
+	 * @param {string} accountFullName - The full name of the account to toggle.
+	 */
 	toggleAccountExpansion(accountFullName: string) {
 		this.state.update(s => {
 			const newExpanded = new Set(s.expandedAccounts);
@@ -159,7 +186,10 @@ export class AccountsController {
 		});
 	}
 
-	// Show detailed view for an account
+	/**
+	 * Opens the details view for a specific account.
+	 * @param {string} accountFullName - The full name of the account to show.
+	 */
 	showAccountDetail(accountFullName: string) {
 		const currentState = get(this.state);
 		const accountDetail = currentState.accountDetails.get(accountFullName);
@@ -173,7 +203,9 @@ export class AccountsController {
 		}
 	}
 
-	// Close detailed view
+	/**
+	 * Closes the account details view.
+	 */
 	closeAccountDetail() {
 		this.state.update(s => ({
 			...s,
@@ -182,18 +214,29 @@ export class AccountsController {
 		}));
 	}
 
-	// Update search filter
+	/**
+	 * Updates the search filter and triggers re-filtering of the tree.
+	 * @param {string} filter - The new search filter string.
+	 */
 	updateSearchFilter(filter: string) {
 		this.state.update(s => ({ ...s, searchFilter: filter }));
 	}
 
-	// Helper method to get display name (last part of account hierarchy)
+	/**
+	 * Extracts the display name (leaf name) from a full account path.
+	 * @param {string} fullAccountName - e.g., "Assets:Bank:Checking".
+	 * @returns {string} e.g., "Checking".
+	 */
 	private getAccountDisplayName(fullAccountName: string): string {
 		const parts = fullAccountName.split(':');
 		return parts[parts.length - 1];
 	}
 
-	// Helper method to determine account type
+	/**
+	 * Determines the top-level account type.
+	 * @param {string} accountName - The full account name.
+	 * @returns {AccountDetail['accountType']} The account type.
+	 */
 	private getAccountType(accountName: string): AccountDetail['accountType'] {
 		if (accountName.startsWith('Assets')) return 'Assets';
 		if (accountName.startsWith('Liabilities')) return 'Liabilities';
@@ -203,7 +246,10 @@ export class AccountsController {
 		return 'Other';
 	}
 
-	// Filter accounts based on search
+	/**
+	 * Returns the account tree filtered by the current search term.
+	 * @returns {AccountNode[]} The filtered list of root nodes.
+	 */
 	getFilteredAccountTree(): AccountNode[] {
 		const currentState = get(this.state);
 		if (!currentState.searchFilter.trim()) {
@@ -214,7 +260,12 @@ export class AccountsController {
 		return this.filterAccountTreeRecursive(currentState.accountTree, filter);
 	}
 
-	// Recursive filtering for account tree
+	/**
+	 * Recursively filters account nodes.
+	 * @param {AccountNode[]} nodes - The nodes to filter.
+	 * @param {string} filter - The lowercase filter string.
+	 * @returns {AccountNode[]} The filtered nodes.
+	 */
 	private filterAccountTreeRecursive(nodes: AccountNode[], filter: string): AccountNode[] {
 		const filtered: AccountNode[] = [];
 

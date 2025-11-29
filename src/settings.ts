@@ -4,19 +4,33 @@ import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 
+/**
+ * Interface defining the plugin settings.
+ */
 export interface BeancountPluginSettings {
+    /** Path to the main Beancount file. */
     beancountFilePath: string;
+    /** Command to run Beancount/Python (e.g. "bean-query", "python3"). */
     beancountCommand: string;
+    /** The primary currency for reporting and defaults. */
     operatingCurrency: string;
+    /** Max transactions to fetch in the dashboard. */
     maxTransactionResults: number;
+    /** Max entries to fetch in the journal. */
     maxJournalResults: number;
     // BQL Code Block Settings
+    /** Whether to show tool buttons (copy, refresh) on query blocks. */
     bqlShowTools: boolean;
+    /** Whether to show the query source code above results. */
     bqlShowQuery: boolean;
     // BQL Shorthand Template File
+    /** Path to the markdown file defining BQL shortcuts. */
     bqlShorthandsTemplatePath: string;
 }
 
+/**
+ * Default settings for the plugin.
+ */
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
@@ -30,16 +44,29 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     bqlShorthandsTemplatePath: ''
 }
 
+/**
+ * BeancountSettingTab
+ *
+ * The settings tab for the plugin in Obsidian's settings modal.
+ * Provides UI for configuring connection, currencies, limits, and templates.
+ */
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
 
+    /**
+     * Creates an instance of BeancountSettingTab.
+     * @param {App} app - The Obsidian App instance.
+     * @param {BeancountPlugin} plugin - The plugin instance.
+     */
     constructor(app: App, plugin: BeancountPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
 
     /**
-     * Validates currency code format
+     * Validates currency code format.
+     * @param {string} currency - The currency code to validate.
+     * @returns {{isValid: boolean; message: string}} Validation result.
      */
     private validateCurrency(currency: string): { isValid: boolean; message: string } {
         if (!currency.trim()) {
@@ -56,7 +83,9 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Creates a validation display element
+     * Creates a validation display element.
+     * @param {HTMLElement} container - The container to append to.
+     * @returns {HTMLElement} The created element.
      */
     private createValidationElement(container: HTMLElement): HTMLElement {
         const validationEl = container.createEl('div', { 
@@ -67,13 +96,18 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Updates validation message display
+     * Updates validation message display.
+     * @param {HTMLElement} element - The element to update.
+     * @param {{isValid: boolean; message: string}} result - The validation result.
      */
     private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
         element.textContent = result.message;
         element.style.color = result.isValid ? '#4CAF50' : '#f44336';
     }
 
+    /**
+     * Renders the settings tab UI.
+     */
     display(): void {
         const {containerEl} = this;
         containerEl.empty();
@@ -242,7 +276,8 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Set up file autocomplete for the template file input
+     * Set up file autocomplete for the template file input.
+     * @param {HTMLInputElement} input - The input element to attach autocomplete to.
      */
     private setupFileAutocomplete(input: HTMLInputElement) {
         let suggestionContainer: HTMLElement | null = null;
@@ -383,7 +418,8 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Show a file suggestion modal with all markdown files
+     * Show a file suggestion modal with all markdown files.
+     * @param {HTMLInputElement} input - The input element to update with selection.
      */
     private showFileSuggestModal(input: HTMLInputElement) {
         const modal = document.createElement('div');
@@ -529,6 +565,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         document.body.appendChild(modal);
         searchInput.focus();
     }
+
     /**
      * Create the enhanced connection section with Svelte component
      */

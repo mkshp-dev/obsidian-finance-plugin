@@ -3,6 +3,15 @@ import { writable, derived, get } from 'svelte/store';
 import type { JournalService } from '../services/journal.service';
 import type { JournalEntry, JournalFilters, JournalTransaction } from '../models/journal';
 
+/**
+ * Creates a Svelte store for managing journal entries and state.
+ *
+ * Provides reactive stores for entries, loading state, errors, and pagination.
+ * Exposes methods to load, filter, and modify entries via the JournalService.
+ *
+ * @param {JournalService} service - The journal service instance.
+ * @returns {object} The store object containing state and actions.
+ */
 export function createJournalStore(service: JournalService) {
     // State
     const entries = writable<JournalEntry[]>([]);
@@ -22,6 +31,10 @@ export function createJournalStore(service: JournalService) {
     const hasMore = writable<boolean>(false);
 
     // Actions
+
+    /**
+     * Loads entries from the backend based on current filters and pagination.
+     */
     async function loadEntries() {
         loading.set(true);
         error.set(null);
@@ -44,28 +57,47 @@ export function createJournalStore(service: JournalService) {
         }
     }
 
+    /**
+     * Updates the filters and reloads entries (resets to page 1).
+     * @param {Partial<JournalFilters>} newFilters - The new filters to apply.
+     */
     async function setFilters(newFilters: Partial<JournalFilters>) {
         filters.update(f => ({ ...f, ...newFilters }));
         currentPage.set(1);
         await loadEntries();
     }
 
+    /**
+     * Clears all filters and reloads entries.
+     */
     async function clearFilters() {
         filters.set({});
         currentPage.set(1);
         await loadEntries();
     }
 
+    /**
+     * Sets the current page and reloads entries.
+     * @param {number} page - The page number (1-based).
+     */
     async function setPage(page: number) {
         if (page < 1) return;
         currentPage.set(page);
         await loadEntries();
     }
 
+    /**
+     * Refreshes the current view.
+     */
     async function refresh() {
         await loadEntries();
     }
 
+    /**
+     * Adds a new entry via the service and reloads.
+     * @param {any} entry - The entry data.
+     * @returns {Promise<boolean>} True if successful.
+     */
     async function addEntry(entry: any) {
         try {
             await service.createEntry(entry);
@@ -77,6 +109,12 @@ export function createJournalStore(service: JournalService) {
         }
     }
 
+    /**
+     * Updates an existing transaction.
+     * @param {string} id - The transaction ID.
+     * @param {any} data - The updated data.
+     * @returns {Promise<boolean>} True if successful.
+     */
     async function updateTransaction(id: string, data: any) {
         try {
             await service.updateTransaction(id, data);
@@ -88,6 +126,11 @@ export function createJournalStore(service: JournalService) {
         }
     }
 
+    /**
+     * Deletes a transaction.
+     * @param {string} id - The transaction ID.
+     * @returns {Promise<boolean>} True if successful.
+     */
     async function deleteTransaction(id: string) {
         try {
             await service.deleteTransaction(id);
