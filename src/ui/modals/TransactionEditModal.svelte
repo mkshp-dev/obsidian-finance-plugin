@@ -34,13 +34,11 @@
         { account: '', amount: null, currency: operatingCurrency, price: null, cost: null }
     ];
     let selectedTags: string[] = transaction ? [...transaction.tags] : [];
-    let links: string[] = transaction ? [...transaction.links] : [];
     
     // Balance-specific fields
     let balanceAccount = (entry?.type === 'balance') ? (entry as JournalBalance).account : '';
     let balanceAmount = (entry?.type === 'balance') ? (entry as JournalBalance).amount : '';
     let balanceCurrency = (entry?.type === 'balance') ? (entry as JournalBalance).currency : operatingCurrency;
-    let balanceTolerance = (entry?.type === 'balance') ? (entry as JournalBalance).tolerance : '';
     
     // Note-specific fields
     let noteAccount = (entry?.type === 'note') ? (entry as JournalNote).account : '';
@@ -77,7 +75,7 @@
         if (!date) errors.push('Date is required');
         
         if (activeTab === 'transaction') {
-            if (!narration) errors.push('Narration is required');
+            // Removed narration requirement
             if (postings.length < 2) errors.push('At least 2 postings are required');
             
             for (let i = 0; i < postings.length; i++) {
@@ -86,6 +84,12 @@
                 }
             }
             
+            // Validate that max one posting has an empty amount
+            const emptyAmountPostings = postings.filter(p => p.amount === null || p.amount === '');
+            if (emptyAmountPostings.length > 1) {
+                errors.push('Only one posting can have an empty amount (to be auto-calculated)');
+            }
+
             // Check if amounts balance (if all postings have amounts)
             const postingsWithAmounts = postings.filter(p => p.amount !== null && p.amount !== '');
             if (postingsWithAmounts.length === postings.length) {
@@ -130,8 +134,7 @@
                     price: p.price,
                     cost: p.cost
                 })),
-                tags: selectedTags,
-                links
+                tags: selectedTags
             };
         } else if (activeTab === 'balance') {
             entryData = {
@@ -139,8 +142,7 @@
                 date,
                 account: balanceAccount,
                 amount: balanceAmount,
-                currency: balanceCurrency,
-                tolerance: balanceTolerance || null
+                currency: balanceCurrency
             };
         } else if (activeTab === 'note') {
             entryData = {
@@ -181,25 +183,6 @@
     // Remove tag
     function removeTag(tag: string) {
         selectedTags = selectedTags.filter(t => t !== tag);
-    }
-    
-    // Handle link input
-    function handleLinkInput(event: Event) {
-        const target = event.target as HTMLInputElement;
-        const value = target.value;
-        
-        if (event instanceof KeyboardEvent && event.key === 'Enter' && value.trim()) {
-            const trimmedValue = value.trim();
-            if (!links.includes(trimmedValue)) {
-                links = [...links, trimmedValue];
-            }
-            target.value = '';
-        }
-    }
-    
-    // Remove link
-    function removeLink(link: string) {
-        links = links.filter(l => l !== link);
     }
     
     // Delete transaction (only available in edit mode)
@@ -287,13 +270,12 @@
                 </div>
                 
                 <div class="form-group full-width">
-                    <label for="narration">Narration *</label>
+                    <label for="narration">Narration</label>
                     <input 
                         type="text" 
                         id="narration" 
                         bind:value={narration}
                         placeholder="Transaction description"
-                        required
                     />
                 </div>
             </div>
@@ -350,7 +332,7 @@
                 </button>
             </div>
             
-            <!-- Tags and Links -->
+            <!-- Tags -->
             <div class="form-grid">
                 <div class="form-group full-width">
                     <label for="tags">Tags</label>
@@ -373,27 +355,6 @@
                                 <span class="tag">
                                     #{tag}
                                     <button type="button" on:click={() => removeTag(tag)}>&times;</button>
-                                </span>
-                            {/each}
-                        </div>
-                    {/if}
-                </div>
-                
-                <div class="form-group full-width">
-                    <label for="links">Links</label>
-                    <input 
-                        type="text" 
-                        id="links"
-                        on:input={handleLinkInput}
-                        placeholder="Add links (comma-separated)"
-                    />
-                    
-                    {#if links.length > 0}
-                        <div class="selected-links">
-                            {#each links as link}
-                                <span class="link">
-                                    ^{link}
-                                    <button type="button" on:click={() => removeLink(link)}>&times;</button>
                                 </span>
                             {/each}
                         </div>
@@ -439,17 +400,6 @@
                         placeholder="INR"
                         maxlength="3"
                         required
-                    />
-                </div>
-                
-                <div class="form-group full-width">
-                    <label for="balance-tolerance">Tolerance</label>
-                    <input 
-                        type="number" 
-                        step="0.01"
-                        id="balance-tolerance" 
-                        bind:value={balanceTolerance}
-                        placeholder="Optional tolerance amount"
                     />
                 </div>
             </div>
@@ -550,13 +500,14 @@
 <style>
     .transaction-edit-modal {
         background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 8px;
+        /* REMOVED: border: 1px solid var(--background-modifier-border); */
+        border-radius: 0; /* Changed from 8px to 0 for seamless fit */
         max-height: 90vh;
         overflow-y: auto;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        margin: 0; /* Remove margin since modal handles positioning */
-        width: 100%; /* Use full width of modal container */
+        /* REMOVED: box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); */
+        margin: 0;
+        width: 100%;
+        height: 100%; /* Ensure it fills the container */
     }
     
     .modal-header {
@@ -601,8 +552,10 @@
     }
     
     .error {
-        color: var(--text-error);
+        /* Ensure high contrast for error messages */
+        color: var(--text-on-accent);
         margin: 0.25rem 0;
+        font-weight: 500;
     }
     
     .form-grid {
