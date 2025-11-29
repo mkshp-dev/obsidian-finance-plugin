@@ -87,15 +87,15 @@ const config: Config = {
           items: [
             {
               label: 'Getting Started',
-              to: '/docs/intro',
+              to: '/docs/getting-started/intro',
             },
             {
               label: 'Installation',
-              to: '/docs/installation',
+              to: '/docs/getting-started/installation',
             },
             {
               label: 'Dashboard',
-              to: '/docs/dashboard',
+              to: '/docs/core-features/unified-dashboard/overview',
             },
           ],
         },

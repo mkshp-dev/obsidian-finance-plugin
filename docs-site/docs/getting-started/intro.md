@@ -18,7 +18,7 @@ This plugin transforms your Obsidian vault into a powerful financial analysis to
 
 ## 🚀 Key Features
 
-*   **📊 Overview Dashboard**: Real-time Net Worth, Monthly Trends, and Asset Allocation.
+*   **📊 Unified Dashboard**: A centralized hub featuring Overview, Transactions, Journal, Balance Sheet, Accounts, and Commodities tabs.
 *   **💸 Transaction Management**: Unified entry modal for Transactions, Balance Assertions, and Notes with smart validation.
 *   **🏦 Account Hierarchy**: Interactive tree view with real-time balances and drill-down capability.
 *   **📋 Journal View**: Full Beancount ledger interface with server-side filtering and Fava-style cards.
@@ -28,15 +28,12 @@ This plugin transforms your Obsidian vault into a powerful financial analysis to
 
 ## 📚 Documentation Guide
 
-*   **[Installation](./installation.md)**: How to set up the plugin and its dependencies.
-*   **[Dashboard](./dashboard.md)**: Explore the visual analytics and account views.
-*   **[BQL Queries](./bql.md)**: Learn how to query your data directly in Obsidian notes.
-*   **[Transactions](./transactions.md)**: How to create and manage financial entries.
-*   **[Commodities](./commodities.md)**: Managing assets, currencies, and prices.
-*   **[Journal & Backend](./journal.md)**: Understanding the ledger view and the background process.
-*   **[Settings](./settings.md)**: Configuration and connection management.
-*   **[Troubleshooting](./troubleshooting.md)**: Solutions for common issues.
-*   **[Agent Context](./agent-context.md)**: Technical overview for AI assistants and developers.
+This documentation is structured to help you get the most out of the plugin:
+
+*   **[Getting Started](./installation.md)**: Setup instructions and initial configuration.
+*   **[Core Features](../core-features/unified-dashboard/overview.md)**: Deep dive into the Dashboard, Adding Directives, and Snapshot views.
+*   **[Configuration](../configuration/settings.md)**: Detailed explanation of all plugin settings.
+*   **[Queries](../queries/bql.md)**: Master the Beancount Query Language (BQL) within Obsidian.
 
 ## 🔧 Requirements
 
