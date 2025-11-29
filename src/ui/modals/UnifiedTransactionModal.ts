@@ -47,46 +47,14 @@ export class UnifiedTransactionModal extends Modal {
         this.modalEl.style.maxWidth = '1200px';
         this.modalEl.style.width = '95vw';
 
-        // Show loading indicator
-        const loadingEl = contentEl.createDiv('loading-indicator');
-        loadingEl.textContent = 'Loading...';
+        // Set initial title (fallback, component will update it)
+        this.setTitle(this.mode === 'edit' ? 'Edit Transaction' : 'Add Transaction');
 
-        // Load form data with better error handling and defaults
-        let accounts: string[] = [];
-        let payees: string[] = [];
-        let tags: string[] = [];
-        let currencies: string[] = [];
-
-        try {
-            // Use ApiClient to fetch data directly or via Service if exposed
-            const { apiClient } = this.plugin;
-
-            // Run all requests in parallel for better performance
-            // We can use the apiClient directly here
-            const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
-                apiClient.get<{accounts: string[]}>('/accounts'),
-                apiClient.get<{payees: string[]}>('/payees'),
-                apiClient.get<{tags: string[]}>('/tags'),
-                apiClient.get<{commodities: {name: string}[]}>('/commodities')
-            ]);
-            
-            accounts = accountsResult.status === 'fulfilled' ? accountsResult.value.accounts : [];
-            payees = payeesResult.status === 'fulfilled' ? payeesResult.value.payees : [];
-            tags = tagsResult.status === 'fulfilled' ? tagsResult.value.tags : [];
-            currencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.commodities.map(c => c.name) : [];
-            
-            // Fallback to common currencies if no commodities found
-            if (currencies.length === 0) {
-                currencies = ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
-            }
-        } catch (error) {
-            console.error('Error loading form data:', error);
-            // Don't show notice for data loading errors, just use empty arrays and fallback currencies
-            currencies = ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
-        }
-
-        // Remove loading indicator
-        loadingEl.remove();
+        // Initialize with empty data
+        const accounts: string[] = [];
+        const payees: string[] = [];
+        const tags: string[] = [];
+        let currencies: string[] = ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD']; // Default fallback
 
         // Create component immediately with static import
         this.component = new (TransactionEditModal as any)({
@@ -108,6 +76,44 @@ export class UnifiedTransactionModal extends Modal {
         this.component.$on('save', (e: any) => this.onSave(e.detail));
         this.component.$on('delete', (e: any) => this.onDelete(e.detail));
         this.component.$on('cancel', () => this.close());
+        this.component.$on('titleChange', (e: any) => this.setTitle(e.detail)); // Listen for title changes
+
+        // Fetch data in background
+        this.fetchData();
+    }
+
+    async fetchData() {
+        try {
+            // Use ApiClient to fetch data directly or via Service if exposed
+            const { apiClient } = this.plugin;
+
+            // Run all requests in parallel for better performance
+            const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
+                apiClient.get<{accounts: string[]}>('/accounts'),
+                apiClient.get<{payees: string[]}>('/payees'),
+                apiClient.get<{tags: string[]}>('/tags'),
+                apiClient.get<{commodities: {name: string}[]}>('/commodities')
+            ]);
+
+            const accounts = accountsResult.status === 'fulfilled' ? accountsResult.value.accounts : [];
+            const payees = payeesResult.status === 'fulfilled' ? payeesResult.value.payees : [];
+            const tags = tagsResult.status === 'fulfilled' ? tagsResult.value.tags : [];
+            const fetchedCurrencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.commodities.map(c => c.name) : [];
+
+            const currencies = fetchedCurrencies.length > 0 ? fetchedCurrencies : ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
+
+            // Update component props
+            if (this.component) {
+                this.component.$set({
+                    accounts,
+                    payees,
+                    tags,
+                    currencies
+                });
+            }
+        } catch (error) {
+            console.error('Error loading form data:', error);
+        }
     }
 
     async onAdd(entryData: any) {
