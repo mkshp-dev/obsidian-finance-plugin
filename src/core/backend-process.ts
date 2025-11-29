@@ -6,13 +6,26 @@ import { FileSystemAdapter } from 'obsidian';
 import type BeancountPlugin from '../main';
 import { SystemDetector } from '../utils/SystemDetector';
 
+/**
+ * Interface representing the status of the backend process.
+ */
 interface BackendStatus {
+    /** Whether the backend process is currently running. */
     isRunning: boolean;
+    /** Whether the backend process is currently in the startup phase. */
     isStarting: boolean;
+    /** The process ID of the backend process, if running. */
     processId: number | null;
+    /** Number of retry attempts made if startup failed. */
     retryCount: number;
 }
 
+/**
+ * BackendProcess
+ *
+ * Manages the lifecycle of the Python backend process (starting, stopping, monitoring).
+ * Handles detection of the optimal Python environment (including WSL) and dependency verification.
+ */
 export class BackendProcess {
     private plugin: BeancountPlugin;
     private backendProcess: ChildProcess | null = null;
@@ -20,10 +33,21 @@ export class BackendProcess {
     private maxRetries: number = 3;
     private retryCount: number = 0;
 
+    /**
+     * Creates an instance of BackendProcess.
+     * @param {BeancountPlugin} plugin - The main plugin instance.
+     */
     constructor(plugin: BeancountPlugin) {
         this.plugin = plugin;
     }
 
+    /**
+     * Starts the backend process.
+     *
+     * Detects the environment, ensures dependencies are installed, and spawns the Python server.
+     *
+     * @returns {Promise<boolean>} True if started successfully, false otherwise.
+     */
     public async start(): Promise<boolean> {
         if (this.isStarting || this.backendProcess) {
             return true;
@@ -154,6 +178,9 @@ export class BackendProcess {
         }
     }
 
+    /**
+     * Stops the running backend process.
+     */
     public stop(): void {
         if (this.backendProcess) {
             this.backendProcess.kill('SIGTERM');
@@ -161,6 +188,10 @@ export class BackendProcess {
         }
     }
 
+    /**
+     * Gets the current status of the backend process.
+     * @returns {BackendStatus} Object containing isRunning, isStarting, processId, etc.
+     */
     public getStatus(): BackendStatus {
         return {
             isRunning: this.backendProcess !== null && !this.backendProcess.killed,
@@ -170,6 +201,12 @@ export class BackendProcess {
         };
     }
 
+    /**
+     * Ensures required Python packages are installed.
+     * @param {string} pythonCmd - The command to run Python (e.g. "python3" or "wsl python3").
+     * @param {boolean} useWSL - Whether WSL is being used.
+     * @param {any} currentPackages - Object containing currently detected package versions.
+     */
     private async ensureDependencies(pythonCmd: string, useWSL: boolean, currentPackages: any): Promise<void> {
         const requiredPackages = ['beancount', 'flask', 'flask-cors'];
 
@@ -197,6 +234,11 @@ export class BackendProcess {
         }
     }
 
+    /**
+     * Executes a shell command and returns stdout.
+     * @param {string} command - The command to execute.
+     * @returns {Promise<string>} The standard output of the command.
+     */
     private runCommand(command: string): Promise<string> {
         return new Promise((resolve, reject) => {
             exec(command, (error, stdout) => {

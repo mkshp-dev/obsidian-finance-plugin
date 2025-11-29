@@ -7,32 +7,64 @@ import { homedir, platform, arch, type, release } from 'os';
 
 const execAsync = promisify(exec);
 
+/**
+ * Interface representing system information detected by the SystemDetector.
+ */
 export interface SystemInfo {
+    /** The platform name (e.g., 'win32', 'darwin'). */
     platform: NodeJS.Platform;
+    /** Human-readable platform name (e.g., 'Windows', 'macOS'). */
     platformDisplay: string;
+    /** CPU architecture (e.g., 'x64'). */
     arch: string;
+    /** Operating system type. */
     osType: string;
+    /** Operating system release version. */
     osRelease: string;
+    /** User's home directory path. */
     homeDir: string;
+    /** Path separator for the system. */
     pathSeparator: string;
+    /** Whether Windows Subsystem for Linux (WSL) is detected. */
     isWSL: boolean;
+    /** The detected shell environment. */
     shell: string;
+    /** Path to the Python executable. */
     pythonExecutable: string | null;
+    /** Version of the detected Python executable. */
     pythonVersion: string | null;
 }
 
+/**
+ * Interface representing information about a detected executable.
+ */
 export interface ExecutableInfo {
+    /** Whether the executable was found. */
     found: boolean;
+    /** Path to the executable. */
     path: string | null;
+    /** Version of the executable, if detectable. */
     version: string | null;
+    /** Whether the executable is accessible/runnable. */
     accessible: boolean;
+    /** Error message if not found or not accessible. */
     errorMessage?: string;
 }
 
+/**
+ * SystemDetector
+ *
+ * Utility class for detecting system configuration, Python environment, and Beancount tools.
+ * Handles platform-specific logic (Windows vs Unix, WSL detection) and command path resolution.
+ */
 export class SystemDetector {
     private static _instance: SystemDetector;
     private _systemInfo: SystemInfo | null = null;
 
+    /**
+     * Gets the singleton instance of SystemDetector.
+     * @returns {SystemDetector} The singleton instance.
+     */
     static getInstance(): SystemDetector {
         if (!SystemDetector._instance) {
             SystemDetector._instance = new SystemDetector();
@@ -42,6 +74,8 @@ export class SystemDetector {
 
     /**
      * Get human-readable platform name
+     * @param {NodeJS.Platform} platformInfo - The platform identifier.
+     * @returns {string} The display name.
      */
     private getPlatformDisplayName(platformInfo: NodeJS.Platform): string {
         switch (platformInfo) {
@@ -57,7 +91,9 @@ export class SystemDetector {
     }
 
     /**
-     * Detect comprehensive system information
+     * Detect comprehensive system information.
+     * Caches the result after the first call.
+     * @returns {Promise<SystemInfo>} The detected system information.
      */
     async getSystemInfo(): Promise<SystemInfo> {
         if (this._systemInfo) {
@@ -92,7 +128,8 @@ export class SystemDetector {
     }
 
     /**
-     * Detect if running in WSL (Windows Subsystem for Linux)
+     * Detect if running in WSL (Windows Subsystem for Linux) environment.
+     * @returns {Promise<boolean>} True if running inside WSL.
      */
     private async detectWSL(): Promise<boolean> {
         try {
@@ -123,6 +160,7 @@ export class SystemDetector {
     /**
      * Check if WSL is available on Windows systems (public method)
      * This checks if WSL can be used, not if we're currently running in WSL
+     * @returns {Promise<boolean>} True if WSL is available on the Windows host.
      */
     async detectWSLAvailability(): Promise<boolean> {
         try {
@@ -151,6 +189,7 @@ export class SystemDetector {
 
     /**
      * Detect current shell with enhanced terminal detection
+     * @returns {Promise<string>} The name of the shell.
      */
     private async detectShell(): Promise<string> {
         try {
@@ -217,6 +256,7 @@ export class SystemDetector {
 
     /**
      * Detect Python executable and version
+     * @returns {Promise<{ path: string | null; version: string | null }>} The python path and version.
      */
     private async detectPython(): Promise<{ path: string | null; version: string | null }> {
         const pythonCommands = ['python3', 'python', 'py'];
@@ -240,6 +280,8 @@ export class SystemDetector {
 
     /**
      * Find executable in system PATH
+     * @param {string} executableName - The name of the executable to find.
+     * @returns {Promise<ExecutableInfo>} Information about the found executable.
      */
     async findExecutable(executableName: string): Promise<ExecutableInfo> {
         try {
@@ -319,6 +361,7 @@ export class SystemDetector {
 
     /**
      * Get common executable search paths for current platform
+     * @returns {string[]} List of common paths.
      */
     private getCommonExecutablePaths(): string[] {
         const platformInfo = platform();
@@ -355,6 +398,8 @@ export class SystemDetector {
 
     /**
      * Get possible executable name variations for different platforms
+     * @param {string} baseName - The base name of the executable.
+     * @returns {string[]} List of variations (e.g. with .exe extension).
      */
     private getExecutableVariations(baseName: string): string[] {
         const variations = [baseName];
@@ -372,6 +417,8 @@ export class SystemDetector {
 
     /**
      * Normalize and resolve file paths for current system
+     * @param {string} filePath - The path to normalize.
+     * @returns {string} The normalized, resolved path.
      */
     normalizeFilePath(filePath: string): string {
         if (!filePath) return '';
@@ -391,6 +438,8 @@ export class SystemDetector {
 
     /**
      * Convert WSL path to Windows path
+     * @param {string} wslPath - The path in WSL format (/mnt/c/...)
+     * @returns {string} The path in Windows format (C:\...)
      */
     private convertWSLToWindowsPath(wslPath: string): string {
         const match = wslPath.match(/^\/mnt\/([a-zA-Z])\/(.*)/);
@@ -404,6 +453,8 @@ export class SystemDetector {
 
     /**
      * Convert Windows path to WSL path format
+     * @param {string} windowsPath - The path in Windows format.
+     * @returns {string} The path in WSL format.
      */
     public convertWindowsToWSLPath(windowsPath: string): string {
         // Convert C:\path\to\file to /mnt/c/path/to/file
@@ -418,6 +469,9 @@ export class SystemDetector {
 
     /**
      * Get appropriate command format for current system
+     * @param {string} baseCommand - The base command.
+     * @param {string[]} args - Arguments for the command.
+     * @returns {string} The formatted command string.
      */
     formatCommand(baseCommand: string, args: string[] = []): string {
         const systemInfo = this._systemInfo;
@@ -443,6 +497,7 @@ export class SystemDetector {
 
     /**
      * Validate and suggest beancount command based on system detection
+     * @returns {Promise<string[]>} List of suggested command strings.
      */
     async suggestBeancountCommand(): Promise<string[]> {
         const suggestions: string[] = [];
@@ -477,6 +532,9 @@ export class SystemDetector {
 
     /**
      * Test if a command works with proper error handling
+     * @param {string} command - The command to test.
+     * @param {number} [timeout=5000] - Timeout in milliseconds.
+     * @returns {Promise<{ success: boolean; output?: string; error?: string }>} The result.
      */
     async testCommand(command: string, timeout: number = 5000): Promise<{ success: boolean; output?: string; error?: string }> {
         try {
@@ -493,6 +551,8 @@ export class SystemDetector {
 
     /**
      * Comprehensive Python environment detection with package validation
+     * @param {boolean} [useWSL=false] - Whether to check in WSL.
+     * @returns {Promise<object>} Detailed report of Python environment.
      */
     async detectPythonEnvironment(useWSL: boolean = false): Promise<{
         command: string | null;
@@ -591,6 +651,9 @@ export class SystemDetector {
 
     /**
      * Comprehensive bean-query command detection with version validation
+     * @param {boolean} [useWSL=false] - Whether to check in WSL.
+     * @param {string} [beancountFilePath] - Optional path to a beancount file to test against.
+     * @returns {Promise<object>} Report of bean-query detection.
      */
     async detectBeanQueryCommand(useWSL: boolean = false, beancountFilePath?: string): Promise<{
         command: string | null;
@@ -680,6 +743,9 @@ export class SystemDetector {
 
     /**
      * Comprehensive bean-check command detection with version validation
+     * @param {boolean} [useWSL=false] - Whether to check in WSL.
+     * @param {string} [beancountFilePath] - Optional path to a beancount file to test validation.
+     * @returns {Promise<object>} Report of bean-check detection.
      */
     async detectBeanCheckCommand(useWSL: boolean = false, beancountFilePath?: string): Promise<{
         command: string | null;
@@ -768,6 +834,8 @@ export class SystemDetector {
 
     /**
      * Comprehensive bean-price command detection with version validation
+     * @param {boolean} [useWSL=false] - Whether to check in WSL.
+     * @returns {Promise<object>} Report of bean-price detection.
      */
     async detectBeanPriceCommand(useWSL: boolean = false): Promise<{
         command: string | null;
@@ -849,7 +917,12 @@ export class SystemDetector {
     }
 
     /**
-     * Auto-detect optimal Beancount commands by testing all variations
+     * Auto-detect optimal Beancount commands by testing all variations.
+     * This is the main entry point for configuring the plugin's environment.
+     *
+     * @param {string} [beancountFilePath] - Path to the user's ledger file.
+     * @param {boolean} [preferWSL=false] - User preference for WSL.
+     * @returns {Promise<object>} Comprehensive report containing optimal commands for python, bean-query, etc.
      */
     async detectOptimalBeancountSetup(beancountFilePath?: string, preferWSL: boolean = false): Promise<{
         python: string | null;
@@ -1113,4 +1186,5 @@ export class SystemDetector {
 
 }
 
+/** Singleton instance of SystemDetector. */
 export const systemDetector = SystemDetector.getInstance();

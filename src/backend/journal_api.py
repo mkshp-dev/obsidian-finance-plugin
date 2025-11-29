@@ -33,16 +33,35 @@ except ImportError:
     sys.exit(1)
 
 class BeancountJournalAPI:
-    """Main API class for Beancount journal data"""
+    """
+    Main API class for Beancount journal data.
+
+    Handles loading, parsing, and querying of the Beancount file, as well as
+    providing methods to modify the file (add, update, delete entries).
+    """
 
     @staticmethod
     def filter_user_metadata(meta: dict) -> dict:
-        """Return only user-supplied metadata, filtering out internal fields."""
+        """
+        Return only user-supplied metadata, filtering out internal fields.
+
+        Args:
+            meta (dict): The metadata dictionary from a Beancount entry.
+
+        Returns:
+            dict: A new dictionary containing only user-supplied metadata.
+        """
         if not meta:
             return {}
         return {k: v for k, v in meta.items() if k not in ('lineno', 'filename')}
     
     def __init__(self, beancount_file: str):
+        """
+        Initialize the BeancountJournalAPI.
+
+        Args:
+            beancount_file (str): The file path to the main Beancount ledger file.
+        """
         self.beancount_file = beancount_file
         self.entries = None
         self.errors = None
@@ -50,7 +69,15 @@ class BeancountJournalAPI:
         self.load_data()
     
     def load_data(self):
-        """Load and parse the Beancount file"""
+        """
+        Load and parse the Beancount file.
+
+        Populates self.entries, self.errors, and self.options_map.
+        Prints errors to stdout if parsing fails or has warnings.
+
+        Raises:
+            Exception: If loading the file fails completely.
+        """
         try:
             self.entries, self.errors, self.options_map = loader.load_file(self.beancount_file)
             if self.errors:
@@ -62,7 +89,11 @@ class BeancountJournalAPI:
             raise
     
     def reload_data(self):
-        """Reload the Beancount file (for when it changes)"""
+        """
+        Reload the Beancount file.
+
+        Useful when the file has been modified externally or by this API.
+        """
         self.load_data()
     
     def get_entries(self, 
@@ -76,7 +107,28 @@ class BeancountJournalAPI:
                    limit: int = 100,
                    offset: int = 0) -> Dict[str, Any]:
         """
-        Get all entries (transactions and other directives) with filtering and pagination
+        Get all entries (transactions and other directives) with filtering and pagination.
+
+        Args:
+            start_date (Optional[str]): Filter entries on or after this date (YYYY-MM-DD).
+            end_date (Optional[str]): Filter entries on or before this date (YYYY-MM-DD).
+            account_filter (Optional[str]): Filter entries involving this account name.
+            payee_filter (Optional[str]): Filter transactions by payee name.
+            tag_filter (Optional[str]): Filter transactions containing this tag.
+            search_term (Optional[str]): General search term matching payee, narration, or account.
+            entry_types (Optional[List[str]]): List of entry types to include (e.g., ['transaction', 'note']).
+                                               Defaults to ['transaction', 'balance', 'pad', 'note'].
+            limit (int): Maximum number of entries to return. Defaults to 100.
+            offset (int): Number of entries to skip. Defaults to 0.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing:
+                - entries (List[Dict]): The list of filtered entry objects.
+                - total_count (int): Total number of entries after filtering (before pagination).
+                - returned_count (int): Number of entries returned in this page.
+                - offset (int): The offset used.
+                - limit (int): The limit used.
+                - has_more (bool): True if there are more entries available after this page.
         """
         entries = []
         
@@ -157,7 +209,15 @@ class BeancountJournalAPI:
         }
     
     def get_entry_type(self, entry) -> str:
-        """Get the type of a Beancount entry (focused on journal essentials)"""
+        """
+        Get the string type representation of a Beancount entry.
+
+        Args:
+            entry: A Beancount directive object.
+
+        Returns:
+            str: One of 'transaction', 'note', 'balance', 'pad', or 'unknown'.
+        """
         if isinstance(entry, data.Transaction):
             return 'transaction'
         elif isinstance(entry, data.Note):
@@ -170,7 +230,16 @@ class BeancountJournalAPI:
             return 'unknown'
     
     def entry_matches_account(self, entry, account_filter: str) -> bool:
-        """Check if an entry matches the account filter"""
+        """
+        Check if an entry matches the account filter.
+
+        Args:
+            entry: The Beancount entry to check.
+            account_filter (str): The account name substring to match.
+
+        Returns:
+            bool: True if the entry involves the account, False otherwise.
+        """
         account_lower = account_filter.lower()
         
         if isinstance(entry, data.Transaction):
@@ -181,7 +250,16 @@ class BeancountJournalAPI:
         return False
     
     def entry_matches_search(self, entry, search_term: str) -> bool:
-        """Check if an entry matches the search term"""
+        """
+        Check if an entry matches a general search term.
+
+        Args:
+            entry: The Beancount entry to check.
+            search_term (str): The term to search for in payee, narration, or accounts.
+
+        Returns:
+            bool: True if the search term matches any relevant field.
+        """
         search_lower = search_term.lower()
         
         if isinstance(entry, data.Transaction):
@@ -201,7 +279,15 @@ class BeancountJournalAPI:
         return False
     
     def entry_to_dict(self, entry) -> Dict[str, Any]:
-        """Convert any supported Beancount entry to a dictionary"""
+        """
+        Convert any supported Beancount entry to a dictionary.
+
+        Args:
+            entry: The Beancount entry object.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the entry, suitable for JSON serialization.
+        """
         # Safely convert metadata
         safe_metadata = {}
         if hasattr(entry, 'meta') and entry.meta:
@@ -238,13 +324,29 @@ class BeancountJournalAPI:
             return base_data
     
     def generate_entry_id(self, entry) -> str:
-        """Generate a unique ID using Beancount's official hash_entry function"""
+        """
+        Generate a unique ID using Beancount's official hash_entry function.
+
+        Args:
+            entry: The Beancount entry.
+
+        Returns:
+            str: A hash string uniquely identifying the entry.
+        """
         # Use Beancount's built-in stable hash function
         # This includes metadata (filename, lineno) by default for true uniqueness
         return hash_entry(entry, exclude_meta=False)
     
     def transaction_to_dict_data(self, transaction: data.Transaction) -> Dict[str, Any]:
-        """Convert transaction-specific data"""
+        """
+        Convert transaction-specific data to a dictionary.
+
+        Args:
+            transaction (data.Transaction): The transaction object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing flag, payee, narration, tags, links, and postings.
+        """
         postings = []
         for posting in transaction.postings:
             posting_data = {
@@ -285,14 +387,30 @@ class BeancountJournalAPI:
         }
     
     def note_to_dict_data(self, note: data.Note) -> Dict[str, Any]:
-        """Convert Note directive data"""
+        """
+        Convert Note directive data to a dictionary.
+
+        Args:
+            note (data.Note): The note object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account and comment.
+        """
         return {
             'account': note.account,
             'comment': note.comment
         }
     
     def balance_to_dict_data(self, balance: data.Balance) -> Dict[str, Any]:
-        """Convert Balance directive data"""
+        """
+        Convert Balance directive data to a dictionary.
+
+        Args:
+            balance (data.Balance): The balance object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account, amount, currency, tolerance, and diff_amount.
+        """
         return {
             'account': balance.account,
             'amount': str(balance.amount.number),
@@ -302,7 +420,15 @@ class BeancountJournalAPI:
         }
     
     def pad_to_dict_data(self, pad: data.Pad) -> Dict[str, Any]:
-        """Convert Pad directive data"""
+        """
+        Convert Pad directive data to a dictionary.
+
+        Args:
+            pad (data.Pad): The pad object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account and source_account.
+        """
         return {
             'account': pad.account,
             'source_account': pad.source_account
@@ -318,7 +444,22 @@ class BeancountJournalAPI:
                         limit: int = 100,
                         offset: int = 0) -> Dict[str, Any]:
         """
-        Legacy method to get only transactions (for backward compatibility)
+        Legacy method to get only transactions (for backward compatibility).
+
+        Delegates to get_entries with entry_types=['transaction'].
+
+        Args:
+            start_date (Optional[str]): Start date filter.
+            end_date (Optional[str]): End date filter.
+            account_filter (Optional[str]): Account name filter.
+            payee_filter (Optional[str]): Payee name filter.
+            tag_filter (Optional[str]): Tag filter.
+            search_term (Optional[str]): General search term.
+            limit (int): Max results.
+            offset (int): Pagination offset.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing list of 'transactions' and pagination metadata.
         """
         result = self.get_entries(
             start_date=start_date,
@@ -343,7 +484,12 @@ class BeancountJournalAPI:
         }
     
     def get_accounts(self) -> List[str]:
-        """Get all account names"""
+        """
+        Get all unique account names from the journal.
+
+        Returns:
+            List[str]: A sorted list of account strings.
+        """
         accounts = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction):
@@ -355,7 +501,12 @@ class BeancountJournalAPI:
         return sorted(list(accounts))
     
     def get_payees(self) -> List[str]:
-        """Get all unique payees"""
+        """
+        Get all unique payees from transactions.
+
+        Returns:
+            List[str]: A sorted list of payee strings.
+        """
         payees = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction) and entry.payee:
@@ -364,7 +515,12 @@ class BeancountJournalAPI:
         return sorted(list(payees))
     
     def get_tags(self) -> List[str]:
-        """Get all unique tags"""
+        """
+        Get all unique tags from transactions.
+
+        Returns:
+            List[str]: A sorted list of tag strings.
+        """
         tags = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction) and entry.tags:
@@ -373,10 +529,14 @@ class BeancountJournalAPI:
         return sorted(list(tags))
     
     def get_commodities(self) -> List[Dict[str, Any]]:
-        """Get all unique commodities/currencies from transactions and price entries
+        """
+        Get all unique commodities/currencies from transactions and price entries.
 
         Note: This remains a simple helper for backwards compatibility. Use
         `get_commodities_detailed()` for rich metadata and latest-price information.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts, e.g. [{'name': 'USD'}, ...].
         """
         commodities = set()
 
@@ -400,7 +560,12 @@ class BeancountJournalAPI:
         return [{'name': commodity} for commodity in sorted(list(commodities))]
 
     def find_first_directive_date(self) -> Optional[date]:
-        """Return the earliest date found across all entries (best-effort)."""
+        """
+        Return the earliest date found across all entries (best-effort).
+
+        Returns:
+            Optional[date]: The earliest date, or None if no dated entries exist.
+        """
         first = None
         for entry in self.entries:
             try:
@@ -412,7 +577,13 @@ class BeancountJournalAPI:
         return first
 
     def get_commodities_detailed(self) -> List[Dict[str, Any]]:
-        """Return detailed commodity information including metadata and latest price."""
+        """
+        Return detailed commodity information including metadata and latest price.
+
+        Returns:
+            List[Dict[str, Any]]: A list of commodity detail objects containing symbol,
+                                  metadata, logo_url, price_meta, latest_price, etc.
+        """
         commodity_map: Dict[str, Dict[str, Any]] = {}
 
         # Collect declared commodities and metadata
@@ -483,7 +654,15 @@ class BeancountJournalAPI:
         return [commodity_map[k] for k in sorted(commodity_map.keys())]
 
     def get_commodity_details(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Return detailed information for a specific commodity"""
+        """
+        Return detailed information for a specific commodity.
+
+        Args:
+            symbol (str): The commodity currency symbol (e.g. 'USD', 'AAPL').
+
+        Returns:
+            Optional[Dict[str, Any]]: The commodity detail object or None if not found.
+        """
         details = None
         for c in self.get_commodities_detailed():
             if c['symbol'] == symbol:
@@ -494,7 +673,17 @@ class BeancountJournalAPI:
         return details
 
     def create_commodity_declaration(self, symbol: str, metadata: Dict[str, Any], date_for_decl: Optional[date] = None) -> Dict[str, Any]:
-        """Append a new commodity declaration to the Beancount file."""
+        """
+        Append a new commodity declaration to the Beancount file.
+
+        Args:
+            symbol (str): The commodity symbol.
+            metadata (Dict[str, Any]): Metadata key-value pairs to attach.
+            date_for_decl (Optional[date]): The date for the directive. Defaults to first directive date or today.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and optional 'message' or 'error'.
+        """
         try:
             print(f"[DEBUG] create_commodity_declaration called for symbol={symbol} metadata={metadata} date_for_decl={date_for_decl}")
             if not isinstance(metadata, dict):
@@ -548,7 +737,16 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def update_commodity_metadata(self, symbol: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Update or create commodity declaration metadata."""
+        """
+        Update or create commodity declaration metadata.
+
+        Args:
+            symbol (str): The commodity symbol.
+            metadata (Dict[str, Any]): The new metadata to apply.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and details.
+        """
         try:
             print(f"[DEBUG] update_commodity_metadata called for symbol={symbol} metadata={metadata}")
             if not isinstance(metadata, dict):
@@ -651,7 +849,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def validate_price_source(self, price_meta: str) -> Dict[str, Any]:
-        """Validate price metadata by running bean-price with -e and checking output."""
+        """
+        Validate price metadata by running bean-price with -e and checking output.
+
+        Args:
+            price_meta (str): The price source definition (e.g. "yahoo/AAPL").
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool), and 'output' or 'error'.
+        """
         try:
             print(f"[DEBUG] validate_price_source called with price_meta={price_meta}")
             if not price_meta or not isinstance(price_meta, str):
@@ -686,7 +892,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def validate_logo_url(self, url: str) -> Dict[str, Any]:
-        """Check if a URL returns an image content-type."""
+        """
+        Check if a URL returns an image content-type.
+
+        Args:
+            url (str): The URL to check.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and 'content_type' or 'error'.
+        """
         try:
             print(f"[DEBUG] validate_logo_url called with url={url}")
             if not url or not isinstance(url, str):
@@ -710,7 +924,13 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive statistics about the ledger (focused on journal essentials)"""
+        """
+        Get comprehensive statistics about the ledger (focused on journal essentials).
+
+        Returns:
+            Dict[str, Any]: Dictionary containing counts of transactions, notes, etc.,
+                            and date ranges.
+        """
         stats = {
             'transaction_count': 0,
             'note_count': 0,
@@ -749,7 +969,15 @@ class BeancountJournalAPI:
         return stats
 
     def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
-        """Find a transaction by its ID"""
+        """
+        Find a transaction by its ID.
+
+        Args:
+            transaction_id (str): The hash ID of the transaction.
+
+        Returns:
+            Optional[data.Transaction]: The transaction object or None.
+        """
         for entry in self.entries:
             if isinstance(entry, data.Transaction):
                 entry_id = self.generate_entry_id(entry)
@@ -758,7 +986,16 @@ class BeancountJournalAPI:
         return None
 
     def update_transaction_in_file(self, transaction_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update a transaction in the Beancount file"""
+        """
+        Update a transaction in the Beancount file.
+
+        Args:
+            transaction_id (str): The ID of the transaction to update.
+            updated_data (Dict[str, Any]): The new transaction data (payee, narration, postings, etc.).
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
             # Find the original transaction
             original_transaction = self.find_transaction_by_id(transaction_id)
@@ -814,7 +1051,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': f'Failed to update transaction: {str(e)}'}
 
     def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
-        """Delete a transaction from the Beancount file"""
+        """
+        Delete a transaction from the Beancount file.
+
+        Args:
+            transaction_id (str): The ID of the transaction to delete.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
             # Find the original transaction
             original_transaction = self.find_transaction_by_id(transaction_id)
@@ -867,7 +1112,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': f'Failed to delete transaction: {str(e)}'}
 
     def generate_transaction_text(self, transaction_data: Dict[str, Any]) -> str:
-        """Generate Beancount transaction text from transaction data"""
+        """
+        Generate Beancount transaction text from transaction data.
+
+        Args:
+            transaction_data (Dict[str, Any]): The transaction data dictionary.
+
+        Returns:
+            str: Formatted Beancount string.
+        """
         date_str = transaction_data['date']
         flag = transaction_data.get('flag', '*')
         payee = transaction_data.get('payee', '')
@@ -915,7 +1168,15 @@ class BeancountJournalAPI:
         return '\n'.join(lines)
 
     def add_entry_to_file(self, entry_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Add a new entry (transaction, balance, or note) to the Beancount file"""
+        """
+        Add a new entry (transaction, balance, or note) to the Beancount file.
+
+        Args:
+            entry_data (Dict[str, Any]): Dictionary containing entry type and data.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
             # Create backup
             backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -949,7 +1210,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': f'Failed to add {entry_data.get("type", "entry")}: {str(e)}'}
 
     def generate_balance_text(self, balance_data: Dict[str, Any]) -> str:
-        """Generate balance assertion text for Beancount file"""
+        """
+        Generate balance assertion text for Beancount file.
+
+        Args:
+            balance_data (Dict[str, Any]): Balance data including date, account, amount, etc.
+
+        Returns:
+            str: Formatted Beancount balance string.
+        """
         date_str = balance_data['date']
         account = balance_data['account']
         amount = balance_data['amount']
@@ -962,7 +1231,15 @@ class BeancountJournalAPI:
             return f"{date_str} balance {account} {amount} {currency}"
 
     def generate_note_text(self, note_data: Dict[str, Any]) -> str:
-        """Generate note directive text for Beancount file"""
+        """
+        Generate note directive text for Beancount file.
+
+        Args:
+            note_data (Dict[str, Any]): Note data including date, account, and comment.
+
+        Returns:
+            str: Formatted Beancount note string.
+        """
         date_str = note_data['date']
         account = note_data['account']
         comment = note_data['comment']
@@ -970,13 +1247,29 @@ class BeancountJournalAPI:
         return f'{date_str} note {account} "{comment}"'
 
     def add_transaction_to_file(self, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to add_entry_to_file"""
+        """
+        Legacy method - redirects to add_entry_to_file.
+
+        Args:
+            transaction_data (Dict[str, Any]): Transaction data.
+
+        Returns:
+            Dict[str, Any]: Result from add_entry_to_file.
+        """
         transaction_data['type'] = 'transaction'
         return self.add_entry_to_file(transaction_data)
 
 # Flask App Setup
 def create_app(beancount_file: str) -> Flask:
-    """Create and configure the Flask app"""
+    """
+    Create and configure the Flask app.
+
+    Args:
+        beancount_file (str): Path to the Beancount file.
+
+    Returns:
+        Flask: The configured Flask application instance.
+    """
     app = Flask(__name__)
     CORS(app)  # Enable CORS for all routes
     
@@ -1292,7 +1585,11 @@ def create_app(beancount_file: str) -> Flask:
     return app
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point.
+
+    Parses command line arguments and starts the Flask server.
+    """
     parser = argparse.ArgumentParser(description='Beancount Journal API Server')
     parser.add_argument('beancount_file', help='Path to the Beancount file')
     parser.add_argument('--port', type=int, default=5001, help='Port to run the server on')

@@ -7,25 +7,47 @@ import * as queries from '../queries/index';
 import { parseAmount, extractConvertedAmount, getCurrentMonthRange } from '../utils/index'; // Import helpers
 import { parse as parseCsv } from 'csv-parse/sync';
 
-// Define the shape of our state
+/**
+ * Interface representing the state of the Overview dashboard.
+ */
 export interface OverviewState {
+	/** Whether data is loading. */
 	isLoading: boolean;
+	/** Error message if loading failed. */
 	error: string | null;
+	/** Net worth string (e.g. "1,000.00 USD"). */
 	netWorth: string;
+	/** Monthly income string. */
 	monthlyIncome: string;
+	/** Monthly expenses string. */
 	monthlyExpenses: string;
+	/** Savings rate percentage string (e.g. "20%"). */
 	savingsRate: string;
+	/** Chart.js configuration object for the net worth chart. */
 	chartConfig: ChartConfiguration | null;
+	/** Error specific to chart data loading. */
 	chartError: string | null;
+	/** The reporting currency. */
 	currency: string;
 }
 
+/**
+ * OverviewController
+ *
+ * Manages the state and logic for the Overview tab.
+ * Fetches high-level financial metrics (Net Worth, Income, Expenses) and
+ * prepares data for the Net Worth over time chart.
+ */
 export class OverviewController {
 	private plugin: BeancountPlugin;
 	
 	// Create a Svelte store to hold the state
 	public state: Writable<OverviewState>;
 
+	/**
+	 * Creates an instance of OverviewController.
+	 * @param {BeancountPlugin} plugin - The main plugin instance.
+	 */
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
 		// Initialize the store with default values
@@ -42,7 +64,10 @@ export class OverviewController {
 		});
 	}
 
-	// The main data-fetching method
+	/**
+	 * Loads all overview data from Beancount.
+	 * Fetches total assets, liabilities, monthly income/expenses, and historical data for the chart.
+	 */
 	async loadData() {
 		this.state.update(s => ({ ...s, isLoading: true, error: null, chartError: null }));
 

@@ -5,7 +5,15 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
 
 // --- QUERY RUNNER ---
-// Pass the plugin instance to access settings
+
+/**
+ * Executes a Beancount query (BQL) against the configured ledger file.
+ *
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} query - The BQL query string.
+ * @returns {Promise<string>} The CSV output of the query.
+ * @throws {Error} If the query fails or command/path is not set.
+ */
 export function runQuery(plugin: BeancountPlugin, query: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const filePath = plugin.settings.beancountFilePath;
@@ -50,6 +58,13 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 }
 
 // --- CSV PARSER HELPER ---
+
+/**
+ * Parses a single value from a CSV response (typically from a simple SELECT query).
+ *
+ * @param {string} csv - The raw CSV string.
+ * @returns {string} The parsed single value (e.g. "100.00 USD") or "0 USD" on failure.
+ */
 export function parseSingleValue(csv: string): string {
 	try {
 		// First, try to clean and process the raw CSV data
@@ -115,6 +130,13 @@ export function parseSingleValue(csv: string): string {
 }
 
 // --- PATH CONVERTER ---
+
+/**
+ * Converts a WSL path (/mnt/c/...) to a Windows path (C:\...).
+ *
+ * @param {string} wslPath - The WSL path.
+ * @returns {string} The corresponding Windows path.
+ */
 export function convertWslPathToWindows(wslPath: string): string {
 	const match = wslPath.match(/^\/mnt\/([a-zA-Z])\//);
 	if (match) {
@@ -127,6 +149,12 @@ export function convertWslPathToWindows(wslPath: string): string {
 // --- ACCOUNT TREE BUILDER ---
 import type { AccountNode } from '../models/account';
 
+/**
+ * Builds a hierarchical tree of accounts from a flat list of account names.
+ *
+ * @param {string[]} accounts - List of account strings (e.g. "Assets:Bank:Checking").
+ * @returns {AccountNode[]} The root level nodes of the account tree.
+ */
 export function buildAccountTree(accounts: string[]): AccountNode[] {
 	const root: AccountNode = { name: 'Root', fullName: '', children: [] };
 	accounts.sort();
@@ -144,6 +172,15 @@ export function buildAccountTree(accounts: string[]): AccountNode[] {
 }
 
 // --- DEBOUNCE UTILITY ---
+
+/**
+ * Creates a debounced version of a function.
+ *
+ * @template T
+ * @param {T} func - The function to debounce.
+ * @param {number} wait - The wait time in milliseconds.
+ * @returns {(...args: Parameters<T>) => void} The debounced function.
+ */
 export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
 	let timeout: ReturnType<typeof setTimeout> | null = null;
 	return function executedFunction(...args: Parameters<T>) {
@@ -162,6 +199,12 @@ export function debounce<T extends (...args: any[]) => any>(func: T, wait: numbe
 // ... (at the end of the file, after the debounce function)
 
 // --- DATE HELPER ---
+
+/**
+ * Gets the start and end dates of the current month.
+ *
+ * @returns {{start: string, end: string}} Object with 'start' and 'end' date strings (YYYY-MM-DD).
+ */
 export function getCurrentMonthRange(): { start: string, end: string } {
 	const now = new Date();
 	const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -178,6 +221,12 @@ export function getCurrentMonthRange(): { start: string, end: string } {
 	return { start: formatDate(startOfMonth), end: formatDate(endOfMonth) };
 }
 
+/**
+ * Parses a string amount into a numeric value and currency.
+ *
+ * @param {string} amountString - The string to parse (e.g. "1,234.56 USD").
+ * @returns {{amount: number, currency: string}} The parsed amount and currency.
+ */
 export function parseAmount(amountString: string): { amount: number; currency: string } {
 	// Default values
 	const defaultValue = { amount: 0, currency: 'USD' };
@@ -200,6 +249,13 @@ export function parseAmount(amountString: string): { amount: number; currency: s
 	return defaultValue;
 }
 
+/**
+ * Extracts the amount for a specific currency from an inventory string.
+ *
+ * @param {string} inventoryString - The multi-currency inventory string.
+ * @param {string} targetCurrency - The currency to extract.
+ * @returns {string} The extracted amount string with currency.
+ */
 export function extractConvertedAmount(inventoryString: string, targetCurrency: string): string {
 	// Regex to find the number associated with the *specific* target currency
 	const regex = new RegExp(`(-?[\\d,]+\\.?\\d*)\\s*${targetCurrency}`);
@@ -213,6 +269,13 @@ export function extractConvertedAmount(inventoryString: string, targetCurrency: 
 	return `0.00 ${targetCurrency}`;
 }
 
+/**
+ * Extracts amounts for all currencies EXCEPT the operating currency.
+ *
+ * @param {string} inventoryString - The inventory string.
+ * @param {string} operatingCurrency - The currency to exclude.
+ * @returns {string} Newline-separated list of other currency amounts.
+ */
 export function extractNonReportingCurrencies(inventoryString: string, operatingCurrency: string): string {
 	// Extract all currency amounts from the inventory string
 	const currencyRegex = /(-?[\d,]+\.?\d*)\s*([A-Z]{3,4})/g;
@@ -239,6 +302,14 @@ export function extractNonReportingCurrencies(inventoryString: string, operating
 }
 
 // --- CURRENCY FORMATTER ---
+
+/**
+ * Formats a number as a currency string.
+ *
+ * @param {number} amount - The numeric amount.
+ * @param {string} currency - The currency symbol.
+ * @returns {string} Formatted string (e.g. "1,234.56 USD").
+ */
 export function formatCurrency(amount: number, currency: string): string {
 	if (isNaN(amount)) {
 		return `0.00 ${currency}`;

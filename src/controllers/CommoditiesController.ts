@@ -4,41 +4,79 @@ import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import type { ApiClient } from '../api/client';
 
+/**
+ * Interface representing metadata and state of a single commodity.
+ */
 export interface CommodityInfo {
+    /** The commodity symbol (e.g. "USD", "AAPL"). */
     symbol: string;
+    /** Whether explicit price metadata exists for this commodity. */
     hasPriceMetadata: boolean;
+    /** The price metadata string (e.g. "yahoo/AAPL") if exists. */
     priceMetadata?: string;
+    /** Complete metadata dictionary from Beancount. */
     fullMetadata: Record<string, any>;
-    currentPrice?: string; // Latest price from getprice()
+    /** Latest price information if available. */
+    currentPrice?: string;
+    /** Alias for fullMetadata for UI compatibility. */
     metadata?: Record<string, any>;
 }
 
+/**
+ * Interface representing the state of the Commodities view.
+ */
 export interface CommoditiesState {
+    /** List of all loaded commodities. */
     commodities: CommodityInfo[];
+    /** The currently selected commodity for detailed view. */
     selectedCommodity: CommodityInfo | null;
+    /** Current search filter string. */
     searchTerm: string;
+    /** Whether data is loading. */
     loading: boolean;
+    /** Error message if loading/saving failed. */
     error: string | null;
+    /** Timestamp of last data update. */
     lastUpdated: Date | null;
+    /** Whether any commodity data exists. */
     hasCommodityData: boolean;
 }
 
+/**
+ * CommoditiesController
+ *
+ * Manages the state and logic for the Commodities tab.
+ * Handles loading commodity lists, fetching details (including prices and metadata),
+ * creating/updating commodity definitions, and validating price sources/logo URLs.
+ */
 export class CommoditiesController {
     private plugin: BeancountPlugin;
     private apiClient: ApiClient;
     
     // Reactive stores
+    /** Store for the full list of commodities. */
     public commodities: Writable<CommodityInfo[]> = writable([]);
+    /** Store for the currently selected commodity. */
     public selectedCommodity: Writable<CommodityInfo | null> = writable(null);
+    /** Store for the search term. */
     public searchTerm: Writable<string> = writable('');
+    /** Store for loading state. */
     public loading: Writable<boolean> = writable(false);
+    /** Store for error messages. */
     public error: Writable<string | null> = writable(null);
+    /** Store for last update timestamp. */
     public lastUpdated: Writable<Date | null> = writable(null);
+    /** Store indicating if any data is present. */
     public hasCommodityData: Writable<boolean> = writable(false);
 
     // Derived stores for filtering
+    /** Store containing commodities filtered by the search term. */
     public filteredCommodities: Writable<CommodityInfo[]> = writable([]);
 
+    /**
+     * Creates an instance of CommoditiesController.
+     * @param {BeancountPlugin} plugin - The main plugin instance.
+     */
     constructor(plugin: BeancountPlugin) {
         this.plugin = plugin;
         // Inject ApiClient directly from the plugin instance
@@ -47,6 +85,9 @@ export class CommoditiesController {
         console.debug('[CommoditiesController] initialized');
     }
 
+    /**
+     * Sets up reactive subscriptions to update filtered lists automatically.
+     */
     private setupReactivity() {
         // Update filtered commodities when search term or commodities change
         let currentCommodities: CommodityInfo[] = [];
@@ -63,6 +104,11 @@ export class CommoditiesController {
         });
     }
 
+    /**
+     * Updates the filteredCommodities store based on the search term.
+     * @param {CommodityInfo[]} commodities - The full list.
+     * @param {string} searchTerm - The search term.
+     */
     private updateFilteredCommodities(commodities: CommodityInfo[], searchTerm: string) {
         if (!searchTerm.trim()) {
             this.filteredCommodities.set(commodities);
@@ -76,7 +122,8 @@ export class CommoditiesController {
     }
 
     /**
-     * Load all commodities data
+     * Load all commodities data from the backend.
+     * Fetches detailed information including metadata and latest prices.
      */
     public async loadData(): Promise<void> {
         this.loading.set(true);
@@ -121,7 +168,9 @@ export class CommoditiesController {
     }
 
     /**
-     * Load detailed information for a specific commodity
+     * Load detailed information for a specific commodity by symbol.
+     * Updates selectedCommodity store.
+     * @param {string} symbol - The commodity symbol.
      */
     public async loadCommodityDetails(symbol: string): Promise<void> {
         console.debug('[CommoditiesController] loadCommodityDetails:', symbol);
@@ -146,7 +195,10 @@ export class CommoditiesController {
     }
 
     /**
-     * Save metadata (creates or updates commodity directive)
+     * Save metadata (creates or updates commodity directive in Beancount).
+     * @param {string} symbol - The commodity symbol.
+     * @param {Record<string, any>} metadata - The metadata key-value pairs.
+     * @returns {Promise<boolean | any>} The result object or false on failure.
      */
     public async saveMetadata(symbol: string, metadata: Record<string, any>): Promise<boolean | any> {
         this.loading.set(true);
@@ -197,7 +249,9 @@ export class CommoditiesController {
     }
 
     /**
-     * Test price source using backend bean-price validation
+     * Test price source string using the backend's validation (runs bean-price).
+     * @param {string} symbol - The commodity symbol.
+     * @returns {Promise<any>} The validation result.
      */
     public async testPriceSource(symbol: string): Promise<any> {
         this.loading.set(true);
@@ -224,7 +278,10 @@ export class CommoditiesController {
     }
 
     /**
-     * Test logo URL via backend
+     * Validates a logo URL via the backend (checks content type).
+     * @param {string} symbol - The commodity symbol (for logging/context).
+     * @param {string} url - The URL to test.
+     * @returns {Promise<any>} The validation result.
      */
     public async testLogoUrl(symbol: string, url: string): Promise<any> {
         console.debug('[CommoditiesController] testLogoUrl:', { symbol, url });
@@ -241,13 +298,19 @@ export class CommoditiesController {
         }
     }
 
+    /**
+     * Helper to find a commodity in the current list by symbol.
+     * @param {string} symbol - The symbol to find.
+     * @returns {CommodityInfo | undefined} The commodity info.
+     */
     private getCommodityBySymbol(symbol: string): CommodityInfo | undefined {
         const list = get(this.commodities);
         return list.find(c => c.symbol === symbol);
     }
 
     /**
-     * Set the selected commodity and load its details
+     * Selects a commodity and loads its full details.
+     * @param {CommodityInfo} commodity - The commodity to select.
      */
     public async selectCommodity(commodity: CommodityInfo): Promise<void> {
         console.debug('[CommoditiesController] selectCommodity ->', commodity?.symbol);
@@ -256,21 +319,22 @@ export class CommoditiesController {
     }
 
     /**
-     * Clear the selected commodity
+     * Clears the currently selected commodity.
      */
     public clearSelection(): void {
         this.selectedCommodity.set(null);
     }
 
     /**
-     * Update search term
+     * Sets the search term.
+     * @param {string} term - The new search term.
      */
     public setSearchTerm(term: string): void {
         this.searchTerm.set(term);
     }
 
     /**
-     * Refresh all data
+     * Triggers a refresh of the commodity data.
      */
     public async refresh(): Promise<void> {
         await this.loadData();

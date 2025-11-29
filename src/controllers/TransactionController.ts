@@ -7,24 +7,44 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import { buildAccountTree } from '../utils/index';
 import type { AccountNode } from '../models/account';
 
-// Define the shape of our state
+/**
+ * Interface representing the state of the Transaction view.
+ */
 export interface TransactionState {
+	/** Whether the main transaction list is loading. */
 	isLoading: boolean;
+	/** Whether the filters (accounts, tags) are loading. */
 	isLoadingFilters: boolean;
+	/** Error message if loading failed. */
 	error: string | null;
+	/** Current active filters. */
 	currentFilters: queries.TransactionFilters;
+	/** List of raw transaction rows (CSV parsed). */
 	currentTransactions: string[][];
+	/** Tree structure of accounts for the filter dropdown. */
 	accountTree: AccountNode[];
-	allAccounts: string[]; // Add flat list of account names
+	/** Flat list of all available accounts. */
+	allAccounts: string[];
+	/** List of all available tags. */
 	allTags: string[];
 }
 
+/**
+ * TransactionController
+ *
+ * Manages the state and logic for the Transaction tab.
+ * Handles loading transaction data based on filters, and fetching available filter options (accounts, tags).
+ */
 export class TransactionController {
 	private plugin: BeancountPlugin;
 	
 	// Svelte store for all state
 	public state: Writable<TransactionState>;
 
+	/**
+	 * Creates an instance of TransactionController.
+	 * @param {BeancountPlugin} plugin - The main plugin instance.
+	 */
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
 		this.state = writable({
@@ -34,13 +54,15 @@ export class TransactionController {
 			currentFilters: {},
 			currentTransactions: [],
 			accountTree: [],
-			allAccounts: [], // Add empty array for account names
+			allAccounts: [],
 			allTags: [],
 		});
 	}
 
-	// --- LOGIC MOVED FROM SVELTE onMount ---
-	// Fetches the data needed for the filters (accounts, tags)
+	/**
+	 * Fetches metadata needed for filters (all accounts and tags).
+	 * Typically called on mount.
+	 */
 	async loadFilterData() {
 		this.state.update(s => ({ ...s, isLoadingFilters: true }));
 		try {
@@ -80,8 +102,10 @@ export class TransactionController {
 		}
 	}
 
-	// --- LOGIC MOVED FROM unified-dashboard-view.ts ---
-	// Fetches the actual transactions based on filters
+	/**
+	 * Updates the transaction list based on new filters.
+	 * @param {queries.TransactionFilters} filters - The filters to apply.
+	 */
 	async handleFilterChange(filters: queries.TransactionFilters) {
 		this.state.update(s => ({ ...s, isLoading: true, error: null, currentFilters: filters }));
 		
