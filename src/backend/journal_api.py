@@ -164,14 +164,22 @@ class BeancountJournalAPI:
                     if not self.entry_matches_account(entry, account_filter):
                         continue
                 
-                # Apply payee filter (only for transactions)
-                if payee_filter and isinstance(entry, data.Transaction):
-                    if not entry.payee or payee_filter.lower() not in entry.payee.lower():
+                # Apply payee filter
+                if payee_filter:
+                    if isinstance(entry, data.Transaction):
+                        if not entry.payee or payee_filter.lower() not in entry.payee.lower():
+                            continue
+                    else:
+                        # Skip non-transactions when filtering by payee
                         continue
                 
-                # Apply tag filter (only for transactions)
-                if tag_filter and isinstance(entry, data.Transaction):
-                    if not entry.tags or tag_filter.lower() not in [t.lower() for t in entry.tags]:
+                # Apply tag filter
+                if tag_filter:
+                    if isinstance(entry, data.Transaction):
+                        if not entry.tags or tag_filter.lower() not in [t.lower() for t in entry.tags]:
+                            continue
+                    else:
+                        # Skip non-transactions when filtering by tag
                         continue
                 
                 # Apply search term
@@ -968,21 +976,32 @@ class BeancountJournalAPI:
         
         return stats
 
-    def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
+    def find_entry_by_id(self, entry_id: str) -> Optional[Any]:
         """
-        Find a transaction by its ID.
+        Find an entry (Transaction, Note, Balance, Pad) by its ID.
 
         Args:
-            transaction_id (str): The hash ID of the transaction.
+            entry_id (str): The hash ID of the entry.
 
         Returns:
-            Optional[data.Transaction]: The transaction object or None.
+            Optional[Any]: The entry object or None.
         """
         for entry in self.entries:
-            if isinstance(entry, data.Transaction):
-                entry_id = self.generate_entry_id(entry)
-                if entry_id == transaction_id:
+            # Check supported entry types
+            if isinstance(entry, (data.Transaction, data.Note, data.Balance, data.Pad)):
+                eid = self.generate_entry_id(entry)
+                if eid == entry_id:
                     return entry
+        return None
+
+    def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
+        """
+        Legacy method: Find a transaction by its ID.
+        DEPRECATED: Use find_entry_by_id instead.
+        """
+        entry = self.find_entry_by_id(transaction_id)
+        if isinstance(entry, data.Transaction):
+            return entry
         return None
 
     def update_transaction_in_file(self, transaction_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1050,21 +1069,21 @@ class BeancountJournalAPI:
         except Exception as e:
             return {'success': False, 'error': f'Failed to update transaction: {str(e)}'}
 
-    def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
+    def delete_entry_from_file(self, entry_id: str) -> Dict[str, Any]:
         """
-        Delete a transaction from the Beancount file.
+        Delete an entry (Transaction, Note, Balance, Pad) from the Beancount file.
 
         Args:
-            transaction_id (str): The ID of the transaction to delete.
+            entry_id (str): The ID of the entry to delete.
 
         Returns:
             Dict[str, Any]: Result object with 'success' (bool).
         """
         try:
-            # Find the original transaction
-            original_transaction = self.find_transaction_by_id(transaction_id)
-            if not original_transaction:
-                return {'success': False, 'error': 'Transaction not found'}
+            # Find the original entry
+            original_entry = self.find_entry_by_id(entry_id)
+            if not original_entry:
+                return {'success': False, 'error': 'Entry not found'}
 
             # Create backup
             backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -1074,23 +1093,23 @@ class BeancountJournalAPI:
             with open(self.beancount_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # Find the transaction in the file by looking for its line number
-            if hasattr(original_transaction, 'meta') and 'lineno' in original_transaction.meta:
-                lineno = original_transaction.meta['lineno']
+            # Find the entry in the file by looking for its line number
+            if hasattr(original_entry, 'meta') and 'lineno' in original_entry.meta:
+                lineno = original_entry.meta['lineno']
                 lines = content.split('\n')
                 
-                # Find the start and end of the transaction
+                # Find the start and end of the entry
                 start_line = lineno - 1  # Convert to 0-based indexing
                 end_line = start_line
                 
-                # Find the end of the transaction (next non-indented line or empty line)
+                # Find the end of the entry (next non-indented line or empty line)
                 while end_line + 1 < len(lines):
                     next_line = lines[end_line + 1].strip()
                     if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
                         break
                     end_line += 1
                 
-                # Remove the transaction lines
+                # Remove the entry lines
                 del lines[start_line:end_line + 1]
                 
                 # Write back to file
@@ -1102,14 +1121,20 @@ class BeancountJournalAPI:
                 
                 return {
                     'success': True, 
-                    'message': 'Transaction deleted successfully',
+                    'message': 'Entry deleted successfully',
                     'backup_file': backup_path
                 }
             else:
-                return {'success': False, 'error': 'Could not locate transaction in file'}
+                return {'success': False, 'error': 'Could not locate entry in file'}
 
         except Exception as e:
-            return {'success': False, 'error': f'Failed to delete transaction: {str(e)}'}
+            return {'success': False, 'error': f'Failed to delete entry: {str(e)}'}
+
+    def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
+        """
+        Legacy method: redirects to delete_entry_from_file.
+        """
+        return self.delete_entry_from_file(transaction_id)
 
     def generate_transaction_text(self, transaction_data: Dict[str, Any]) -> str:
         """

@@ -71,7 +71,8 @@ export class UnifiedDashboardView extends ItemView {
 				balanceSheetController: this.balanceSheetController,
 				accountsController: this.accountsController,
 				commoditiesController: this.commoditiesController,
-				journalStore: this.plugin.journalStore // Pass store instead of controller
+				journalStore: this.plugin.journalStore, // Pass store instead of controller
+				plugin: this.plugin // Pass plugin instance
 			}
 		});
 
