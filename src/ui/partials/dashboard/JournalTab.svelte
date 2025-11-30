@@ -1,9 +1,39 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { debounce } from '../../../utils/index';
+    import TransactionCard from './cards/TransactionCard.svelte';
+    import BalanceCard from './cards/BalanceCard.svelte';
+    import NoteCard from './cards/NoteCard.svelte';
+    import { UnifiedTransactionModal } from '../../modals/UnifiedTransactionModal';
+    import { ConfirmModal } from '../../modals/ConfirmModal';
+    import type { JournalEntry } from '../../../models/journal';
 
     // Instead of importing Controller, we receive the Store
     export let store: any;
+    // We also need the plugin instance to pass to the modal
+    // But store usually doesn't have the plugin instance.
+    // The previous code didn't use plugin instance for actions, but UnifiedTransactionModal NEEDS it.
+    // How did JournalTab get the plugin?
+    // It didn't use it before.
+    // UnifiedTransactionModal constructor: (app: App, plugin: BeancountPlugin, ...)
+    // We need to access the plugin instance.
+    // Usually passed as prop or context.
+    // Let's assume it's available via a method on the store or we need to find a way.
+    // In UnifiedDashboardView.svelte, JournalTab is rendered.
+    // UnifiedDashboardView receives `controller` which has `plugin`.
+    // JournalTab receives `store`.
+    // We might need to pass `plugin` prop to JournalTab.
+    // Let's check UnifiedDashboardView.svelte again.
+
+    // For now, I'll add `plugin` export and update the caller if needed.
+    // Or I can access it via the store if the store holds a reference?
+    // The store is a Svelte store, likely not holding the plugin directly in a public way.
+    // `journal.store.ts` imports `JournalService`.
+
+    // The `UnifiedDashboardView.svelte` passes `store={journalStore}`.
+    // I should check `UnifiedDashboardView.svelte` to see if I can pass `plugin`.
+
+    export let plugin: any = null; // We will need to update the parent to pass this.
 
     // Destructure store for easier access
     const {
@@ -37,31 +67,6 @@
     }, 500);
 
     function applyFilters() {
-        const newFilters: any = {};
-        if (searchTerm) newFilters.searchTerm = searchTerm;
-        if (selectedAccount) newFilters.account = selectedAccount;
-        if (startDate) newFilters.startDate = startDate;
-        if (endDate) newFilters.endDate = endDate;
-        if (payeeFilter) newFilters.payee = payeeFilter;
-        if (tagFilter) newFilters.tag = tagFilter;
-
-        if (typeFilter !== 'all') {
-            newFilters.entryTypes = [typeFilter];
-        } else {
-            newFilters.entryTypes = undefined; // clear it
-        }
-
-        // We need to merge with empty object to ensure we clear old filters if they are now empty
-        // Actually setFilters merges. To clear, we should use setFilters with explicit undefineds or clearFilters then set.
-        // But JournalStore.setFilters does a merge.
-        // Let's just pass what we have. If a user clears an input, we pass empty string?
-        // JournalService checks `if (filters.account)` so empty string is ignored.
-        // So we need to ensure we don't persist old values.
-
-        // Better approach: clear all then set new.
-        // But that triggers two loads.
-        // Let's just update the store with all keys.
-
         setFilters({
             searchTerm: searchTerm || undefined,
             account: selectedAccount || undefined,
@@ -84,40 +89,40 @@
         clearFilters();
     }
 
-    function formatDate(dateStr: string) {
-        if (!dateStr) return '';
-        return new Date(dateStr).toLocaleDateString();
+    function handleEdit(entry: JournalEntry) {
+        if (!plugin) {
+            console.error("Plugin instance not found");
+            return;
+        }
+        new UnifiedTransactionModal(plugin.app, plugin, entry, async () => {
+            await refresh();
+        }).open();
     }
 
-    function formatEntryType(type: string) {
-        switch(type) {
-            case 'transaction': return 'TXN';
-            case 'note': return 'NOTE';
-            case 'pad': return 'PAD';
-            case 'balance': return 'BAL';
-            default: return type.toUpperCase();
+    function handleDelete(entry: JournalEntry) {
+        if (!plugin) {
+            console.error("Plugin instance not found");
+            return;
         }
-    }
 
-    function getEntryDescription(entry: any) {
-        if (entry.type === 'transaction') {
-            return `${entry.payee ? entry.payee + ' | ' : ''}${entry.narration || ''}`;
-        }
-        if (entry.type === 'note') {
-            return `${entry.account}: ${entry.comment}`;
-        }
-        if (entry.type === 'balance') {
-            return `Balance ${entry.account}: ${entry.amount} ${entry.currency}`;
-        }
-        if (entry.type === 'pad') {
-            return `Pad ${entry.account} from ${entry.source_account}`;
-        }
-        return '';
+        new ConfirmModal(
+            plugin.app,
+            'Delete Entry',
+            `Are you sure you want to delete this ${entry.type}?`,
+            async () => {
+                await deleteTransaction(entry.id);
+            }
+        ).open();
     }
 
     onMount(() => {
         loadEntries();
     });
+
+    // Filter visible entries to only allow transaction, balance, note
+    $: visibleEntries = $entries.filter((e: any) =>
+        ['transaction', 'balance', 'note'].includes(e.type)
+    );
 </script>
 
 <div class="journal-tab">
@@ -135,7 +140,6 @@
                     <option value="transaction">Transactions</option>
                     <option value="note">Notes</option>
                     <option value="balance">Balances</option>
-                    <option value="pad">Pads</option>
                 </select>
             </div>
              <div class="filter-group">
@@ -175,48 +179,35 @@
         </div>
     {/if}
 
-    <!-- Table -->
-    <div class="table-container">
-        <table class="journal-table">
-            <thead>
-                <tr>
-                    <th class="col-date">Date</th>
-                    <th class="col-type">Type</th>
-                    <th class="col-desc">Description</th>
-                    <th class="col-actions">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {#if $loading}
-                    <tr>
-                        <td colspan="4" class="text-center py-8">Loading...</td>
-                    </tr>
-                {:else if $entries.length === 0}
-                    <tr>
-                        <td colspan="4" class="text-center py-8">No entries found.</td>
-                    </tr>
-                {:else}
-                    {#each $entries as entry}
-                        <tr>
-                            <td class="col-date">{formatDate(entry.date)}</td>
-                            <td class="col-type">
-                                <span class="badge badge-{entry.type}">{formatEntryType(entry.type)}</span>
-                            </td>
-                            <td class="col-desc">
-                                {getEntryDescription(entry)}
-                            </td>
-                            <td class="col-actions">
-                                {#if entry.type === 'transaction'}
-                                    <button class="action-btn delete-btn" title="Delete" on:click={() => deleteTransaction(entry.id)}>
-                                        🗑️
-                                    </button>
-                                {/if}
-                            </td>
-                        </tr>
-                    {/each}
+    <!-- Cards List -->
+    <div class="cards-container">
+        {#if $loading}
+            <div class="loading-state">Loading entries...</div>
+        {:else if visibleEntries.length === 0}
+             <div class="empty-state">No entries found matching your filters.</div>
+        {:else}
+            {#each visibleEntries as entry (entry.id)}
+                {#if entry.type === 'transaction'}
+                    <TransactionCard
+                        {entry}
+                        on:edit={() => handleEdit(entry)}
+                        on:delete={() => handleDelete(entry)}
+                    />
+                {:else if entry.type === 'balance'}
+                    <BalanceCard
+                        {entry}
+                        on:edit={() => handleEdit(entry)}
+                        on:delete={() => handleDelete(entry)}
+                    />
+                {:else if entry.type === 'note'}
+                    <NoteCard
+                        {entry}
+                        on:edit={() => handleEdit(entry)}
+                        on:delete={() => handleDelete(entry)}
+                    />
                 {/if}
-            </tbody>
-        </table>
+            {/each}
+        {/if}
     </div>
 
     <!-- Pagination -->
@@ -322,71 +313,19 @@
         border: 1px solid var(--text-error);
     }
 
-    .table-container {
+    .cards-container {
         flex: 1;
         overflow-y: auto;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 8px;
+        padding-right: 4px; /* Space for scrollbar */
     }
 
-    .journal-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .journal-table th {
-        text-align: left;
-        padding: 0.75rem;
-        background: var(--background-secondary);
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: 3rem;
         color: var(--text-muted);
-        font-weight: 600;
-        font-size: 0.85rem;
-        position: sticky;
-        top: 0;
-        border-bottom: 1px solid var(--background-modifier-border);
-    }
-
-    .journal-table td {
-        padding: 0.6rem 0.75rem;
-        border-bottom: 1px solid var(--background-modifier-border);
-        font-size: 0.9rem;
-        color: var(--text-normal);
-    }
-
-    .journal-table tr:hover {
-        background-color: var(--background-modifier-hover);
-    }
-
-    .col-date { width: 100px; font-family: var(--font-monospace); }
-    .col-type { width: 80px; }
-    .col-desc { flex: 1; font-family: var(--font-monospace); }
-    .col-actions { width: 60px; text-align: center; }
-
-    .badge {
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    .badge-transaction { background: var(--interactive-accent); color: var(--text-on-accent); }
-    .badge-note { background: var(--text-muted); color: var(--text-on-accent); }
-    .badge-balance { background: var(--color-purple); color: var(--text-on-accent); }
-    .badge-pad { background: var(--color-orange); color: var(--text-on-accent); }
-
-    .action-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        opacity: 0.6;
-        padding: 4px;
-    }
-
-    .action-btn:hover {
-        opacity: 1;
-        background-color: var(--background-modifier-hover);
-        border-radius: 4px;
+        font-size: 1.1rem;
+        border: 1px dashed var(--background-modifier-border);
+        border-radius: 8px;
     }
 
     .pagination-container {
@@ -420,7 +359,4 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
-
-    .text-center { text-align: center; }
-    .py-8 { padding-top: 2rem; padding-bottom: 2rem; }
 </style>
