@@ -23,6 +23,7 @@
     export let accountsController: AccountsController;
     export let commoditiesController: CommoditiesController;
     export let journalStore: any;
+    export let plugin: any = null; // Add plugin prop
 
     let activeTab = 'overview';
 
@@ -57,7 +58,7 @@
                 on:filtersChange={e => transactionController.handleFilterChange(e.detail)}
             />
         {:else if activeTab === 'journal'}
-            <JournalTab store={journalStore} />
+            <JournalTab store={journalStore} plugin={plugin} />
         {:else if activeTab === 'balancesheet'}
             <BalanceSheetTab controller={balanceSheetController} />
         {:else if activeTab === 'accounts'}

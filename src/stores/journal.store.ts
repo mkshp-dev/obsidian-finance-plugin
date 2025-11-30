@@ -45,9 +45,16 @@ export function createJournalStore(service: JournalService) {
 
             const data = await service.getEntries(currentFilters, page, size);
 
-            entries.set(data.entries || []);
-            totalCount.set(data.total_count);
-            hasMore.set(data.has_more);
+            // Ensure entries is always an array to prevent crashes
+            if (Array.isArray(data.entries)) {
+                entries.set(data.entries);
+            } else {
+                console.warn('JournalStore: Received invalid entries data', data.entries);
+                entries.set([]);
+            }
+
+            totalCount.set(data.total_count || 0);
+            hasMore.set(data.has_more || false);
             lastUpdated.set(new Date());
         } catch (err: any) {
             console.error('Failed to load entries', err);
