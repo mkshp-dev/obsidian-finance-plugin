@@ -8,11 +8,13 @@ import { runQuery, parseSingleValue, convertWslPathToWindows } from './utils/ind
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
 import { BQLCodeBlockProcessor } from './ui/markdown/BQLCodeBlockProcessor';
 import { InlineBQLProcessor } from './ui/markdown/InlineBQLProcessor';
+import { OnboardingModal } from './ui/modals/OnboardingModal';
 
 import { BackendProcess } from './core/backend-process';
 import { ApiClient } from './api/client';
 import { JournalService } from './services/journal.service';
 import { createJournalStore } from './stores/journal.store';
+import { Logger } from './utils/logger';
 
 // --------------------------------------------------
 
@@ -38,11 +40,23 @@ export default class BeancountPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+        // Initialize Logger
+        Logger.setDebugMode(this.settings.debugMode);
+        Logger.log('Plugin loading...');
+
         // Initialize Core Services
         this.backendProcess = new BackendProcess(this);
         this.apiClient = new ApiClient(this.backendProcess);
         this.journalService = new JournalService(this.apiClient);
         this.journalStore = createJournalStore(this.journalService);
+
+        // Check for onboarding
+        if (!this.settings.beancountFilePath) {
+            Logger.log('No Beancount file configured. Triggering onboarding.');
+            this.app.workspace.onLayoutReady(() => {
+                new OnboardingModal(this.app, this).open();
+            });
+        }
 
 		// Initialize and register BQL code block processor
 		this.registerBQLProcessor();
@@ -123,13 +137,14 @@ export default class BeancountPlugin extends Plugin {
 		}
 
 		if (leaf) {
+			Logger.log(`Activating view: ${viewType} at ${location}`);
 			await leaf.setViewState({
 				type: viewType,
 				active: true,
 			});
 			this.app.workspace.revealLeaf(leaf); // Focus the view
 		} else {
-			console.error(`Could not get leaf for location: ${location}`);
+			Logger.error(`Could not get leaf for location: ${location}`);
 		}
 	}
 	
@@ -180,6 +195,7 @@ export default class BeancountPlugin extends Plugin {
 	 * Stops backend processes.
 	 */
 	onunload() {
+        Logger.log('Plugin unloading...');
         this.backendProcess?.stop();
     }
 	

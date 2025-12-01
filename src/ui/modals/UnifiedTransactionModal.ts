@@ -5,6 +5,7 @@ import type BeancountPlugin from '../../main';
 import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
+import { Logger } from '../../utils/logger';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -40,6 +41,7 @@ export class UnifiedTransactionModal extends Modal {
     }
 
     async onOpen() {
+        Logger.log('Opening UnifiedTransactionModal', { mode: this.mode });
         const { contentEl } = this;
         contentEl.empty();
         
@@ -118,6 +120,7 @@ export class UnifiedTransactionModal extends Modal {
 
     async onAdd(entryData: any) {
         try {
+            Logger.log('Adding entry', entryData);
             // Use JournalService
             const success = await this.plugin.journalService.createEntry(entryData);
             if (success) {
@@ -138,7 +141,7 @@ export class UnifiedTransactionModal extends Modal {
                 this.close();
             }
         } catch (error) {
-            console.error('Error adding entry:', error);
+            Logger.error('Error adding entry:', error);
             new Notice(`Failed to add ${entryData.type}. Check console for details.`);
         }
     }
@@ -148,6 +151,7 @@ export class UnifiedTransactionModal extends Modal {
         
         try {
             const entryId = this.transaction?.id || this.entry?.id;
+            Logger.log('Updating entry', { id: entryId, data: entryData });
             // Use JournalService
             const success = await this.plugin.journalService.updateTransaction(entryId!, entryData);
             if (success) {
@@ -168,13 +172,14 @@ export class UnifiedTransactionModal extends Modal {
                 this.close();
             }
         } catch (error) {
-            console.error('Error updating entry:', error);
+            Logger.error('Error updating entry:', error);
             new Notice(`Failed to update ${entryData.type}. Check console for details.`);
         }
     }
 
     async onDelete(entryId: string) {
         try {
+             Logger.log('Deleting entry', entryId);
              // Use JournalService
             const success = await this.plugin.journalService.deleteTransaction(entryId);
             if (success) {

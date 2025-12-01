@@ -26,6 +26,8 @@ export interface BeancountPluginSettings {
     // BQL Shorthand Template File
     /** Path to the markdown file defining BQL shortcuts. */
     bqlShorthandsTemplatePath: string;
+    /** Whether to enable debug logging. */
+    debugMode: boolean;
 }
 
 /**
@@ -41,7 +43,8 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     bqlShowTools: true,
     bqlShowQuery: false,
     // BQL Shorthand Template File
-    bqlShorthandsTemplatePath: ''
+    bqlShorthandsTemplatePath: '',
+    debugMode: false
 }
 
 /**
@@ -273,6 +276,22 @@ export class BeancountSettingTab extends PluginSettingTab {
             text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data. Edit the template file to customize shortcuts.',
             cls: 'setting-item-description' 
         });
+
+        // --- Advanced Settings ---
+        containerEl.createEl('h3', { text: 'Advanced' });
+
+        new Setting(containerEl)
+            .setName('Debug mode')
+            .setDesc('Enable detailed logging to the developer console for troubleshooting.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugMode)
+                .onChange(async (value) => {
+                    this.plugin.settings.debugMode = value;
+                    await this.plugin.saveSettings();
+                    // Update logger immediately
+                    const { Logger } = await import('./utils/logger');
+                    Logger.setDebugMode(value);
+                }));
     }
 
     /**

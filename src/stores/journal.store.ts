@@ -2,6 +2,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { JournalService } from '../services/journal.service';
 import type { JournalEntry, JournalFilters, JournalTransaction } from '../models/journal';
+import { Logger } from '../utils/logger';
 
 /**
  * Creates a Svelte store for managing journal entries and state.
@@ -43,13 +44,14 @@ export function createJournalStore(service: JournalService) {
             const page = get(currentPage);
             const size = get(pageSize);
 
+            Logger.log('Loading entries...', { filters: currentFilters, page, size });
             const data = await service.getEntries(currentFilters, page, size);
 
             // Ensure entries is always an array to prevent crashes
             if (Array.isArray(data.entries)) {
                 entries.set(data.entries);
             } else {
-                console.warn('JournalStore: Received invalid entries data', data.entries);
+                Logger.warn('JournalStore: Received invalid entries data', data.entries);
                 entries.set([]);
             }
 
@@ -57,7 +59,7 @@ export function createJournalStore(service: JournalService) {
             hasMore.set(data.has_more || false);
             lastUpdated.set(new Date());
         } catch (err: any) {
-            console.error('Failed to load entries', err);
+            Logger.error('Failed to load entries', err);
             error.set(err.message || 'Failed to load entries');
         } finally {
             loading.set(false);
@@ -69,6 +71,7 @@ export function createJournalStore(service: JournalService) {
      * @param {Partial<JournalFilters>} newFilters - The new filters to apply.
      */
     async function setFilters(newFilters: Partial<JournalFilters>) {
+        Logger.log('Setting filters', newFilters);
         filters.update(f => ({ ...f, ...newFilters }));
         currentPage.set(1);
         await loadEntries();

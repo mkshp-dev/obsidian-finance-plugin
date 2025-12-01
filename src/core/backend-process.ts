@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { FileSystemAdapter } from 'obsidian';
 import type BeancountPlugin from '../main';
 import { SystemDetector } from '../utils/SystemDetector';
+import { Logger } from '../utils/logger';
 
 /**
  * Interface representing the status of the backend process.
@@ -137,7 +138,7 @@ export class BackendProcess {
             // If command is "python3", it's fine.
             // If command is "wsl", it's fine.
 
-            console.log(`Starting backend: ${command} ${args.join(' ')}`);
+            Logger.log(`Starting backend: ${command} ${args.join(' ')}`);
 
             this.backendProcess = spawn(command, args, {
                 cwd: undefined, // We are providing full paths, so cwd shouldn't matter as much, but undefined lets it inherit
@@ -146,27 +147,27 @@ export class BackendProcess {
             });
 
             this.backendProcess.on('error', (error) => {
-                console.error('Backend process error:', error);
+                Logger.error('Backend process error:', error);
                 this.backendProcess = null;
                 this.isStarting = false;
             });
 
             this.backendProcess.on('exit', (code, signal) => {
-                console.log(`Backend process exited with code ${code}, signal ${signal}`);
+                Logger.log(`Backend process exited with code ${code}, signal ${signal}`);
                 this.backendProcess = null;
                 this.isStarting = false;
             });
 
             // Log stdout/stderr
-            this.backendProcess.stdout?.on('data', d => console.log('[Backend]', d.toString()));
-            this.backendProcess.stderr?.on('data', d => console.error('[Backend]', d.toString()));
+            this.backendProcess.stdout?.on('data', d => Logger.log('[Backend stdout]', d.toString()));
+            this.backendProcess.stderr?.on('data', d => Logger.error('[Backend stderr]', d.toString()));
 
             this.isStarting = false;
             this.retryCount = 0;
             return true;
 
         } catch (error) {
-            console.error('Failed to start backend:', error);
+            Logger.error('Failed to start backend:', error);
             this.isStarting = false;
             this.retryCount++;
 
@@ -228,7 +229,7 @@ export class BackendProcess {
 
                 await this.runCommand(`${pythonCmd} -c "import ${pkgNameInCheck}"`);
             } catch {
-                console.log(`Installing ${pkg}...`);
+                Logger.log(`Installing ${pkg}...`);
                 await this.runCommand(`${pythonCmd} -m pip install ${pkg}`);
             }
         }
