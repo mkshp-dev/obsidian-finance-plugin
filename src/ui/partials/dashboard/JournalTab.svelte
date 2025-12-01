@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { debounce } from '../../../utils/index';
     import TransactionCard from './cards/TransactionCard.svelte';
     import BalanceCard from './cards/BalanceCard.svelte';
@@ -62,6 +62,9 @@
     let payeeFilter = '';
     let tagFilter = '';
     let typeFilter = 'all';
+    
+    // Flag to prevent filter application during initialization
+    let isInitialized = false;
 
     // Suggestions lists
     let availableAccounts: string[] = [];
@@ -69,6 +72,10 @@
     let availableTags: string[] = [];
 
     const updateFiltersDebounced = debounce(() => {
+        // Prevent filter updates if not initialized or already loading
+        if (!isInitialized || isLoading) {
+            return;
+        }
         applyFilters();
     }, 500);
 
@@ -105,7 +112,10 @@
     }
 
     function applyFilters() {
-        console.log('Applying filters:', { searchTerm, selectedAccount, payeeFilter, tagFilter });
+        // Prevent concurrent filter applications or premature calls
+        if (!isInitialized || isLoading) {
+            return;
+        }
         setFilters({
             searchTerm: searchTerm || undefined,
             account: selectedAccount || undefined,
@@ -172,13 +182,45 @@
         }
 
         fetchSuggestions();
-        loadEntries();
+        loadEntries().then(() => {
+            // Set initialized flag after initial load completes
+            isInitialized = true;
+        });
     });
 
-    // Filter visible entries to only allow transaction, balance, note
-    $: visibleEntries = $entries.filter((e: any) =>
-        ['transaction', 'balance', 'note'].includes(e.type)
-    );
+    // Use non-reactive variables and update them manually
+    let hasVisibleEntries = false;
+    let visibleEntriesArray: JournalEntry[] = [];
+    let isLoading = false;
+    let totalEntries = 0;
+    let currentPageNum = 1;
+    let pageSizeNum = 200;
+    let hasMorePages = false;
+    
+    // Subscribe to stores manually and update local state
+    const unsubEntries = entries.subscribe((value: JournalEntry[]) => {
+        const allEntries = value || [];
+        visibleEntriesArray = allEntries.filter((e: JournalEntry) =>
+            e && ['transaction', 'balance', 'note'].includes(e.type)
+        );
+        hasVisibleEntries = visibleEntriesArray.length > 0;
+    });
+    
+    const unsubLoading = loading.subscribe((value: boolean) => { isLoading = value; });
+    const unsubTotalCount = totalCount.subscribe((value: number) => { totalEntries = value; });
+    const unsubCurrentPage = currentPage.subscribe((value: number) => { currentPageNum = value; });
+    const unsubPageSize = pageSize.subscribe((value: number) => { pageSizeNum = value; });
+    const unsubHasMore = hasMore.subscribe((value: boolean) => { hasMorePages = value; });
+    
+    // Cleanup subscriptions
+    onDestroy(() => {
+        unsubEntries();
+        unsubLoading();
+        unsubTotalCount();
+        unsubCurrentPage();
+        unsubPageSize();
+        unsubHasMore();
+    });
 </script>
 
 <div class="journal-tab">
@@ -187,11 +229,11 @@
         <div class="filter-row">
             <div class="filter-group">
                 <label for="search">Search</label>
-                <input type="text" id="search" bind:value={searchTerm} on:input={updateFiltersDebounced} placeholder="Search (payee, narration, account)..." />
+                <input type="text" id="search" bind:value={searchTerm} on:input={updateFiltersDebounced} placeholder="Search (payee, narration, account)..." disabled={isLoading} />
             </div>
             <div class="filter-group">
                 <label for="type">Type</label>
-                <select id="type" bind:value={typeFilter} on:change={applyFilters}>
+                <select id="type" bind:value={typeFilter} on:change={applyFilters} disabled={isLoading}>
                     <option value="all">All Types</option>
                     <option value="transaction">Transactions</option>
                     <option value="note">Notes</option>
@@ -200,7 +242,7 @@
             </div>
              <div class="filter-group">
                 <label for="account">Account</label>
-                <input type="text" id="account" bind:value={selectedAccount} on:input={updateFiltersDebounced} list="account-suggestions" placeholder="Account..." />
+                <input type="text" id="account" bind:value={selectedAccount} on:input={updateFiltersDebounced} list="account-suggestions" placeholder="Account..." disabled={isLoading} />
                 <datalist id="account-suggestions">
                     {#each availableAccounts as account}
                         <option value={account} />
@@ -212,15 +254,15 @@
         <div class="filter-row">
              <div class="filter-group">
                 <label for="start">From</label>
-                <input type="date" id="start" bind:value={startDate} on:change={applyFilters} />
+                <input type="date" id="start" bind:value={startDate} on:change={applyFilters} disabled={isLoading} />
             </div>
              <div class="filter-group">
                 <label for="end">To</label>
-                <input type="date" id="end" bind:value={endDate} on:change={applyFilters} />
+                <input type="date" id="end" bind:value={endDate} on:change={applyFilters} disabled={isLoading} />
             </div>
             <div class="filter-group">
                 <label for="payee">Payee</label>
-                <input type="text" id="payee" bind:value={payeeFilter} on:input={updateFiltersDebounced} list="payee-suggestions" placeholder="Payee..." />
+                <input type="text" id="payee" bind:value={payeeFilter} on:input={updateFiltersDebounced} list="payee-suggestions" placeholder="Payee..." disabled={isLoading} />
                 <datalist id="payee-suggestions">
                     {#each availablePayees as payee}
                         <option value={payee} />
@@ -229,16 +271,17 @@
             </div>
             <div class="filter-group">
                 <label for="tag">Tag</label>
-                <input type="text" id="tag" bind:value={tagFilter} on:input={updateFiltersDebounced} list="tag-suggestions" placeholder="Tag..." />
+                <input type="text" id="tag" bind:value={tagFilter} on:input={updateFiltersDebounced} list="tag-suggestions" placeholder="Tag..." disabled={isLoading} />
                 <datalist id="tag-suggestions">
                     {#each availableTags as tag}
                         <option value={tag} />
                     {/each}
                 </datalist>
+                <!-- Datalist temporarily removed for debugging -->
             </div>
             <div class="filter-actions">
-                 <button class="btn" on:click={handleClear}>Clear</button>
-                 <button class="btn btn-primary" on:click={() => refresh()}>Refresh</button>
+                 <button class="btn" on:click={handleClear} disabled={isLoading}>Clear</button>
+                 <button class="btn btn-primary" on:click={() => refresh()} disabled={isLoading}>Refresh</button>
             </div>
         </div>
     </div>
@@ -252,12 +295,18 @@
 
     <!-- Cards List -->
     <div class="cards-container">
-        {#if $loading}
+        {#if isLoading}
             <div class="loading-state">Loading entries...</div>
-        {:else if visibleEntries.length === 0}
-             <div class="empty-state">No entries found matching your filters.</div>
-        {:else}
-            {#each visibleEntries as entry (entry.id)}
+        {/if}
+        
+        {#if !isLoading && visibleEntriesArray.length === 0}
+            <span style="display: block; text-align: center; padding: 3rem; color: var(--text-muted);">
+                No entries found matching your filters.
+            </span>
+        {/if}
+        
+        {#if !isLoading && visibleEntriesArray.length > 0}
+            {#each visibleEntriesArray as entry (entry.id)}
                 {#if entry.type === 'transaction'}
                     <TransactionCard
                         {entry}
@@ -282,16 +331,16 @@
     </div>
 
     <!-- Pagination -->
-    {#if $totalCount > 0}
+    {#if totalEntries > 0}
     <div class="pagination-container">
         <span class="pagination-info">
-            Showing <span class="font-semibold">{($currentPage - 1) * $pageSize + 1}</span> to <span class="font-semibold">{Math.min($currentPage * $pageSize, $totalCount)}</span> of <span class="font-semibold">{$totalCount}</span>
+            Showing <span class="font-semibold">{(currentPageNum - 1) * pageSizeNum + 1}</span> to <span class="font-semibold">{Math.min(currentPageNum * pageSizeNum, totalEntries)}</span> of <span class="font-semibold">{totalEntries}</span>
         </span>
         <div class="pagination-controls">
-            <button class="btn-small" on:click={() => setPage($currentPage - 1)} disabled={$currentPage === 1}>
+            <button class="btn-small" on:click={() => setPage(currentPageNum - 1)} disabled={currentPageNum === 1}>
                 Previous
             </button>
-            <button class="btn-small" on:click={() => setPage($currentPage + 1)} disabled={!$hasMore}>
+            <button class="btn-small" on:click={() => setPage(currentPageNum + 1)} disabled={!hasMorePages}>
                 Next
             </button>
         </div>
@@ -394,7 +443,7 @@
         padding-right: 4px; /* Space for scrollbar */
     }
 
-    .loading-state, .empty-state {
+    .loading-state {
         text-align: center;
         padding: 3rem;
         color: var(--text-muted);
