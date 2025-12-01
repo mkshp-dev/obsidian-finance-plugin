@@ -1,11 +1,12 @@
 // src/core/backend-process.ts
 import { exec, spawn, ChildProcess } from 'child_process';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { FileSystemAdapter } from 'obsidian';
 import type BeancountPlugin from '../main';
 import { SystemDetector } from '../utils/SystemDetector';
 import { Logger } from '../utils/logger';
+import journalApiScript from '../backend/journal_api.py';
 
 /**
  * Interface representing the status of the backend process.
@@ -91,6 +92,14 @@ export class BackendProcess {
 
             // Construct absolute path to script
             let scriptPath = join(vaultPath, pluginDir, 'src', 'backend', 'journal_api.py');
+
+            // Ensure the backend script exists on disk
+            try {
+                this.ensureBackendFile(scriptPath);
+            } catch (err) {
+                Logger.error('Failed to extract backend script:', err);
+                throw new Error('Could not extract backend script.');
+            }
 
             // If we are in WSL, we need to convert paths
             let actualScriptPath = scriptPath;
@@ -247,5 +256,21 @@ export class BackendProcess {
                 else resolve(stdout.trim());
             });
         });
+    }
+
+    /**
+     * Ensures that the backend script is present on the filesystem.
+     * Writes the embedded script content to the target path.
+     * @param {string} scriptPath - The absolute path to the backend script.
+     */
+    private ensureBackendFile(scriptPath: string): void {
+        const dir = dirname(scriptPath);
+        if (!existsSync(dir)) {
+            Logger.log(`Creating directory for backend script: ${dir}`);
+            mkdirSync(dir, { recursive: true });
+        }
+        // Always write the file to ensure we are using the version bundled with the plugin
+        Logger.log(`Extracting backend script to: ${scriptPath}`);
+        writeFileSync(scriptPath, journalApiScript, { encoding: 'utf-8' });
     }
 }
