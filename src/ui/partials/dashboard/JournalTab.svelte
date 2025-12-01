@@ -7,6 +7,7 @@
     import { UnifiedTransactionModal } from '../../modals/UnifiedTransactionModal';
     import { ConfirmModal } from '../../modals/ConfirmModal';
     import type { JournalEntry } from '../../../models/journal';
+    import { Logger } from '../../../utils/logger';
 
     // Instead of importing Controller, we receive the Store
     export let store: any;
@@ -154,6 +155,7 @@
     }
 
     onMount(() => {
+        Logger.log('JournalTab mounted');
         // Sync local state with store filters
         const currentFilters = $filters;
         searchTerm = currentFilters.searchTerm || '';
