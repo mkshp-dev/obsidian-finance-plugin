@@ -282,6 +282,7 @@
     </div>
 
     <!-- Pagination -->
+    {#if $totalCount > 0}
     <div class="pagination-container">
         <span class="pagination-info">
             Showing <span class="font-semibold">{($currentPage - 1) * $pageSize + 1}</span> to <span class="font-semibold">{Math.min($currentPage * $pageSize, $totalCount)}</span> of <span class="font-semibold">{$totalCount}</span>
@@ -295,6 +296,7 @@
             </button>
         </div>
     </div>
+    {/if}
 </div>
 
 <style>

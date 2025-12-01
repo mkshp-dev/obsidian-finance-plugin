@@ -55,8 +55,15 @@ export function createJournalStore(service: JournalService) {
                 entries.set([]);
             }
 
-            totalCount.set(data.total_count || 0);
+            const count = data.total_count || 0;
+            totalCount.set(count);
             hasMore.set(data.has_more || false);
+            
+            // Reset to page 1 if no results to prevent invalid pagination state
+            if (count === 0 && page > 1) {
+                currentPage.set(1);
+            }
+            
             lastUpdated.set(new Date());
         } catch (err: any) {
             Logger.error('Failed to load entries', err);
