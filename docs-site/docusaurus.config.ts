@@ -15,12 +15,12 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://mukundshelake.github.io',
+  url: 'https://mkshp-dev.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   baseUrl: '/obsidian-finance-plugin/',
 
   // GitHub pages deployment config.
-  organizationName: 'mukundshelake',
+  organizationName: 'mkshp-dev',
   projectName: 'obsidian-finance-plugin',
 
   onBrokenLinks: 'throw',
@@ -37,7 +37,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl:
-            'https://github.com/mukundshelake/obsidian-finance-plugin/tree/main/docs-site/',
+            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/main/docs-site/',
         },
         blog: {
           showReadingTime: true,
