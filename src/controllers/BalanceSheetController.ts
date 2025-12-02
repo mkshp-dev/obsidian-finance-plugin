@@ -48,8 +48,6 @@ export interface BalanceSheetState {
 	totalLiabilities: number;
 	/** Total numeric value of Equity. */
 	totalEquity: number;
-	/** Total numeric value of Liabilities + Equity. */
-	totalLiabEquity: number;
 	/** The reporting currency used. */
 	currency: string;
 	/** Whether multi-currency entries were detected. */
@@ -86,7 +84,6 @@ export class BalanceSheetController {
 			totalAssets: 0,
 			totalLiabilities: 0,
 			totalEquity: 0,
-			totalLiabEquity: 0,
 			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
@@ -111,15 +108,9 @@ export class BalanceSheetController {
 			let convertedAmount: string;
 			let otherCurrencies: string;
 			
-			if (valuationMethod === 'convert') {
-				// Use extractConvertedAmount to handle multi-currency results
-				convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
-				otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
-			} else {
-				// For cost and units, use the raw amount as-is (no currency extraction needed)
-				convertedAmount = rawAmount;
-				otherCurrencies = '';
-			}
+			// For all valuation methods, separate operating currency from other currencies
+			convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
+			otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
 			
 			const amountNumber = parseFloat(convertedAmount.split(' ')[0].replace(/,/g, '')) || 0;
 
@@ -133,12 +124,12 @@ export class BalanceSheetController {
 				currentPath = currentPath ? `${currentPath}:${part}` : part;
 				
 				if (!accountMap.has(currentPath)) {
-					const defaultCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
+					// Always use reporting currency for all valuation methods
 					const item: AccountItem = {
 						account: currentPath,
 						displayName: part,
 						level: i,
-						amount: i === parts.length - 1 ? convertedAmount : `0.00 ${defaultCurrency}`,
+						amount: i === parts.length - 1 ? convertedAmount : `0.00 ${reportingCurrency}`,
 						amountNumber: i === parts.length - 1 ? amountNumber : 0,
 						otherCurrencies: i === parts.length - 1 ? otherCurrencies : '',
 						isCategory: i < parts.length - 1,
@@ -164,8 +155,8 @@ export class BalanceSheetController {
 		}
 
 		// Calculate category totals (bottom-up)
-		const displayCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
-		this.calculateCategoryTotals(rootAccounts, displayCurrency);
+		// Always use reporting currency for all valuation methods
+		this.calculateCategoryTotals(rootAccounts, reportingCurrency);
 
 		return rootAccounts;
 	}
@@ -183,15 +174,8 @@ export class BalanceSheetController {
 				const childTotal = this.calculateCategoryTotals(account.children, currency);
 				account.amountNumber = childTotal;
 				
-				// For units or cost view, show aggregated info differently
-				const currentState = get(this.state);
-				if (currentState.valuationMethod === 'units') {
-					account.amount = `${childTotal.toFixed(2)} units`;
-				} else if (currentState.valuationMethod === 'cost') {
-					account.amount = `${childTotal.toFixed(2)} ${currency}`;
-				} else {
-					account.amount = `${childTotal.toFixed(2)} ${currency}`;
-				}
+				// Always show amount with reporting currency
+				account.amount = `${childTotal.toFixed(2)} ${currency}`;
 				
 				// Aggregate other currencies from children - collect unique currencies
 				const childOtherCurrencies = account.children
@@ -305,11 +289,10 @@ export class BalanceSheetController {
 			const liabilitiesHierarchy = this.buildAccountHierarchy(tempLiab, 'Liabilities', valuationMethod);
 			const equityHierarchy = this.buildAccountHierarchy(tempEquity, 'Equity', valuationMethod);
 
-			// Calculate totals
-			const displayCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
-			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, displayCurrency);
-			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, displayCurrency);
-			const totalEquity = this.calculateCategoryTotals(equityHierarchy, displayCurrency);
+			// Calculate totals - always use reporting currency
+			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, reportingCurrency);
+			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, reportingCurrency);
+			const totalEquity = this.calculateCategoryTotals(equityHierarchy, reportingCurrency);
 
 			// Create warning message
 			let unconvertedWarning = null;
@@ -327,8 +310,7 @@ export class BalanceSheetController {
 				totalAssets,
 				totalLiabilities,
 				totalEquity,
-				totalLiabEquity: totalLiabilities + totalEquity,
-				currency: displayCurrency || 'Mixed',
+				currency: reportingCurrency,
 				hasUnconvertedCommodities,
 				unconvertedWarning,
 				valuationMethod

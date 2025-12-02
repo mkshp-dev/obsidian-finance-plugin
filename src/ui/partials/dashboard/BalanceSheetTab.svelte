@@ -9,8 +9,8 @@
 	// --- Set up a placeholder and subscribe to the store ---
 	const placeholderState: Writable<BalanceSheetState> = writable({
 		isLoading: true, error: null, assets: [], liabilities: [], equity: [],
-		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, totalLiabEquity: 0, currency: 'INR',
-		hasUnconvertedCommodities: false, unconvertedWarning: null
+		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, currency: 'INR',
+		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert'
 	});
 	$: stateStore = controller ? controller.state : placeholderState;
 	$: state = $stateStore;
@@ -34,7 +34,7 @@
 		return accounts.some(item => item.otherCurrencies && item.otherCurrencies.trim() !== '');
 	}
 
-	// Check if any section has other currencies to show the column header
+	// Always show other currencies column for all valuation methods if any section has them
 	$: showOtherCurrenciesColumn = state.assets && state.liabilities && state.equity && 
 		(hasOtherCurrencies(state.assets) || hasOtherCurrencies(state.liabilities) || hasOtherCurrencies(state.equity));
 
@@ -56,6 +56,48 @@
 			default: return 'Market Value';
 		}
 	}
+
+	// Collapsible hierarchy state
+	let collapsedAccounts = new Set<string>();
+
+	function toggleCollapse(account: string, event?: MouseEvent) {
+		if (event) {
+			event.stopPropagation();
+		}
+		console.log('Toggle collapse for:', account, 'Currently collapsed?', collapsedAccounts.has(account));
+		const newSet = new Set(collapsedAccounts);
+		if (newSet.has(account)) {
+			newSet.delete(account);
+		} else {
+			newSet.add(account);
+		}
+		collapsedAccounts = newSet; // Trigger reactivity with new Set instance
+		console.log('New collapsed state:', Array.from(collapsedAccounts));
+	}
+
+	function isCollapsed(account: string): boolean {
+		return collapsedAccounts.has(account);
+	}
+
+	function shouldShowRow(item: AccountItem, collapsed: Set<string>): boolean {
+		// Always show root level items
+		if (item.level === 0) return true;
+		
+		// Check if any parent is collapsed
+		const accountParts = item.account.split(':');
+		for (let i = 1; i < accountParts.length; i++) {
+			const parentPath = accountParts.slice(0, i).join(':');
+			if (collapsed.has(parentPath)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Create reactive filtered lists that depend on collapsedAccounts
+	$: visibleAssets = state.assets ? state.assets.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
+	$: visibleLiabilities = state.liabilities ? state.liabilities.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
+	$: visibleEquity = state.equity ? state.equity.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 </script>
 
 <div class="balance-sheet-container">
@@ -95,26 +137,23 @@
 					<thead>
 						<tr class="header-row">
 							<th class="account-header">Account</th>
-							<th class="amount-header">
-								{#if state.valuationMethod === 'units'}
-									Units
-								{:else if state.valuationMethod === 'cost'}
-									Cost ({state.currency})
-								{:else}
-									{state.currency}
-								{/if}
-							</th>
+							<th class="amount-header">{state.currency}</th>
 							{#if showOtherCurrenciesColumn}
 								<th class="other-currencies-header">Other Currencies</th>
 							{/if}
 						</tr>
 					</thead>
-					<tbody>
-						{#each state.assets as item}
-							<tr class={getAccountClass(item)}>
-								<td class="account-name">
-									{getIndentation(item.level)}{item.displayName}
-								</td>
+				<tbody>
+					{#each visibleAssets as item}
+						<tr class={getAccountClass(item)}>
+							<td class="account-name" 
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
+								{#if item.isCategory}
+									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
+								{/if}
+								{getIndentation(item.level)}{item.displayName}
+							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
 								</td>
@@ -135,26 +174,23 @@
 					<thead>
 						<tr class="header-row">
 							<th class="account-header">Account</th>
-							<th class="amount-header">
-								{#if state.valuationMethod === 'units'}
-									Units
-								{:else if state.valuationMethod === 'cost'}
-									Cost ({state.currency})
-								{:else}
-									{state.currency}
-								{/if}
-							</th>
+							<th class="amount-header">{state.currency}</th>
 							{#if showOtherCurrenciesColumn}
 								<th class="other-currencies-header">Other Currencies</th>
 							{/if}
 						</tr>
 					</thead>
-					<tbody>
-						{#each state.liabilities as item}
-							<tr class={getAccountClass(item)}>
-								<td class="account-name">
-									{getIndentation(item.level)}{item.displayName}
-								</td>
+				<tbody>
+					{#each visibleLiabilities as item}
+						<tr class={getAccountClass(item)}>
+							<td class="account-name" 
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
+								{#if item.isCategory}
+									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
+								{/if}
+								{getIndentation(item.level)}{item.displayName}
+							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
 								</td>
@@ -175,26 +211,23 @@
 					<thead>
 						<tr class="header-row">
 							<th class="account-header">Account</th>
-							<th class="amount-header">
-								{#if state.valuationMethod === 'units'}
-									Units
-								{:else if state.valuationMethod === 'cost'}
-									Cost ({state.currency})
-								{:else}
-									{state.currency}
-								{/if}
-							</th>
+							<th class="amount-header">{state.currency}</th>
 							{#if showOtherCurrenciesColumn}
 								<th class="other-currencies-header">Other Currencies</th>
 							{/if}
 						</tr>
 					</thead>
-					<tbody>
-						{#each state.equity as item}
-							<tr class={getAccountClass(item)}>
-								<td class="account-name">
-									{getIndentation(item.level)}{item.displayName}
-								</td>
+				<tbody>
+					{#each visibleEquity as item}
+						<tr class={getAccountClass(item)}>
+							<td class="account-name" 
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
+								{#if item.isCategory}
+									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
+								{/if}
+								{getIndentation(item.level)}{item.displayName}
+							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
 								</td>
@@ -390,6 +423,15 @@
 		text-overflow: ellipsis;
 		max-width: 160px;
 		width: 40%;
+	}
+
+	.collapse-icon {
+		display: inline-block;
+		width: 12px;
+		margin-right: 4px;
+		font-size: 0.8em;
+		color: var(--text-muted);
+		user-select: none;
 	}
 
 	.amount-cell {
