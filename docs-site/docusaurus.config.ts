@@ -37,12 +37,12 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl:
-            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/main/docs-site/',
+            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/agent/docs-site/',
         },
         blog: {
           showReadingTime: true,
           editUrl:
-            'https://github.com/mukundshelake/obsidian-finance-plugin/tree/main/docs-site/',
+            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/agent/docs-site/',
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -73,7 +73,7 @@ const config: Config = {
         },
         {to: '/blog', label: 'Blog', position: 'left'},
         {
-          href: 'https://github.com/mukundshelake/obsidian-finance-plugin',
+          href: 'https://github.com/mkshp-dev/obsidian-finance-plugin',
           label: 'GitHub',
           position: 'right',
         },
@@ -104,11 +104,11 @@ const config: Config = {
           items: [
             {
               label: 'GitHub Issues',
-              href: 'https://github.com/mukundshelake/obsidian-finance-plugin/issues',
+              href: 'https://github.com/mkshp-dev/obsidian-finance-plugin/issues',
             },
             {
               label: 'Discussions',
-              href: 'https://github.com/mukundshelake/obsidian-finance-plugin/discussions',
+              href: 'https://github.com/mkshp-dev/obsidian-finance-plugin/discussions',
             },
           ],
         },
@@ -121,7 +121,7 @@ const config: Config = {
             },
             {
               label: 'GitHub',
-              href: 'https://github.com/mukundshelake/obsidian-finance-plugin',
+              href: 'https://github.com/mkshp-dev/obsidian-finance-plugin',
             },
           ],
         },

@@ -16,7 +16,7 @@ This guide covers how to install the Obsidian Finance Plugin and set up the nece
 4.  Click **Install** and then **Enable**.
 
 ### Method 2: Manual Installation (BRAT / GitHub)
-1.  Download the latest `main.js`, `manifest.json`, and `styles.css` from the [GitHub Releases](https://github.com/mukundshelake/obsidian-finance-plugin/releases) page.
+1.  Download the latest `main.js`, `manifest.json`, and `styles.css` from the [GitHub Releases](https://github.com/mkshp-dev/obsidian-finance-plugin/releases) page.
 2.  Create a folder named `obsidian-finance-plugin` in your vault's plugin directory: `<VaultFolder>/.obsidian/plugins/`.
 3.  Place the downloaded files into this folder.
 4.  Reload Obsidian.
