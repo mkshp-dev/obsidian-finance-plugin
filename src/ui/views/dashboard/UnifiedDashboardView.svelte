@@ -5,7 +5,6 @@
     import OverviewTab from '../../partials/dashboard/OverviewTab.svelte';
     import TransactionsTab from '../../partials/dashboard/TransactionsTab.svelte';
     import BalanceSheetTab from '../../partials/dashboard/BalanceSheetTab.svelte';
-    import AccountsTab from '../../partials/dashboard/AccountsTab.svelte';
     import CommoditiesTab from '../../partials/dashboard/CommoditiesTab.svelte';
     import JournalTab from '../../partials/dashboard/JournalTab.svelte';
 
@@ -13,14 +12,12 @@
     import type { OverviewController } from '../../../controllers/OverviewController';
     import type { TransactionController } from '../../../controllers/TransactionController';
     import type { BalanceSheetController } from '../../../controllers/BalanceSheetController';
-    import type { AccountsController } from '../../../controllers/AccountsController';
     import type { CommoditiesController } from '../../../controllers/CommoditiesController';
 
     // Props
     export let overviewController: OverviewController;
     export let transactionController: TransactionController;
     export let balanceSheetController: BalanceSheetController;
-    export let accountsController: AccountsController;
     export let commoditiesController: CommoditiesController;
     export let journalStore: any;
     export let plugin: any = null; // Add plugin prop
@@ -32,7 +29,6 @@
         { id: 'transactions', label: 'Transactions' },
         { id: 'journal', label: 'Journal' },
         { id: 'balancesheet', label: 'Balance Sheet' },
-        { id: 'accounts', label: 'Accounts' },
         { id: 'commodities', label: 'Commodities' }
     ];
 </script>
@@ -61,8 +57,6 @@
             <JournalTab store={journalStore} plugin={plugin} />
         {:else if activeTab === 'balancesheet'}
             <BalanceSheetTab controller={balanceSheetController} />
-        {:else if activeTab === 'accounts'}
-            <AccountsTab controller={accountsController} />
         {:else if activeTab === 'commodities'}
             <CommoditiesTab controller={commoditiesController} on:openCommodity />
         {/if}

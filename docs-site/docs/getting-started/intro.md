@@ -18,7 +18,7 @@ This plugin transforms your Obsidian vault into a powerful financial analysis to
 
 ## 🚀 Key Features
 
-*   **📊 Unified Dashboard**: A centralized hub featuring Overview, Transactions, Journal, Balance Sheet, Accounts, and Commodities tabs.
+*   **📊 Unified Dashboard**: A centralized hub featuring Overview, Transactions, Journal, Balance Sheet, and Commodities tabs.
 *   **💸 Transaction Management**: Unified entry modal for Transactions, Balance Assertions, and Notes with smart validation.
 *   **🏦 Account Hierarchy**: Interactive tree view with real-time balances and drill-down capability.
 *   **📋 Journal View**: Full Beancount ledger interface with server-side filtering and Fava-style cards.
