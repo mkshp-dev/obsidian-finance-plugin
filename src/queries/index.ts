@@ -171,6 +171,7 @@ export function getMonthlyExpensesQuery(startDate: string, endDate: string, curr
  * @param {string} currency - Target currency.
  * @returns {string} The BQL query string.
  */
+
 export function getHistoricalNetWorthDataQuery(interval: string = 'month', currency: string): string { // Must accept 2 args
-	return `SELECT ${interval}, account, convert(SUM(position), '${currency}') WHERE account ~ '^(Assets|Liabilities)' GROUP BY ${interval}, account ORDER BY ${interval}, account`;
+	return `SELECT year, month, only('${currency}', convert(last(balance), '${currency}', last(date))) WHERE account ~ '^(Assets|Liabilities)' ORDER BY year, month`;
 }

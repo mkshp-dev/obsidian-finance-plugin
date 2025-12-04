@@ -2,6 +2,7 @@
 	// --- REMOVED onMount, parseCsv, queries, plugin imports ---
 	import { writable, type Writable } from 'svelte/store';
 	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../../controllers/BalanceSheetController';
+	import { Logger } from '../../../utils/logger';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;
@@ -64,7 +65,7 @@
 		if (event) {
 			event.stopPropagation();
 		}
-		console.log('Toggle collapse for:', account, 'Currently collapsed?', collapsedAccounts.has(account));
+		Logger.log('Toggle collapse for:', account, 'Currently collapsed?', collapsedAccounts.has(account));
 		const newSet = new Set(collapsedAccounts);
 		if (newSet.has(account)) {
 			newSet.delete(account);
@@ -72,7 +73,7 @@
 			newSet.add(account);
 		}
 		collapsedAccounts = newSet; // Trigger reactivity with new Set instance
-		console.log('New collapsed state:', Array.from(collapsedAccounts));
+		Logger.log('New collapsed state:', Array.from(collapsedAccounts));
 	}
 
 	function isCollapsed(account: string): boolean {

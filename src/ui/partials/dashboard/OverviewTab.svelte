@@ -71,18 +71,26 @@
 	{:else if state.error}
 		<p class="error-message">Error: {state.error}</p>
 	{:else}
+		<div class="conversion-warning">
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+				<line x1="12" y1="9" x2="12" y2="13"/>
+				<line x1="12" y1="17" x2="12.01" y2="17"/>
+			</svg>
+			<span>Only commodities with conversion prices to {state.currency} are included in Net Worth calculations</span>
+		</div>
+		
 		<div class="kpi-grid">
-			<CardComponent label="Total Balance" value={state.netWorth} />
-			<CardComponent label="Monthly Income" value={state.monthlyIncome} />
-			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} />
-			<CardComponent label="Savings Rate" value={state.savingsRate} />
+			<CardComponent label="Total Balance" value={state.netWorth} comparison="Assets minus liabilities" />
+			<CardComponent label="Monthly Income" value={state.monthlyIncome} comparison="Current month earnings" />
+			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} comparison="Current month spending" />
+			<CardComponent label="Savings Rate" value={state.savingsRate} comparison="Income minus expenses" />
 		</div>
 		
 		<div class="chart-container">
 			{#if state.chartError}
 				<p class="error-message">Chart Error: {state.chartError}</p>
 			{:else if state.chartConfig}
-				<h4>Net Worth Over Time</h4>
 				<ChartComponent config={state.chartConfig} height="300px"/>
 			{:else if !state.isLoading}
 				<p>Not enough data to display chart.</p>
@@ -147,15 +155,29 @@
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: var(--size-4-4);
 	}
+	
+	.conversion-warning {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: var(--size-4-2) var(--size-4-3);
+		margin-bottom: var(--size-4-4);
+		background: var(--background-modifier-info);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		color: var(--text-muted);
+		font-size: var(--font-ui-small);
+	}
+	
+	.conversion-warning svg {
+		flex-shrink: 0;
+		opacity: 0.7;
+	}
+	
 	.error-message { color: var(--text-error); }
 	.chart-container {
 		margin-top: var(--size-4-8);
 		height: 300px;
 		position: relative;
-	}
-	.chart-container h4 {
-		text-align: center;
-		margin-bottom: var(--size-4-4);
-		color: var(--text-muted);
 	}
 </style>

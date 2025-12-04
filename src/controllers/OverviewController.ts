@@ -6,6 +6,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parseAmount, extractConvertedAmount, getCurrentMonthRange } from '../utils/index'; // Import helpers
 import { parse as parseCsv } from 'csv-parse/sync';
+import { Logger } from '../utils/logger';
 
 /**
  * Interface representing the state of the Overview dashboard.
@@ -89,10 +90,9 @@ export class OverviewController {
 				this.plugin.runQuery(queries.getTotalLiabilitiesCostQuery(reportingCurrency)),
 				this.plugin.runQuery(queries.getMonthlyIncomeQuery(monthRange.start, monthRange.end, reportingCurrency)),
 				this.plugin.runQuery(queries.getMonthlyExpensesQuery(monthRange.start, monthRange.end, reportingCurrency)),
-				this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery('month', reportingCurrency))
-			]);
-
-			// Process KPI Data
+			this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery('month', reportingCurrency))
+		]);
+		Logger.log("OverviewController: Historical Result:", historicalResult);			// Process KPI Data
 			const assetsInventoryStr = this.plugin.parseSingleValue(assetsResult);
 			const liabilitiesInventoryStr = this.plugin.parseSingleValue(liabilitiesResult);
 			const incomeInventoryStr = this.plugin.parseSingleValue(incomeResult);
@@ -135,79 +135,80 @@ export class OverviewController {
 			// Process Historical Data for Chart
 			try {
 				const cleanHistoricalStdout = historicalResult.replace(/\r/g, "").trim();
+				Logger.log("OverviewController: Clean Historical Stdout:", cleanHistoricalStdout);
 				const historicalRecords: string[][] = parseCsv(cleanHistoricalStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
-				if (historicalRecords.length < 2) { throw new Error("Not enough data for chart."); }
+				Logger.log("OverviewController: Parsed Historical Records:", historicalRecords);
+				if (historicalRecords.length === 0) { throw new Error("No data available for chart."); }
 
-				const firstRowIsHeader = historicalRecords[0][0]?.toLowerCase().includes('month') && historicalRecords[0][2]?.toLowerCase().includes('sum');
-				const dataRows = firstRowIsHeader ? historicalRecords.slice(1) : historicalRecords;
-
-				const monthlyChanges: { [month: string]: { assets: number, liabilities: number } } = {};
+				// New query format: [year, month_number, net_worth_value]
+				// Example: ["2024", "5", "362701.06 INR"]
 				
-				for (const row of dataRows) {
+				// Parse and collect actual data points
+				const dataMap = new Map<string, number>();
+				let minYear = Infinity;
+				let maxYear = -Infinity;
+				let minMonth = Infinity;
+				let maxMonth = -Infinity;
+				
+				for (const row of historicalRecords) {
 					if (row.length < 3) continue;
-					const month = row[0]; 
-					const account = row[1];
-					const sumStr = extractConvertedAmount(row[2], reportingCurrency);
-					const sumData = parseAmount(sumStr);
-					if (!monthlyChanges[month]) monthlyChanges[month] = { assets: 0, liabilities: 0 };
-					if (account.startsWith('Assets')) { 
-						monthlyChanges[month].assets += sumData.amount; 
-					} else if (account.startsWith('Liabilities')) { 
-						// Correct Beancount accounting: liabilities are negative, convert to positive for net worth calculation
-						monthlyChanges[month].liabilities += Math.abs(sumData.amount); 
+					
+					const year = parseInt(row[0].trim());
+					const monthNum = parseInt(row[1].trim());
+					const valueStr = row[2].trim();
+					
+					// Extract net worth value
+					const netWorthStr = extractConvertedAmount(valueStr, reportingCurrency);
+					const netWorthData = parseAmount(netWorthStr);
+					
+					const sortKey = `${year}-${monthNum.toString().padStart(2, '0')}`;
+					dataMap.set(sortKey, netWorthData.amount);
+					
+					// Track date range
+					if (year < minYear || (year === minYear && monthNum < minMonth)) {
+						minYear = year;
+						minMonth = monthNum;
+					}
+					if (year > maxYear || (year === maxYear && monthNum > maxMonth)) {
+						maxYear = year;
+						maxMonth = monthNum;
 					}
 				}
-
-				// Format month labels and sort properly
-				const formatMonthLabel = (monthStr: string): { sortKey: string, displayLabel: string } => {
-					// Handle different month formats from Beancount
-					if (monthStr.includes('-')) {
-						// Format: "2024-01" or "2024-1"
-						const [year, month] = monthStr.split('-');
-						const monthNum = parseInt(month);
-						const date = new Date(parseInt(year), monthNum - 1);
-						return {
-							sortKey: `${year}-${month.padStart(2, '0')}`,
-							displayLabel: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
-						};
-					} else if (monthStr.length <= 2) {
-						// Format: "1", "12" (just month number, assume current year)
-						const currentYear = new Date().getFullYear();
-						const monthNum = parseInt(monthStr);
-						const date = new Date(currentYear, monthNum - 1);
-						return {
-							sortKey: `${currentYear}-${monthStr.padStart(2, '0')}`,
-							displayLabel: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
-						};
-					} else {
-						// Fallback: use as-is
-						return {
-							sortKey: monthStr,
-							displayLabel: monthStr
-						};
-					}
-				};
-
+				
+				Logger.log("OverviewController: Data Map:", dataMap);
+				Logger.log("OverviewController: Date Range:", { minYear, minMonth, maxYear, maxMonth });
+				
+				// Fill in all months between min and max date
 				const labels: string[] = []; 
-				const dataPoints: number[] = [];
-				let cumulativeNetWorth = 0;
+				const dataPoints: (number | null)[] = [];
 				
-				// Sort months properly by creating sort keys
-				const monthEntries = Object.entries(monthlyChanges).map(([month, data]) => ({
-					...formatMonthLabel(month),
-					data
-				}));
+				let currentYear = minYear;
+				let currentMonth = minMonth;
 				
-				monthEntries.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-
-				for (const entry of monthEntries) {
-					const change = entry.data;
-					cumulativeNetWorth += (change.assets - change.liabilities);
-					labels.push(entry.displayLabel); 
-					dataPoints.push(cumulativeNetWorth);
+				while (currentYear < maxYear || (currentYear === maxYear && currentMonth <= maxMonth)) {
+					const sortKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
+					const date = new Date(currentYear, currentMonth - 1);
+					const displayLabel = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }).toUpperCase();
+					
+					labels.push(displayLabel);
+					
+					// Add actual data point if exists, otherwise null (creates gap in line chart)
+					if (dataMap.has(sortKey)) {
+						dataPoints.push(dataMap.get(sortKey)!);
+					} else {
+						dataPoints.push(null);
+					}
+					
+					// Move to next month
+					currentMonth++;
+					if (currentMonth > 12) {
+						currentMonth = 1;
+						currentYear++;
+					}
 				}
-
-
+				
+				Logger.log("OverviewController: Final Chart Labels:", labels);
+				Logger.log("OverviewController: Final Chart Data Points:", dataPoints);
 
 				newState.chartConfig = {
 					type: 'line',
@@ -221,7 +222,8 @@ export class OverviewController {
 							tension: 0.3,
 							fill: true,
 							pointRadius: 4,
-							pointHoverRadius: 6
+							pointHoverRadius: 6,
+							spanGaps: true // Connect points across null values (gaps)
 						}]
 					},
 					options: { 
@@ -230,7 +232,7 @@ export class OverviewController {
 						plugins: {
 							title: {
 								display: true,
-								text: `Net Worth Over Time (${reportingCurrency})`,
+								text: `Net Worth Trend (${reportingCurrency})`,
 								font: { size: 16 }
 							},
 							legend: {
@@ -287,7 +289,7 @@ export class OverviewController {
 				newState.chartError = null;
 
 			} catch (chartDataError) {
-				console.error("Error processing chart data:", chartDataError);
+				Logger.error("Error processing chart data:", chartDataError);
 				newState.chartError = `Failed to process chart data: ${chartDataError.message}`;
 				newState.chartConfig = null;
 			}
@@ -296,7 +298,7 @@ export class OverviewController {
 			this.state.update(s => ({ ...s, ...newState, isLoading: false, error: null }));
 
 		} catch (e) { 
-			console.error("Error loading overview data:", e); 
+			Logger.error("Error loading overview data:", e); 
 			this.state.update(s => ({ ...s, isLoading: false, error: `Failed to load data: ${e.message}` }));
 		}
 	}
