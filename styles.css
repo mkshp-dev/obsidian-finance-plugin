@@ -1,6 +1,574 @@
 /* styles.css */
 
+/* --- BQL Code Block Styles --- */
+
+.bql-query-container {
+	margin: 16px 0;
+	border: none;
+	background: none;
+	overflow: hidden;
+}
+
+.bql-query-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 4px 0 8px 0;
+	background: none;
+	border-bottom: none;
+}
+
+.bql-query-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.bql-label {
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--text-accent);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.bql-query-controls {
+	display: flex;
+	gap: 4px;
+}
+
+.bql-refresh-btn, .bql-copy-btn, .bql-export-btn {
+	padding: 3px 6px;
+	border: none;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 11px;
+	transition: background-color 0.2s ease;
+	opacity: 0.7;
+}
+
+.bql-refresh-btn:hover, .bql-copy-btn:hover, .bql-export-btn:hover {
+	background: var(--interactive-hover);
+	opacity: 1;
+}
+
+.bql-query-details {
+	margin: 0 0 12px 0;
+	border-bottom: none;
+}
+
+.bql-query-summary {
+	padding: 4px 0;
+	cursor: pointer;
+	background: none;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	border: none;
+	margin: 0;
+}
+
+.bql-query-summary:hover {
+	background: none;
+	color: var(--text-normal);
+}
+
+.bql-query-code {
+	margin: 0 0 8px 0;
+	padding: 8px 0;
+	background: none;
+	border: none;
+	font-size: 0.8em;
+	color: var(--text-muted);
+}
+
+.bql-query-code code {
+	background: var(--background-secondary);
+	padding: 8px 12px;
+	border-radius: 4px;
+	display: block;
+	font-family: var(--font-monospace);
+	color: var(--text-normal);
+}
+
+.bql-result-area {
+	padding: 0;
+}
+
+.bql-loading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+.bql-loading-spinner {
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+.bql-loading-text {
+	font-style: italic;
+}
+
+.bql-no-results {
+	color: var(--text-muted);
+	font-style: italic;
+	text-align: center;
+	padding: 20px;
+}
+
+.bql-error-container {
+	margin: 8px 0;
+}
+
+.bql-error-summary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--text-muted);
+	font-style: italic;
+	font-size: 0.9em;
+	padding: 4px 0;
+	user-select: none;
+}
+
+.bql-error-summary:hover {
+	color: var(--text-normal);
+}
+
+.bql-error-toggle {
+	font-size: 0.8em;
+	color: var(--text-accent);
+	transition: transform 0.2s ease;
+}
+
+.bql-error-summary-text {
+	flex: 1;
+}
+
+.bql-error-details {
+	margin-top: 8px;
+}
+
+.bql-error-full {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 8px;
+	margin: 0;
+	font-family: var(--font-monospace);
+	font-size: 0.8em;
+	color: var(--text-muted);
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-height: 150px;
+	overflow-y: auto;
+}
+
+.bql-simple-error {
+	color: var(--text-muted);
+	font-style: italic;
+	padding: 8px 0;
+	font-size: 0.9em;
+}
+
+.bql-error {
+	color: var(--text-error);
+	background: var(--background-modifier-error);
+	padding: 12px;
+	border-radius: 4px;
+	border: 1px solid var(--text-error);
+	font-size: 0.9em;
+}
+
+.bql-error strong {
+	display: block;
+	margin-bottom: 4px;
+}
+
+.bql-raw-result {
+	margin-top: 8px;
+	padding: 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	font-family: var(--font-monospace);
+	font-size: 0.8em;
+	color: var(--text-muted);
+	overflow-x: auto;
+}
+
+.bql-result-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.85em;
+	background: none;
+	margin: 8px 0;
+}
+
+.bql-result-table th {
+	background: none;
+	color: var(--text-normal);
+	font-weight: 600;
+	padding: 6px 8px;
+	text-align: left;
+	border-bottom: 1px solid var(--background-modifier-border);
+	position: sticky;
+	top: 0;
+}
+
+.bql-result-table td {
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.bql-result-table .bql-numeric-cell {
+	text-align: right;
+	font-family: var(--font-monospace);
+	font-variant-numeric: tabular-nums;
+}
+
+.bql-result-table tr:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bql-result-table tr:nth-child(even) {
+	background: none;
+}
+
+.bql-result-table tr:nth-child(even):hover {
+	background: var(--background-modifier-hover);
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 600px) {
+	.bql-query-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+	}
+	
+	.bql-query-controls {
+		width: 100%;
+		justify-content: flex-end;
+	}
+	
+	.bql-result-table {
+		font-size: 0.75em;
+	}
+	
+	.bql-result-table th,
+	.bql-result-table td {
+		padding: 4px 6px;
+	}
+}
+
+/* Clean mode - minimal loading indicator */
+.bql-loading-minimal {
+	color: var(--text-muted);
+	font-size: 0.8em;
+	font-style: italic;
+	text-align: center;
+	padding: 8px 0;
+	opacity: 0.6;
+}
+
+/* Clean mode - hide container when no header/tools are needed */
+.bql-query-container:not(:has(.bql-query-header)) {
+	margin: 0;
+	padding: 0;
+}
+
+/* Clean mode - ensure table looks native */
+.bql-query-container:not(:has(.bql-query-header)) .bql-result-table {
+	margin: 0;
+	border: none;
+}
+
+/* Clean mode - no background for result area when no tools */
+.bql-query-container:not(:has(.bql-query-header)) .bql-result-area {
+	padding: 0;
+	background: none;
+	border: none;
+}
+
+/* Clean mode - minimal error styling */
+.bql-query-container:not(:has(.bql-query-header)) .bql-error-container {
+	margin: 8px 0;
+	background: none;
+}
+
+.bql-query-container:not(:has(.bql-query-header)) .bql-error-summary {
+	font-size: 0.85em;
+	padding: 2px 0;
+}
+
+/* --- Inline BQL Styles --- */
+
+.bql-inline-wrapper {
+	font-weight: 600;
+	padding: 1px 3px;
+	border-radius: 3px;
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	transition: all 0.2s ease;
+}
+
+.bql-inline-loading {
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	animation: bql-pulse 1.5s ease-in-out infinite;
+}
+
+.bql-inline-result {
+	color: var(--text-accent);
+	background: rgba(var(--color-accent-rgb), 0.1);
+	border: 1px solid rgba(var(--color-accent-rgb), 0.2);
+	cursor: help;
+}
+
+.bql-inline-result:hover {
+	background: rgba(var(--color-accent-rgb), 0.15);
+	border-color: rgba(var(--color-accent-rgb), 0.3);
+}
+
+.bql-inline-error {
+	color: var(--text-error);
+	background: rgba(var(--color-red-rgb), 0.1);
+	border: 1px solid rgba(var(--color-red-rgb), 0.2);
+	cursor: help;
+}
+
+@keyframes bql-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+/* Make inline BQL values look more natural in text */
+.bql-inline-wrapper.bql-inline-result {
+	/* Reduce visual weight for better text flow */
+	font-weight: 500;
+	background: none;
+	border: none;
+	color: var(--text-accent);
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 2px;
+}
+
+.bql-inline-wrapper.bql-inline-result:hover {
+	background: var(--background-modifier-hover);
+	border-radius: 3px;
+	padding: 1px 3px;
+}
+
+/* --- BQL Template File Picker Styles --- */
+
+.bql-template-file-picker {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.bql-template-file-picker input {
+	flex: 1;
+	min-width: 300px;
+	padding: 6px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+}
+
+.bql-template-file-picker button {
+	padding: 6px 12px;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	cursor: pointer;
+	font-size: 0.9em;
+	white-space: nowrap;
+}
+
+.bql-template-file-picker button:hover {
+	background: var(--interactive-hover);
+}
+
+.bql-template-file-picker button.mod-cta {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.bql-file-suggestions {
+	position: absolute;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: var(--shadow-s);
+	max-height: 200px;
+	overflow-y: auto;
+	z-index: 1000;
+	margin-top: 2px;
+}
+
+.bql-file-suggestion-item {
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+	font-size: 0.9em;
+}
+
+.bql-file-suggestion-item:hover,
+.bql-file-suggestion-item.active {
+	background: var(--background-modifier-hover);
+}
+
+.bql-file-suggestion-item:last-child {
+	border-bottom: none;
+}
+
+/* File selection modal */
+.bql-file-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 9999;
+}
+
+.bql-file-modal-content {
+	background: var(--background-primary);
+	padding: 24px;
+	border-radius: 8px;
+	max-width: 600px;
+	width: 90%;
+	max-height: 80%;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: var(--shadow-l);
+}
+
+.bql-file-modal-content h3 {
+	margin-top: 0;
+	margin-bottom: 16px;
+	color: var(--text-normal);
+}
+
+.bql-file-list {
+	max-height: 300px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+}
+
+.bql-file-item {
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+	font-size: 0.9em;
+	color: var(--text-normal);
+}
+
+.bql-file-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bql-file-item:last-child {
+	border-bottom: none;
+}
+
+.bql-no-files {
+	padding: 16px;
+	text-align: center;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* Responsive design for file picker */
+@media (max-width: 600px) {
+	.bql-template-file-picker {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	
+	.bql-template-file-picker input {
+		min-width: unset;
+		width: 100%;
+	}
+	
+	.bql-template-file-picker button {
+		width: 100%;
+	}
+}
+
 /* --- Settings Tab Styles --- */
+
+/* LED Status Panel */
+.beancount-status-panel {
+	background: var(--background-secondary) !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-radius: 8px !important;
+	padding: 16px !important;
+	margin: 16px 0 !important;
+	font-family: var(--font-monospace) !important;
+	font-size: 0.9em !important;
+}
+
+.beancount-status-panel .status-row {
+	display: flex;
+	align-items: center;
+	padding: 6px 0;
+	cursor: help;
+}
+
+.beancount-status-panel .status-led {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	margin-right: 8px;
+	border: 1px solid rgba(0,0,0,0.2);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.beancount-status-panel .status-led.ok {
+	background: radial-gradient(circle at 30% 30%, #4CAF50, #2E7D32);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #4CAF50;
+}
+
+.beancount-status-panel .status-led.warning {
+	background: radial-gradient(circle at 30% 30%, #FF9800, #F57C00);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #FF9800;
+}
+
+.beancount-status-panel .status-led.error {
+	background: radial-gradient(circle at 30% 30%, #F44336, #C62828);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 4px #F44336;
+}
+
+.beancount-status-panel .status-led.unknown {
+	background: radial-gradient(circle at 30% 30%, #9E9E9E, #616161);
+	box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Test Results */
 .beancount-test-results {
 	font-size: var(--font-ui-small);
 	padding: 10px;
@@ -54,4 +622,36 @@
 	border-radius: 4px;
 	font-size: 0.9em; /* Make it a bit smaller */
 	margin-top: 8px;
+}
+
+/* --- Validation Message Styles --- */
+.beancount-validation-message {
+	margin-top: 5px !important;
+	font-size: 0.85em !important;
+	opacity: 0.9 !important;
+	font-weight: 500 !important;
+	padding: 2px 4px !important;
+	border-radius: 3px !important;
+	transition: all 0.2s ease !important;
+}
+
+/* Success validation */
+.beancount-validation-message[style*="color: rgb(76, 175, 80)"],
+.beancount-validation-message[style*="color:#4CAF50"] {
+	background-color: rgba(76, 175, 80, 0.1) !important;
+	border-left: 2px solid #4CAF50 !important;
+}
+
+/* Error validation */
+.beancount-validation-message[style*="color: rgb(244, 67, 54)"],
+.beancount-validation-message[style*="color:#f44336"] {
+	background-color: rgba(244, 67, 54, 0.1) !important;
+	border-left: 2px solid #f44336 !important;
+}
+
+/* Warning validation */
+.beancount-validation-message[style*="color: rgb(102, 102, 102)"],
+.beancount-validation-message[style*="color:#666"] {
+	background-color: rgba(102, 102, 102, 0.1) !important;
+	border-left: 2px solid #666 !important;
 }

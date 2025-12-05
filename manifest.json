@@ -1,10 +1,12 @@
 {
   "id": "obsidian-finance-plugin",
-  "name": "Personal Finance Plugin",
-  "version": "0.0.1",
-  "minAppVersion": "1.1.0",
-  "description": "Manage your finances with Beancount in Obsidian",
+  "name": "Finance Plugin",
+  "version": "1.0.0-beta.1",
+  "minAppVersion": "0.15.0",
+  "description": "Comprehensive financial dashboard with Beancount integration. Features unified entry management, live BQL queries, connection validation, auto-starting backend, and streamlined settings.",
   "author": "Mukund Shelake",
   "authorUrl": "https://mukundshelake.me",
+  "fundingUrl": "https://github.com/mukundshelake/obsidian-finance-plugin",
+  "fileExtensions": ["beancount", "bean"],
   "isDesktopOnly": true
 }

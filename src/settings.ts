@@ -1,126 +1,615 @@
 // src/settings.ts
 
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian'; // Added Notice for potential errors
+import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
-import { getTestConnectionQuery } from './queries/index';
-// ------------------------------------
+import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 
+/**
+ * Interface defining the plugin settings.
+ */
 export interface BeancountPluginSettings {
+    /** Path to the main Beancount file. */
     beancountFilePath: string;
+    /** Command to run Beancount/Python (e.g. "bean-query", "python3"). */
     beancountCommand: string;
-    defaultCurrency: string;
-    reportingCurrency: string;
+    /** The primary currency for reporting and defaults. */
+    operatingCurrency: string;
+    /** Max transactions to fetch in the dashboard. */
+    maxTransactionResults: number;
+    /** Max entries to fetch in the journal. */
+    maxJournalResults: number;
+    // BQL Code Block Settings
+    /** Whether to show tool buttons (copy, refresh) on query blocks. */
+    bqlShowTools: boolean;
+    /** Whether to show the query source code above results. */
+    bqlShowQuery: boolean;
+    // BQL Shorthand Template File
+    /** Path to the markdown file defining BQL shortcuts. */
+    bqlShorthandsTemplatePath: string;
+    /** Whether to enable debug logging. */
+    debugMode: boolean;
 }
 
+/**
+ * Default settings for the plugin.
+ */
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
-    defaultCurrency: 'USD',
-    reportingCurrency: 'INR'
+    operatingCurrency: 'USD',
+    maxTransactionResults: 2000,
+    maxJournalResults: 1000,
+    // BQL Code Block Settings
+    bqlShowTools: true,
+    bqlShowQuery: false,
+    // BQL Shorthand Template File
+    bqlShorthandsTemplatePath: '',
+    debugMode: false
 }
 
+/**
+ * BeancountSettingTab
+ *
+ * The settings tab for the plugin in Obsidian's settings modal.
+ * Provides UI for configuring connection, currencies, limits, and templates.
+ */
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
 
+    /**
+     * Creates an instance of BeancountSettingTab.
+     * @param {App} app - The Obsidian App instance.
+     * @param {BeancountPlugin} plugin - The plugin instance.
+     */
     constructor(app: App, plugin: BeancountPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
 
+    /**
+     * Validates currency code format.
+     * @param {string} currency - The currency code to validate.
+     * @returns {{isValid: boolean; message: string}} Validation result.
+     */
+    private validateCurrency(currency: string): { isValid: boolean; message: string } {
+        if (!currency.trim()) {
+            return { isValid: false, message: 'Currency is required' };
+        }
+
+        // Check if it's a valid 3-letter currency code
+        const currencyRegex = /^[A-Z]{3}$/;
+        if (!currencyRegex.test(currency.toUpperCase())) {
+            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
+        }
+
+        return { isValid: true, message: '✅ Valid currency code' };
+    }
+
+    /**
+     * Creates a validation display element.
+     * @param {HTMLElement} container - The container to append to.
+     * @returns {HTMLElement} The created element.
+     */
+    private createValidationElement(container: HTMLElement): HTMLElement {
+        const validationEl = container.createEl('div', { 
+            cls: 'beancount-validation-message',
+            attr: { style: 'margin-top: 5px; font-size: 0.9em; opacity: 0.8;' }
+        });
+        return validationEl;
+    }
+
+    /**
+     * Updates validation message display.
+     * @param {HTMLElement} element - The element to update.
+     * @param {{isValid: boolean; message: string}} result - The validation result.
+     */
+    private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
+        element.textContent = result.message;
+        element.style.color = result.isValid ? '#4CAF50' : '#f44336';
+    }
+
+    /**
+     * Renders the settings tab UI.
+     */
     display(): void {
         const {containerEl} = this;
         containerEl.empty();
         containerEl.createEl('h2', {text: 'Beancount Settings'});
 
-        // --- Connection Settings ---
-        containerEl.createEl('h3', { text: 'Connection' });
-
-        new Setting(containerEl)
-            .setName('Beancount command')
-            .setDesc('How to run bean-query. (e.g., "bean-query", "wsl bean-query", or a full path)')
-            .addText(text => text
-                .setPlaceholder('bean-query')
-                .setValue(this.plugin.settings.beancountCommand)
-                .onChange(async (value) => {
-                    this.plugin.settings.beancountCommand = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        new Setting(containerEl)
-            .setName('Path to beancount file')
-            .setDesc('Enter the absolute path to your main .beancount file.')
-            .addText(text => text
-                .setPlaceholder('C:/Users/User/finances.beancount or /mnt/c/...')
-                .setValue(this.plugin.settings.beancountFilePath)
-                .onChange(async (value) => {
-                    this.plugin.settings.beancountFilePath = value;
-                    await this.plugin.saveSettings();
-                }));
-
-        // --- Test Connection Button ---
-        const testResultEl = containerEl.createEl('div', { cls: 'beancount-test-results' });
-
-        new Setting(containerEl)
-            .setName('Test connection')
-            .setDesc('Run a test query to verify the command and file path.')
-            .addButton(button => button
-                .setButtonText('Test')
-                .onClick(async () => {
-                    // 1. Clear previous results
-                    testResultEl.empty();
-                    testResultEl.setText('Testing...');
-                    testResultEl.removeClass('beancount-test-success');
-                    testResultEl.removeClass('beancount-test-error');
-
-                    // 2. Check if settings are configured
-                    if (!this.plugin.settings.beancountCommand || !this.plugin.settings.beancountFilePath) {
-                        testResultEl.setText(`❌ Failed: Please configure both Beancount command and file path.`);
-                        testResultEl.addClass('beancount-test-error');
-                        return;
-                    }
-
-                    // 3. Run the test using imported query function
-                    try {
-                        // --- Use imported query function ---
-                        const query = getTestConnectionQuery();
-                        await this.plugin.runQuery(query); // Calls runQuery from main.ts
-                        // -----------------------------------
-
-                        // 4. Handle Success
-                        testResultEl.setText('✅ Success! Your command and file path are correct.');
-                        testResultEl.addClass('beancount-test-success');
-
-                    } catch (error) {
-                        // 5. Handle Failure
-                        testResultEl.setText(`❌ Failed: ${error.message}`);
-                        testResultEl.addClass('beancount-test-error');
-                        // Optional: Log full error for debugging
-                        console.error("Beancount connection test failed:", error);
-                    }
-                }));
+        // --- Enhanced Connection Settings ---
+        this.createConnectionSection(containerEl);
 
         // --- Transaction Form Settings ---
         containerEl.createEl('h3', { text: 'Transaction Form' });
 
         new Setting(containerEl)
-            .setName('Default currency')
-            .setDesc('The default currency to use in the transaction form.')
-            .addText(text => text
-                .setPlaceholder('USD')
-                .setValue(this.plugin.settings.defaultCurrency)
-                .onChange(async (value) => {
-                    this.plugin.settings.defaultCurrency = value;
-                    await this.plugin.saveSettings();
-                }));
+            .setName('Operating currency')
+            .setDesc('The currency to use for transaction defaults and for consolidating totals (e.g., USD, INR).')
+            .addText(text => {
+                const validationEl = this.createValidationElement(containerEl);
+
+                text
+                    .setPlaceholder('USD')
+                    .setValue(this.plugin.settings.operatingCurrency)
+                    .onChange(async (value) => {
+                        this.plugin.settings.operatingCurrency = value.toUpperCase();
+                        await this.plugin.saveSettings();
+
+                        // Real-time validation
+                        if (value.trim()) {
+                            const validation = this.validateCurrency(value);
+                            this.updateValidationDisplay(validationEl, validation);
+                        } else {
+                            validationEl.textContent = '';
+                        }
+
+                        // Update the input field to show uppercase
+                        text.setValue(this.plugin.settings.operatingCurrency);
+                    });
+
+                // Initial validation
+                if (this.plugin.settings.operatingCurrency) {
+                    const validation = this.validateCurrency(this.plugin.settings.operatingCurrency);
+                    this.updateValidationDisplay(validationEl, validation);
+                }
+
+                return text;
+            });
+        
         new Setting(containerEl)
-            .setName('Reporting Currency')
-            .setDesc('The currency to consolidate all totals into (e.g., USD, INR). You must have "price" entries for this to work.')
+            // NOTE: Reporting currency has been consolidated into the single Operating Currency setting above.
+
+        // --- Performance Settings ---
+        containerEl.createEl('h3', { text: 'Performance' });
+
+        new Setting(containerEl)
+            .setName('Max transaction results')
+            .setDesc('Maximum number of transactions to load at once (to prevent memory issues with large datasets).')
             .addText(text => text
-                .setPlaceholder('USD')
-                .setValue(this.plugin.settings.reportingCurrency)
+                .setPlaceholder('2000')
+                .setValue(this.plugin.settings.maxTransactionResults.toString())
                 .onChange(async (value) => {
-                    this.plugin.settings.reportingCurrency = value;
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue > 0 && numValue <= 10000) {
+                        this.plugin.settings.maxTransactionResults = numValue;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        new Setting(containerEl)
+            .setName('Max journal results')
+            .setDesc('Maximum number of journal entries to load at once.')
+            .addText(text => text
+                .setPlaceholder('1000')
+                .setValue(this.plugin.settings.maxJournalResults.toString())
+                .onChange(async (value) => {
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue > 0 && numValue <= 5000) {
+                        this.plugin.settings.maxJournalResults = numValue;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        // --- BQL Code Block Settings ---
+        containerEl.createEl('h3', { text: 'BQL Code Blocks' });
+
+        new Setting(containerEl)
+            .setName('Show query tools')
+            .setDesc('Display refresh, copy, and download buttons above BQL query results. When disabled, only a clean table is shown.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.bqlShowTools)
+                .onChange(async (value) => {
+                    this.plugin.settings.bqlShowTools = value;
                     await this.plugin.saveSettings();
                 }));
+
+        new Setting(containerEl)
+            .setName('Show query text')
+            .setDesc('Display the BQL query text above the results in a collapsible section.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.bqlShowQuery)
+                .onChange(async (value) => {
+                    this.plugin.settings.bqlShowQuery = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // --- BQL Shorthand Template File ---
+        containerEl.createEl('h3', { text: 'BQL Shortcuts Template' });
+
+        const templateSetting = new Setting(containerEl)
+            .setName('Shortcuts template file')
+            .setDesc('Path to markdown file containing BQL shortcut definitions. Leave empty to use defaults.');
+
+        // Create a container for the file picker components
+        const filePickerContainer = templateSetting.controlEl.createDiv({ cls: 'bql-template-file-picker' });
+        
+        // Create text input with autocomplete
+        const textInput = filePickerContainer.createEl('input', {
+            type: 'text',
+            placeholder: 'e.g., BQL_Shortcuts.md or /full/path/to/file.md',
+            value: this.plugin.settings.bqlShorthandsTemplatePath
+        });
+        textInput.style.width = '300px';
+        textInput.style.marginRight = '8px';
+        
+        // Add autocomplete functionality
+        this.setupFileAutocomplete(textInput);
+        
+        // Handle text input changes
+        textInput.addEventListener('input', async (event) => {
+            const value = (event.target as HTMLInputElement).value;
+            this.plugin.settings.bqlShorthandsTemplatePath = value;
+            await this.plugin.saveSettings();
+        });
+        
+        // Browse button for file selection
+        const browseButton = filePickerContainer.createEl('button', {
+            text: '📁 Browse',
+            cls: 'mod-cta'
+        });
+        browseButton.style.marginRight = '8px';
+        browseButton.addEventListener('click', () => {
+            this.showFileSuggestModal(textInput);
+        });
+        
+        // Create Template button
+        const createButton = filePickerContainer.createEl('button', {
+            text: '✨ Create Template',
+        });
+        createButton.addEventListener('click', async () => {
+            const templatePath = this.plugin.settings.bqlShorthandsTemplatePath.trim();
+            if (!templatePath) {
+                new Notice('Please specify a template file path first');
+                return;
+            }
+            
+            const { ShorthandParser } = await import('./utils/shorthandParser');
+            try {
+                ShorthandParser.createDefaultTemplateFile(templatePath);
+                new Notice(`Created template file: ${templatePath}`);
+            } catch (error) {
+                new Notice(`Error creating template file: ${error.message}`);
+            }
+        });
+        
+        containerEl.createEl('p', { 
+            text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data. Edit the template file to customize shortcuts.',
+            cls: 'setting-item-description' 
+        });
+
+        // --- Advanced Settings ---
+        containerEl.createEl('h3', { text: 'Advanced' });
+
+        new Setting(containerEl)
+            .setName('Debug mode')
+            .setDesc('Enable detailed logging to the developer console for troubleshooting.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugMode)
+                .onChange(async (value) => {
+                    this.plugin.settings.debugMode = value;
+                    await this.plugin.saveSettings();
+                    // Update logger immediately
+                    const { Logger } = await import('./utils/logger');
+                    Logger.setDebugMode(value);
+                }));
+    }
+
+    /**
+     * Set up file autocomplete for the template file input.
+     * @param {HTMLInputElement} input - The input element to attach autocomplete to.
+     */
+    private setupFileAutocomplete(input: HTMLInputElement) {
+        let suggestionContainer: HTMLElement | null = null;
+        
+        const showSuggestions = (files: string[]) => {
+            this.hideSuggestions();
+            
+            if (files.length === 0) return;
+            
+            suggestionContainer = document.createElement('div');
+            suggestionContainer.className = 'bql-file-suggestions';
+            suggestionContainer.style.cssText = `
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: var(--background-primary);
+                border: 1px solid var(--background-modifier-border);
+                border-radius: 6px;
+                box-shadow: var(--shadow-s);
+                max-height: 200px;
+                overflow-y: auto;
+                z-index: 1000;
+            `;
+            
+            files.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'bql-file-suggestion-item';
+                item.textContent = file;
+                item.style.cssText = `
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    border-bottom: 1px solid var(--background-modifier-border-hover);
+                `;
+                
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = 'var(--background-modifier-hover)';
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = '';
+                });
+                
+                item.addEventListener('click', () => {
+                    input.value = file;
+                    input.dispatchEvent(new Event('input'));
+                    this.hideSuggestions();
+                });
+                
+                if (index === files.length - 1) {
+                    item.style.borderBottom = 'none';
+                }
+                
+                suggestionContainer!.appendChild(item);
+            });
+            
+            // Position container relative to input
+            const inputRect = input.getBoundingClientRect();
+            const parent = input.parentElement!;
+            parent.style.position = 'relative';
+            parent.appendChild(suggestionContainer);
+        };
+        
+        this.hideSuggestions = () => {
+            if (suggestionContainer) {
+                suggestionContainer.remove();
+                suggestionContainer = null;
+            }
+        };
+        
+        // Setup input event listener for autocomplete
+        input.addEventListener('input', () => {
+            const value = input.value.toLowerCase();
+            if (value.length < 1) {
+                this.hideSuggestions();
+                return;
+            }
+            
+            // Get markdown files from vault
+            const markdownFiles = this.app.vault.getMarkdownFiles()
+                .map(file => file.path)
+                .filter(path => path.toLowerCase().includes(value))
+                .slice(0, 10); // Limit to 10 suggestions
+            
+            showSuggestions(markdownFiles);
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!input.contains(event.target as Node) && !suggestionContainer?.contains(event.target as Node)) {
+                this.hideSuggestions();
+            }
+        });
+        
+        // Handle keyboard navigation
+        input.addEventListener('keydown', (event) => {
+            if (!suggestionContainer) return;
+            
+            const items = Array.from(suggestionContainer.querySelectorAll('.bql-file-suggestion-item'));
+            const activeIndex = items.findIndex(item => item.classList.contains('active'));
+            
+            switch (event.key) {
+                case 'ArrowDown':
+                    event.preventDefault();
+                    const nextIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
+                    this.setActiveSuggestion(items, nextIndex);
+                    break;
+                    
+                case 'ArrowUp':
+                    event.preventDefault();
+                    const prevIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
+                    this.setActiveSuggestion(items, prevIndex);
+                    break;
+                    
+                case 'Enter':
+                    event.preventDefault();
+                    if (activeIndex >= 0) {
+                        (items[activeIndex] as HTMLElement).click();
+                    }
+                    break;
+                    
+                case 'Escape':
+                    this.hideSuggestions();
+                    break;
+            }
+        });
+    }
+
+    private hideSuggestions: () => void = () => {};
+
+    private setActiveSuggestion(items: Element[], index: number) {
+        items.forEach((item, i) => {
+            item.classList.toggle('active', i === index);
+            if (i === index) {
+                item.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    }
+
+    /**
+     * Show a file suggestion modal with all markdown files.
+     * @param {HTMLInputElement} input - The input element to update with selection.
+     */
+    private showFileSuggestModal(input: HTMLInputElement) {
+        const modal = document.createElement('div');
+        modal.className = 'bql-file-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+        
+        const modalContent = modal.createEl('div', {
+            cls: 'bql-file-modal-content'
+        });
+        modalContent.style.cssText = `
+            background: var(--background-primary);
+            padding: 24px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            border: 1px solid var(--background-modifier-border);
+        `;
+        
+        modalContent.createEl('h3', { text: 'Select Template File' });
+        
+        const searchInput = modalContent.createEl('input', {
+            type: 'text',
+            placeholder: 'Search markdown files...'
+        });
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 16px;
+            border: 1px solid var(--background-modifier-border);
+            border-radius: 4px;
+            background: var(--background-secondary);
+            color: var(--text-normal);
+        `;
+        
+        const fileList = modalContent.createEl('div', {
+            cls: 'bql-file-list'
+        });
+        fileList.style.cssText = `
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--background-modifier-border);
+            border-radius: 4px;
+        `;
+        
+        const updateFileList = (filter = '') => {
+            fileList.empty();
+            
+            const markdownFiles = this.app.vault.getMarkdownFiles()
+                .filter(file => filter === '' || file.path.toLowerCase().includes(filter.toLowerCase()))
+                .slice(0, 50); // Limit to 50 files
+            
+            if (markdownFiles.length === 0) {
+                const noFiles = fileList.createEl('div', {
+                    text: 'No markdown files found',
+                    cls: 'bql-no-files'
+                });
+                noFiles.style.cssText = `
+                    padding: 16px;
+                    text-align: center;
+                    color: var(--text-muted);
+                    font-style: italic;
+                `;
+                return;
+            }
+            
+            markdownFiles.forEach(file => {
+                const item = fileList.createEl('div', {
+                    text: file.path,
+                    cls: 'bql-file-item'
+                });
+                item.style.cssText = `
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    border-bottom: 1px solid var(--background-modifier-border-hover);
+                `;
+                
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = 'var(--background-modifier-hover)';
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = '';
+                });
+                
+                item.addEventListener('click', () => {
+                    input.value = file.path;
+                    input.dispatchEvent(new Event('input'));
+                    modal.remove();
+                });
+            });
+        };
+        
+        // Initial file list
+        updateFileList();
+        
+        // Search functionality
+        searchInput.addEventListener('input', () => {
+            updateFileList(searchInput.value);
+        });
+        
+        // Close button
+        const buttonContainer = modalContent.createEl('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 16px;
+            gap: 8px;
+        `;
+        
+        const closeButton = buttonContainer.createEl('button', {
+            text: 'Cancel'
+        });
+        closeButton.style.cssText = `
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: 1px solid var(--background-modifier-border);
+            background: var(--interactive-normal);
+            color: var(--text-normal);
+            cursor: pointer;
+        `;
+        closeButton.addEventListener('click', () => modal.remove());
+        
+        // Close on background click
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.remove();
+            }
+        });
+        
+        document.body.appendChild(modal);
+        searchInput.focus();
+    }
+
+    /**
+     * Create the enhanced connection section with Svelte component
+     */
+    private createConnectionSection(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'Connection' });
+        
+        // Create container for the Svelte component
+        const connectionContainer = containerEl.createEl('div', {
+            cls: 'connection-settings-container'
+        });
+
+        // Create and mount the Svelte component
+        const connectionSettings = new ConnectionSettings({
+            target: connectionContainer,
+            props: {
+                plugin: this.plugin
+            }
+        });
+
+        // Listen for settings changes from the component
+        connectionSettings.$on('settingsChanged', (event) => {
+            // Settings changed - no additional action needed
+        });
+
+        // Store reference for cleanup (if needed)
+        (containerEl as any)._connectionSettings = connectionSettings;
     }
 }
