@@ -28,7 +28,7 @@
         { id: 'overview', label: 'Overview' },
         { id: 'transactions', label: 'Transactions' },
         { id: 'journal', label: 'Journal' },
-        { id: 'balancesheet', label: 'Balance Sheet' },
+        { id: 'balancesheet', label: 'Accounts & Balances' },
         { id: 'commodities', label: 'Commodities' }
     ];
 </script>

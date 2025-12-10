@@ -21,6 +21,15 @@ export class JournalService {
     }
 
     /**
+     * Fetches all account names from the journal.
+     * @returns {Promise<string[]>} Array of account names.
+     */
+    public async getAccounts(): Promise<string[]> {
+        const response = await this.api.get<{accounts: string[]}>(`${ENDPOINTS.ACCOUNTS}`);
+        return response.accounts;
+    }
+
+    /**
      * Fetches journal entries based on filters and pagination.
      * @param {JournalFilters} filters - Filters to apply (date, account, etc.).
      * @param {number} [page=1] - Page number to retrieve.
@@ -96,5 +105,56 @@ export class JournalService {
      */
     public async reloadBackend(): Promise<void> {
         await this.api.post(ENDPOINTS.RELOAD, {});
+    }
+
+    /**
+     * Gets the status of an account (open/closed, dates).
+     * @param {string} accountName - The account name to check.
+     * @returns {Promise<{account: string, is_open: boolean, open_date: string | null, close_date: string | null}>}
+     */
+    public async getAccountStatus(accountName: string): Promise<{account: string, is_open: boolean, open_date: string | null, close_date: string | null}> {
+        return this.api.get(`${ENDPOINTS.ACCOUNTS}/${encodeURIComponent(accountName)}/status`);
+    }
+
+    /**
+     * Opens a new account.
+     * @param {string} accountName - The account name to open.
+     * @param {string} date - The date to open the account (YYYY-MM-DD).
+     * @param {string[]} [currencies] - Optional list of currencies for the account.
+     * @param {string} [booking] - Optional booking method.
+     * @returns {Promise<boolean>} True if successful.
+     * @throws {Error} If the operation fails.
+     */
+    public async openAccount(accountName: string, date: string, currencies?: string[], booking?: string): Promise<boolean> {
+        const data: any = {
+            type: 'open',
+            account: accountName,
+            date
+        };
+        if (currencies && currencies.length > 0) data.currencies = currencies;
+        if (booking) data.booking = booking;
+
+        const result = await this.api.post<{success: boolean, error?: string}>(ENDPOINTS.ACCOUNTS_OPEN, data);
+        if (!result.success) throw new Error(result.error || 'Failed to open account');
+        return true;
+    }
+
+    /**
+     * Closes an existing account.
+     * @param {string} accountName - The account name to close.
+     * @param {string} date - The date to close the account (YYYY-MM-DD).
+     * @returns {Promise<boolean>} True if successful.
+     * @throws {Error} If the operation fails.
+     */
+    public async closeAccount(accountName: string, date: string): Promise<boolean> {
+        const data = {
+            type: 'close',
+            account: accountName,
+            date
+        };
+
+        const result = await this.api.post<{success: boolean, error?: string}>(ENDPOINTS.ACCOUNTS_CLOSE, data);
+        if (!result.success) throw new Error(result.error || 'Failed to close account');
+        return true;
     }
 }
