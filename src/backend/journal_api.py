@@ -563,6 +563,32 @@ class BeancountJournalAPI:
         
         return sorted(list(accounts))
     
+    def get_account_status(self, account_name: str) -> Dict[str, Any]:
+        """
+        Get the open/close status of an account.
+
+        Args:
+            account_name (str): The account name to check.
+
+        Returns:
+            Dict[str, Any]: Dictionary with 'is_open' (bool), 'open_date' (str or None), 'close_date' (str or None).
+        """
+        open_date = None
+        close_date = None
+        
+        for entry in self.entries:
+            if isinstance(entry, data.Open) and entry.account == account_name:
+                open_date = str(entry.date)
+            elif isinstance(entry, data.Close) and entry.account == account_name:
+                close_date = str(entry.date)
+        
+        return {
+            'account': account_name,
+            'is_open': close_date is None,
+            'open_date': open_date,
+            'close_date': close_date
+        }
+    
     def get_payees(self) -> List[str]:
         """
         Get all unique payees from transactions.
@@ -1265,6 +1291,10 @@ class BeancountJournalAPI:
                 entry_text = self.generate_balance_text(entry_data)
             elif entry_type == 'note':
                 entry_text = self.generate_note_text(entry_data)
+            elif entry_type == 'open':
+                entry_text = self.generate_open_text(entry_data)
+            elif entry_type == 'close':
+                entry_text = self.generate_close_text(entry_data)
             else:
                 raise ValueError(f"Unsupported entry type: {entry_type}")
             
@@ -1320,6 +1350,49 @@ class BeancountJournalAPI:
         comment = note_data['comment']
         
         return f'{date_str} note {account} "{comment}"'
+
+    def generate_open_text(self, open_data: Dict[str, Any]) -> str:
+        """
+        Generate open directive text for Beancount file.
+
+        Args:
+            open_data (Dict[str, Any]): Open data including date, account, and optionally currencies and booking method.
+
+        Returns:
+            str: Formatted Beancount open string.
+        """
+        date_str = open_data['date']
+        account = open_data['account']
+        currencies = open_data.get('currencies', [])
+        booking = open_data.get('booking')
+        
+        # Build the open directive
+        parts = [date_str, 'open', account]
+        
+        # Add currencies if specified
+        if currencies and len(currencies) > 0:
+            parts.append(','.join(currencies))
+        
+        # Add booking method if specified
+        if booking:
+            parts.append(f'"{booking}"')
+        
+        return ' '.join(parts)
+
+    def generate_close_text(self, close_data: Dict[str, Any]) -> str:
+        """
+        Generate close directive text for Beancount file.
+
+        Args:
+            close_data (Dict[str, Any]): Close data including date and account.
+
+        Returns:
+            str: Formatted Beancount close string.
+        """
+        date_str = close_data['date']
+        account = close_data['account']
+        
+        return f"{date_str} close {account}"
 
     def add_transaction_to_file(self, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1495,6 +1568,61 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
         try:
             accounts = api.get_accounts()
             return jsonify({'accounts': accounts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/<path:account_name>/status', methods=['GET'])
+    def get_account_status(account_name: str):
+        """Get the open/close status of an account"""
+        try:
+            status = api.get_account_status(account_name)
+            return jsonify(status)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/open', methods=['POST'])
+    def open_account():
+        """Open a new account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'open'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/close', methods=['POST'])
+    def close_account():
+        """Close an existing account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'close'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     

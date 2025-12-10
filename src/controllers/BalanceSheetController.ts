@@ -66,7 +66,7 @@ export interface BalanceSheetState {
  * calculating totals, and handling different valuation methods.
  */
 export class BalanceSheetController {
-	private plugin: BeancountPlugin;
+	public plugin: BeancountPlugin;
 	public state: Writable<BalanceSheetState>;
 
 	/**
