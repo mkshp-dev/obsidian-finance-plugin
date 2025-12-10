@@ -28,6 +28,11 @@ export interface BeancountPluginSettings {
     bqlShorthandsTemplatePath: string;
     /** Whether to enable debug logging. */
     debugMode: boolean;
+    // Backup Settings
+    /** Whether to create backup files when modifying the beancount file. */
+    createBackups: boolean;
+    /** Maximum number of backup files to keep (0 = unlimited). */
+    maxBackupFiles: number;
 }
 
 /**
@@ -44,7 +49,10 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     bqlShowQuery: false,
     // BQL Shorthand Template File
     bqlShorthandsTemplatePath: '',
-    debugMode: false
+    debugMode: false,
+    // Backup Settings
+    createBackups: true,
+    maxBackupFiles: 10
 }
 
 /**
@@ -276,6 +284,33 @@ export class BeancountSettingTab extends PluginSettingTab {
             text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data. Edit the template file to customize shortcuts.',
             cls: 'setting-item-description' 
         });
+
+        // --- Backup Settings ---
+        containerEl.createEl('h3', { text: 'Backup Settings' });
+
+        new Setting(containerEl)
+            .setName('Create backups')
+            .setDesc('Create timestamped backup files before modifying your Beancount file. Highly recommended for data safety.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.createBackups)
+                .onChange(async (value) => {
+                    this.plugin.settings.createBackups = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Max backup files')
+            .setDesc('Maximum number of backup files to keep (oldest are deleted automatically). Set to 0 for unlimited backups.')
+            .addText(text => text
+                .setPlaceholder('10')
+                .setValue(this.plugin.settings.maxBackupFiles.toString())
+                .onChange(async (value) => {
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue >= 0 && numValue <= 1000) {
+                        this.plugin.settings.maxBackupFiles = numValue;
+                        await this.plugin.saveSettings();
+                    }
+                }));
 
         // --- Advanced Settings ---
         containerEl.createEl('h3', { text: 'Advanced' });

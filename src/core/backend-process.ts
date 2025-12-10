@@ -116,6 +116,19 @@ export class BackendProcess {
             let command: string;
             let args: string[];
 
+            // Build backend arguments including backup settings
+            const backendArgs = [
+                actualBeancountFile, 
+                '--port', '5013', 
+                '--host', 'localhost'
+            ];
+            
+            // Add backup settings from plugin settings
+            if (!this.plugin.settings.createBackups) {
+                backendArgs.push('--no-backup');
+            }
+            backendArgs.push('--max-backups', this.plugin.settings.maxBackupFiles.toString());
+
             if (useWSL) {
                 command = 'wsl';
                 // When using wsl command, the first arg is the command inside wsl
@@ -132,15 +145,15 @@ export class BackendProcess {
                     // pythonCmd is "wsl python3"
                     // command is 'wsl'
                     // args start with 'python3'
-                    args = [...parts.slice(1), actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                    args = [...parts.slice(1), actualScriptPath, ...backendArgs];
                 } else {
                      // Should not happen if useWSL is true based on our logic, unless it's just 'python3' running in WSL?
                      // If setup.useWSL is true, it means we should run in WSL.
-                     args = [pythonCmd, actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                     args = [pythonCmd, actualScriptPath, ...backendArgs];
                 }
             } else {
                 command = pythonCmd;
-                args = [actualScriptPath, actualBeancountFile, '--port', '5013', '--host', 'localhost'];
+                args = [actualScriptPath, ...backendArgs];
             }
 
             // Fix for spawn: command must be the executable
