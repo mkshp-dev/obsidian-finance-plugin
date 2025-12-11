@@ -60,15 +60,21 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 
 ---
 
-## 🔧 Requirements
+## ⚠️ Important Prerequisites
 
-This plugin integrates with your existing Beancount setup:
+**Before installing this plugin, you must have a working Beancount environment.**
 
-1. **Python 3.8+**
-2. **Beancount v3+**: Install via `pip install beancount`
-3. **bean-query**: Command-line tool for querying Beancount files
-4. **bean-price** *(optional)*: For automatic commodity price fetching
-5. **WSL Support**: Full compatibility for Windows users running Beancount in WSL
+This plugin is a **frontend** for Beancount. It **does not** include the core accounting engine itself.
+
+### Mandatory Requirements:
+1.  **Python 3.8 or higher**: Must be installed and available in your system PATH.
+2.  **Beancount Package**: Must be installed via pip (`pip install beancount`).
+    > *Verification*: Open your terminal and run `python3 -c "import beancount; print('Success')"`
+3.  **bean-query**: The command-line tool must be accessible.
+    > *Verification*: Run `bean-query --version` in your terminal.
+
+**Windows Users**:
+We strongly recommend using **WSL (Windows Subsystem for Linux)** for the best experience and performance. The plugin has native support for WSL paths.
 
 ---
 
