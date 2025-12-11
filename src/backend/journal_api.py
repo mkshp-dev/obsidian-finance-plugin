@@ -33,24 +33,55 @@ except ImportError:
     sys.exit(1)
 
 class BeancountJournalAPI:
-    """Main API class for Beancount journal data"""
+    """
+    Main API class for Beancount journal data.
+
+    Handles loading, parsing, and querying of the Beancount file, as well as
+    providing methods to modify the file (add, update, delete entries).
+    """
 
     @staticmethod
     def filter_user_metadata(meta: dict) -> dict:
-        """Return only user-supplied metadata, filtering out internal fields."""
+        """
+        Return only user-supplied metadata, filtering out internal fields.
+
+        Args:
+            meta (dict): The metadata dictionary from a Beancount entry.
+
+        Returns:
+            dict: A new dictionary containing only user-supplied metadata.
+        """
         if not meta:
             return {}
         return {k: v for k, v in meta.items() if k not in ('lineno', 'filename')}
     
-    def __init__(self, beancount_file: str):
+    def __init__(self, beancount_file: str, create_backups: bool = True, max_backup_files: int = 10):
+        """
+        Initialize the BeancountJournalAPI.
+
+        Args:
+            beancount_file (str): The file path to the main Beancount ledger file.
+            create_backups (bool): Whether to create backup files before modifications.
+            max_backup_files (int): Maximum number of backup files to keep (0 = unlimited).
+        """
         self.beancount_file = beancount_file
+        self.create_backups = create_backups
+        self.max_backup_files = max_backup_files
         self.entries = None
         self.errors = None
         self.options_map = None
         self.load_data()
     
     def load_data(self):
-        """Load and parse the Beancount file"""
+        """
+        Load and parse the Beancount file.
+
+        Populates self.entries, self.errors, and self.options_map.
+        Prints errors to stdout if parsing fails or has warnings.
+
+        Raises:
+            Exception: If loading the file fails completely.
+        """
         try:
             self.entries, self.errors, self.options_map = loader.load_file(self.beancount_file)
             if self.errors:
@@ -62,8 +93,63 @@ class BeancountJournalAPI:
             raise
     
     def reload_data(self):
-        """Reload the Beancount file (for when it changes)"""
+        """
+        Reload the Beancount file.
+
+        Useful when the file has been modified externally or by this API.
+        """
         self.load_data()
+    
+    def create_backup_if_enabled(self, target_file: str = None) -> Optional[str]:
+        """
+        Create a backup of the target file if backups are enabled.
+        Also manages cleanup of old backups based on max_backup_files setting.
+
+        Args:
+            target_file (str): Path to the file to backup. Defaults to self.beancount_file.
+
+        Returns:
+            Optional[str]: Path to the backup file if created, None otherwise.
+        """
+        if not self.create_backups:
+            return None
+        
+        file_to_backup = target_file or self.beancount_file
+        backup_path = f"{file_to_backup}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        shutil.copy2(file_to_backup, backup_path)
+        print(f"[DEBUG] Created backup: {backup_path}")
+        
+        # Cleanup old backups if max_backup_files is set
+        if self.max_backup_files > 0:
+            self.cleanup_old_backups(file_to_backup)
+        
+        return backup_path
+    
+    def cleanup_old_backups(self, target_file: str = None):
+        """
+        Remove old backup files, keeping only the most recent max_backup_files.
+
+        Args:
+            target_file (str): Path to the original file. Backups will be identified by pattern.
+        """
+        file_to_check = target_file or self.beancount_file
+        backup_pattern = f"{file_to_check}.backup.*"
+        
+        import glob
+        backup_files = glob.glob(backup_pattern)
+        
+        if len(backup_files) > self.max_backup_files:
+            # Sort by modification time (oldest first)
+            backup_files.sort(key=os.path.getmtime)
+            
+            # Remove oldest files
+            files_to_remove = backup_files[:len(backup_files) - self.max_backup_files]
+            for old_backup in files_to_remove:
+                try:
+                    os.remove(old_backup)
+                    print(f"[DEBUG] Removed old backup: {old_backup}")
+                except Exception as e:
+                    print(f"[WARN] Failed to remove old backup {old_backup}: {e}")
     
     def get_entries(self, 
                    start_date: Optional[str] = None,
@@ -76,7 +162,28 @@ class BeancountJournalAPI:
                    limit: int = 100,
                    offset: int = 0) -> Dict[str, Any]:
         """
-        Get all entries (transactions and other directives) with filtering and pagination
+        Get all entries (transactions and other directives) with filtering and pagination.
+
+        Args:
+            start_date (Optional[str]): Filter entries on or after this date (YYYY-MM-DD).
+            end_date (Optional[str]): Filter entries on or before this date (YYYY-MM-DD).
+            account_filter (Optional[str]): Filter entries involving this account name.
+            payee_filter (Optional[str]): Filter transactions by payee name.
+            tag_filter (Optional[str]): Filter transactions containing this tag.
+            search_term (Optional[str]): General search term matching payee, narration, or account.
+            entry_types (Optional[List[str]]): List of entry types to include (e.g., ['transaction', 'note']).
+                                               Defaults to ['transaction', 'balance', 'pad', 'note'].
+            limit (int): Maximum number of entries to return. Defaults to 100.
+            offset (int): Number of entries to skip. Defaults to 0.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing:
+                - entries (List[Dict]): The list of filtered entry objects.
+                - total_count (int): Total number of entries after filtering (before pagination).
+                - returned_count (int): Number of entries returned in this page.
+                - offset (int): The offset used.
+                - limit (int): The limit used.
+                - has_more (bool): True if there are more entries available after this page.
         """
         entries = []
         
@@ -112,14 +219,22 @@ class BeancountJournalAPI:
                     if not self.entry_matches_account(entry, account_filter):
                         continue
                 
-                # Apply payee filter (only for transactions)
-                if payee_filter and isinstance(entry, data.Transaction):
-                    if not entry.payee or payee_filter.lower() not in entry.payee.lower():
+                # Apply payee filter
+                if payee_filter:
+                    if isinstance(entry, data.Transaction):
+                        if not entry.payee or payee_filter.lower() not in entry.payee.lower():
+                            continue
+                    else:
+                        # Skip non-transactions when filtering by payee
                         continue
                 
-                # Apply tag filter (only for transactions)
-                if tag_filter and isinstance(entry, data.Transaction):
-                    if not entry.tags or tag_filter.lower() not in [t.lower() for t in entry.tags]:
+                # Apply tag filter
+                if tag_filter:
+                    if isinstance(entry, data.Transaction):
+                        if not entry.tags or tag_filter.lower() not in [t.lower() for t in entry.tags]:
+                            continue
+                    else:
+                        # Skip non-transactions when filtering by tag
                         continue
                 
                 # Apply search term
@@ -157,7 +272,15 @@ class BeancountJournalAPI:
         }
     
     def get_entry_type(self, entry) -> str:
-        """Get the type of a Beancount entry (focused on journal essentials)"""
+        """
+        Get the string type representation of a Beancount entry.
+
+        Args:
+            entry: A Beancount directive object.
+
+        Returns:
+            str: One of 'transaction', 'note', 'balance', 'pad', or 'unknown'.
+        """
         if isinstance(entry, data.Transaction):
             return 'transaction'
         elif isinstance(entry, data.Note):
@@ -170,7 +293,16 @@ class BeancountJournalAPI:
             return 'unknown'
     
     def entry_matches_account(self, entry, account_filter: str) -> bool:
-        """Check if an entry matches the account filter"""
+        """
+        Check if an entry matches the account filter.
+
+        Args:
+            entry: The Beancount entry to check.
+            account_filter (str): The account name substring to match.
+
+        Returns:
+            bool: True if the entry involves the account, False otherwise.
+        """
         account_lower = account_filter.lower()
         
         if isinstance(entry, data.Transaction):
@@ -181,7 +313,16 @@ class BeancountJournalAPI:
         return False
     
     def entry_matches_search(self, entry, search_term: str) -> bool:
-        """Check if an entry matches the search term"""
+        """
+        Check if an entry matches a general search term.
+
+        Args:
+            entry: The Beancount entry to check.
+            search_term (str): The term to search for in payee, narration, or accounts.
+
+        Returns:
+            bool: True if the search term matches any relevant field.
+        """
         search_lower = search_term.lower()
         
         if isinstance(entry, data.Transaction):
@@ -201,7 +342,15 @@ class BeancountJournalAPI:
         return False
     
     def entry_to_dict(self, entry) -> Dict[str, Any]:
-        """Convert any supported Beancount entry to a dictionary"""
+        """
+        Convert any supported Beancount entry to a dictionary.
+
+        Args:
+            entry: The Beancount entry object.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the entry, suitable for JSON serialization.
+        """
         # Safely convert metadata
         safe_metadata = {}
         if hasattr(entry, 'meta') and entry.meta:
@@ -238,13 +387,29 @@ class BeancountJournalAPI:
             return base_data
     
     def generate_entry_id(self, entry) -> str:
-        """Generate a unique ID using Beancount's official hash_entry function"""
+        """
+        Generate a unique ID using Beancount's official hash_entry function.
+
+        Args:
+            entry: The Beancount entry.
+
+        Returns:
+            str: A hash string uniquely identifying the entry.
+        """
         # Use Beancount's built-in stable hash function
         # This includes metadata (filename, lineno) by default for true uniqueness
         return hash_entry(entry, exclude_meta=False)
     
     def transaction_to_dict_data(self, transaction: data.Transaction) -> Dict[str, Any]:
-        """Convert transaction-specific data"""
+        """
+        Convert transaction-specific data to a dictionary.
+
+        Args:
+            transaction (data.Transaction): The transaction object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing flag, payee, narration, tags, links, and postings.
+        """
         postings = []
         for posting in transaction.postings:
             posting_data = {
@@ -285,14 +450,30 @@ class BeancountJournalAPI:
         }
     
     def note_to_dict_data(self, note: data.Note) -> Dict[str, Any]:
-        """Convert Note directive data"""
+        """
+        Convert Note directive data to a dictionary.
+
+        Args:
+            note (data.Note): The note object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account and comment.
+        """
         return {
             'account': note.account,
             'comment': note.comment
         }
     
     def balance_to_dict_data(self, balance: data.Balance) -> Dict[str, Any]:
-        """Convert Balance directive data"""
+        """
+        Convert Balance directive data to a dictionary.
+
+        Args:
+            balance (data.Balance): The balance object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account, amount, currency, tolerance, and diff_amount.
+        """
         return {
             'account': balance.account,
             'amount': str(balance.amount.number),
@@ -302,7 +483,15 @@ class BeancountJournalAPI:
         }
     
     def pad_to_dict_data(self, pad: data.Pad) -> Dict[str, Any]:
-        """Convert Pad directive data"""
+        """
+        Convert Pad directive data to a dictionary.
+
+        Args:
+            pad (data.Pad): The pad object.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing account and source_account.
+        """
         return {
             'account': pad.account,
             'source_account': pad.source_account
@@ -318,7 +507,22 @@ class BeancountJournalAPI:
                         limit: int = 100,
                         offset: int = 0) -> Dict[str, Any]:
         """
-        Legacy method to get only transactions (for backward compatibility)
+        Legacy method to get only transactions (for backward compatibility).
+
+        Delegates to get_entries with entry_types=['transaction'].
+
+        Args:
+            start_date (Optional[str]): Start date filter.
+            end_date (Optional[str]): End date filter.
+            account_filter (Optional[str]): Account name filter.
+            payee_filter (Optional[str]): Payee name filter.
+            tag_filter (Optional[str]): Tag filter.
+            search_term (Optional[str]): General search term.
+            limit (int): Max results.
+            offset (int): Pagination offset.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing list of 'transactions' and pagination metadata.
         """
         result = self.get_entries(
             start_date=start_date,
@@ -343,7 +547,12 @@ class BeancountJournalAPI:
         }
     
     def get_accounts(self) -> List[str]:
-        """Get all account names"""
+        """
+        Get all unique account names from the journal.
+
+        Returns:
+            List[str]: A sorted list of account strings.
+        """
         accounts = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction):
@@ -354,8 +563,39 @@ class BeancountJournalAPI:
         
         return sorted(list(accounts))
     
+    def get_account_status(self, account_name: str) -> Dict[str, Any]:
+        """
+        Get the open/close status of an account.
+
+        Args:
+            account_name (str): The account name to check.
+
+        Returns:
+            Dict[str, Any]: Dictionary with 'is_open' (bool), 'open_date' (str or None), 'close_date' (str or None).
+        """
+        open_date = None
+        close_date = None
+        
+        for entry in self.entries:
+            if isinstance(entry, data.Open) and entry.account == account_name:
+                open_date = str(entry.date)
+            elif isinstance(entry, data.Close) and entry.account == account_name:
+                close_date = str(entry.date)
+        
+        return {
+            'account': account_name,
+            'is_open': close_date is None,
+            'open_date': open_date,
+            'close_date': close_date
+        }
+    
     def get_payees(self) -> List[str]:
-        """Get all unique payees"""
+        """
+        Get all unique payees from transactions.
+
+        Returns:
+            List[str]: A sorted list of payee strings.
+        """
         payees = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction) and entry.payee:
@@ -364,7 +604,12 @@ class BeancountJournalAPI:
         return sorted(list(payees))
     
     def get_tags(self) -> List[str]:
-        """Get all unique tags"""
+        """
+        Get all unique tags from transactions.
+
+        Returns:
+            List[str]: A sorted list of tag strings.
+        """
         tags = set()
         for entry in self.entries:
             if isinstance(entry, data.Transaction) and entry.tags:
@@ -373,10 +618,14 @@ class BeancountJournalAPI:
         return sorted(list(tags))
     
     def get_commodities(self) -> List[Dict[str, Any]]:
-        """Get all unique commodities/currencies from transactions and price entries
+        """
+        Get all unique commodities/currencies from transactions and price entries.
 
         Note: This remains a simple helper for backwards compatibility. Use
         `get_commodities_detailed()` for rich metadata and latest-price information.
+
+        Returns:
+            List[Dict[str, Any]]: List of dicts, e.g. [{'name': 'USD'}, ...].
         """
         commodities = set()
 
@@ -400,7 +649,12 @@ class BeancountJournalAPI:
         return [{'name': commodity} for commodity in sorted(list(commodities))]
 
     def find_first_directive_date(self) -> Optional[date]:
-        """Return the earliest date found across all entries (best-effort)."""
+        """
+        Return the earliest date found across all entries (best-effort).
+
+        Returns:
+            Optional[date]: The earliest date, or None if no dated entries exist.
+        """
         first = None
         for entry in self.entries:
             try:
@@ -412,7 +666,13 @@ class BeancountJournalAPI:
         return first
 
     def get_commodities_detailed(self) -> List[Dict[str, Any]]:
-        """Return detailed commodity information including metadata and latest price."""
+        """
+        Return detailed commodity information including metadata and latest price.
+
+        Returns:
+            List[Dict[str, Any]]: A list of commodity detail objects containing symbol,
+                                  metadata, logo_url, price_meta, latest_price, etc.
+        """
         commodity_map: Dict[str, Dict[str, Any]] = {}
 
         # Collect declared commodities and metadata
@@ -483,7 +743,15 @@ class BeancountJournalAPI:
         return [commodity_map[k] for k in sorted(commodity_map.keys())]
 
     def get_commodity_details(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Return detailed information for a specific commodity"""
+        """
+        Return detailed information for a specific commodity.
+
+        Args:
+            symbol (str): The commodity currency symbol (e.g. 'USD', 'AAPL').
+
+        Returns:
+            Optional[Dict[str, Any]]: The commodity detail object or None if not found.
+        """
         details = None
         for c in self.get_commodities_detailed():
             if c['symbol'] == symbol:
@@ -494,7 +762,17 @@ class BeancountJournalAPI:
         return details
 
     def create_commodity_declaration(self, symbol: str, metadata: Dict[str, Any], date_for_decl: Optional[date] = None) -> Dict[str, Any]:
-        """Append a new commodity declaration to the Beancount file."""
+        """
+        Append a new commodity declaration to the Beancount file.
+
+        Args:
+            symbol (str): The commodity symbol.
+            metadata (Dict[str, Any]): Metadata key-value pairs to attach.
+            date_for_decl (Optional[date]): The date for the directive. Defaults to first directive date or today.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and optional 'message' or 'error'.
+        """
         try:
             print(f"[DEBUG] create_commodity_declaration called for symbol={symbol} metadata={metadata} date_for_decl={date_for_decl}")
             if not isinstance(metadata, dict):
@@ -532,9 +810,7 @@ class BeancountJournalAPI:
 
             # Backup and append to the target file
             print(f"[DEBUG] Appending commodity declaration to target_file={target_file}")
-            backup_path = f"{target_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            print(f"[DEBUG] Creating backup: {backup_path}")
-            shutil.copy2(target_file, backup_path)
+            backup_path = self.create_backup_if_enabled(target_file)
             with open(target_file, 'a', encoding='utf-8') as f:
                 f.write('\n' + text)
             print(f"[DEBUG] Appended declaration:\n{text}")
@@ -548,7 +824,16 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def update_commodity_metadata(self, symbol: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Update or create commodity declaration metadata."""
+        """
+        Update or create commodity declaration metadata.
+
+        Args:
+            symbol (str): The commodity symbol.
+            metadata (Dict[str, Any]): The new metadata to apply.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and details.
+        """
         try:
             print(f"[DEBUG] update_commodity_metadata called for symbol={symbol} metadata={metadata}")
             if not isinstance(metadata, dict):
@@ -651,7 +936,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def validate_price_source(self, price_meta: str) -> Dict[str, Any]:
-        """Validate price metadata by running bean-price with -e and checking output."""
+        """
+        Validate price metadata by running bean-price with -e and checking output.
+
+        Args:
+            price_meta (str): The price source definition (e.g. "yahoo/AAPL").
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool), and 'output' or 'error'.
+        """
         try:
             print(f"[DEBUG] validate_price_source called with price_meta={price_meta}")
             if not price_meta or not isinstance(price_meta, str):
@@ -686,7 +979,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
 
     def validate_logo_url(self, url: str) -> Dict[str, Any]:
-        """Check if a URL returns an image content-type."""
+        """
+        Check if a URL returns an image content-type.
+
+        Args:
+            url (str): The URL to check.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool) and 'content_type' or 'error'.
+        """
         try:
             print(f"[DEBUG] validate_logo_url called with url={url}")
             if not url or not isinstance(url, str):
@@ -710,7 +1011,13 @@ class BeancountJournalAPI:
             return {'success': False, 'error': str(e)}
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive statistics about the ledger (focused on journal essentials)"""
+        """
+        Get comprehensive statistics about the ledger (focused on journal essentials).
+
+        Returns:
+            Dict[str, Any]: Dictionary containing counts of transactions, notes, etc.,
+                            and date ranges.
+        """
         stats = {
             'transaction_count': 0,
             'note_count': 0,
@@ -748,17 +1055,45 @@ class BeancountJournalAPI:
         
         return stats
 
-    def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
-        """Find a transaction by its ID"""
+    def find_entry_by_id(self, entry_id: str) -> Optional[Any]:
+        """
+        Find an entry (Transaction, Note, Balance, Pad) by its ID.
+
+        Args:
+            entry_id (str): The hash ID of the entry.
+
+        Returns:
+            Optional[Any]: The entry object or None.
+        """
         for entry in self.entries:
-            if isinstance(entry, data.Transaction):
-                entry_id = self.generate_entry_id(entry)
-                if entry_id == transaction_id:
+            # Check supported entry types
+            if isinstance(entry, (data.Transaction, data.Note, data.Balance, data.Pad)):
+                eid = self.generate_entry_id(entry)
+                if eid == entry_id:
                     return entry
         return None
 
+    def find_transaction_by_id(self, transaction_id: str) -> Optional[data.Transaction]:
+        """
+        Legacy method: Find a transaction by its ID.
+        DEPRECATED: Use find_entry_by_id instead.
+        """
+        entry = self.find_entry_by_id(transaction_id)
+        if isinstance(entry, data.Transaction):
+            return entry
+        return None
+
     def update_transaction_in_file(self, transaction_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update a transaction in the Beancount file"""
+        """
+        Update a transaction in the Beancount file.
+
+        Args:
+            transaction_id (str): The ID of the transaction to update.
+            updated_data (Dict[str, Any]): The new transaction data (payee, narration, postings, etc.).
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
             # Find the original transaction
             original_transaction = self.find_transaction_by_id(transaction_id)
@@ -766,8 +1101,7 @@ class BeancountJournalAPI:
                 return {'success': False, 'error': 'Transaction not found'}
 
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Read the file content
             with open(self.beancount_file, 'r', encoding='utf-8') as f:
@@ -813,39 +1147,46 @@ class BeancountJournalAPI:
         except Exception as e:
             return {'success': False, 'error': f'Failed to update transaction: {str(e)}'}
 
-    def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
-        """Delete a transaction from the Beancount file"""
+    def delete_entry_from_file(self, entry_id: str) -> Dict[str, Any]:
+        """
+        Delete an entry (Transaction, Note, Balance, Pad) from the Beancount file.
+
+        Args:
+            entry_id (str): The ID of the entry to delete.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
-            # Find the original transaction
-            original_transaction = self.find_transaction_by_id(transaction_id)
-            if not original_transaction:
-                return {'success': False, 'error': 'Transaction not found'}
+            # Find the original entry
+            original_entry = self.find_entry_by_id(entry_id)
+            if not original_entry:
+                return {'success': False, 'error': 'Entry not found'}
 
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Read the file content
             with open(self.beancount_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # Find the transaction in the file by looking for its line number
-            if hasattr(original_transaction, 'meta') and 'lineno' in original_transaction.meta:
-                lineno = original_transaction.meta['lineno']
+            # Find the entry in the file by looking for its line number
+            if hasattr(original_entry, 'meta') and 'lineno' in original_entry.meta:
+                lineno = original_entry.meta['lineno']
                 lines = content.split('\n')
                 
-                # Find the start and end of the transaction
+                # Find the start and end of the entry
                 start_line = lineno - 1  # Convert to 0-based indexing
                 end_line = start_line
                 
-                # Find the end of the transaction (next non-indented line or empty line)
+                # Find the end of the entry (next non-indented line or empty line)
                 while end_line + 1 < len(lines):
                     next_line = lines[end_line + 1].strip()
                     if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
                         break
                     end_line += 1
                 
-                # Remove the transaction lines
+                # Remove the entry lines
                 del lines[start_line:end_line + 1]
                 
                 # Write back to file
@@ -857,17 +1198,31 @@ class BeancountJournalAPI:
                 
                 return {
                     'success': True, 
-                    'message': 'Transaction deleted successfully',
+                    'message': 'Entry deleted successfully',
                     'backup_file': backup_path
                 }
             else:
-                return {'success': False, 'error': 'Could not locate transaction in file'}
+                return {'success': False, 'error': 'Could not locate entry in file'}
 
         except Exception as e:
-            return {'success': False, 'error': f'Failed to delete transaction: {str(e)}'}
+            return {'success': False, 'error': f'Failed to delete entry: {str(e)}'}
+
+    def delete_transaction_from_file(self, transaction_id: str) -> Dict[str, Any]:
+        """
+        Legacy method: redirects to delete_entry_from_file.
+        """
+        return self.delete_entry_from_file(transaction_id)
 
     def generate_transaction_text(self, transaction_data: Dict[str, Any]) -> str:
-        """Generate Beancount transaction text from transaction data"""
+        """
+        Generate Beancount transaction text from transaction data.
+
+        Args:
+            transaction_data (Dict[str, Any]): The transaction data dictionary.
+
+        Returns:
+            str: Formatted Beancount string.
+        """
         date_str = transaction_data['date']
         flag = transaction_data.get('flag', '*')
         payee = transaction_data.get('payee', '')
@@ -915,11 +1270,18 @@ class BeancountJournalAPI:
         return '\n'.join(lines)
 
     def add_entry_to_file(self, entry_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Add a new entry (transaction, balance, or note) to the Beancount file"""
+        """
+        Add a new entry (transaction, balance, or note) to the Beancount file.
+
+        Args:
+            entry_data (Dict[str, Any]): Dictionary containing entry type and data.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
         try:
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Generate entry text based on type
             entry_type = entry_data.get('type', 'transaction')
@@ -929,6 +1291,10 @@ class BeancountJournalAPI:
                 entry_text = self.generate_balance_text(entry_data)
             elif entry_type == 'note':
                 entry_text = self.generate_note_text(entry_data)
+            elif entry_type == 'open':
+                entry_text = self.generate_open_text(entry_data)
+            elif entry_type == 'close':
+                entry_text = self.generate_close_text(entry_data)
             else:
                 raise ValueError(f"Unsupported entry type: {entry_type}")
             
@@ -949,7 +1315,15 @@ class BeancountJournalAPI:
             return {'success': False, 'error': f'Failed to add {entry_data.get("type", "entry")}: {str(e)}'}
 
     def generate_balance_text(self, balance_data: Dict[str, Any]) -> str:
-        """Generate balance assertion text for Beancount file"""
+        """
+        Generate balance assertion text for Beancount file.
+
+        Args:
+            balance_data (Dict[str, Any]): Balance data including date, account, amount, etc.
+
+        Returns:
+            str: Formatted Beancount balance string.
+        """
         date_str = balance_data['date']
         account = balance_data['account']
         amount = balance_data['amount']
@@ -962,26 +1336,95 @@ class BeancountJournalAPI:
             return f"{date_str} balance {account} {amount} {currency}"
 
     def generate_note_text(self, note_data: Dict[str, Any]) -> str:
-        """Generate note directive text for Beancount file"""
+        """
+        Generate note directive text for Beancount file.
+
+        Args:
+            note_data (Dict[str, Any]): Note data including date, account, and comment.
+
+        Returns:
+            str: Formatted Beancount note string.
+        """
         date_str = note_data['date']
         account = note_data['account']
         comment = note_data['comment']
         
         return f'{date_str} note {account} "{comment}"'
 
+    def generate_open_text(self, open_data: Dict[str, Any]) -> str:
+        """
+        Generate open directive text for Beancount file.
+
+        Args:
+            open_data (Dict[str, Any]): Open data including date, account, and optionally currencies and booking method.
+
+        Returns:
+            str: Formatted Beancount open string.
+        """
+        date_str = open_data['date']
+        account = open_data['account']
+        currencies = open_data.get('currencies', [])
+        booking = open_data.get('booking')
+        
+        # Build the open directive
+        parts = [date_str, 'open', account]
+        
+        # Add currencies if specified
+        if currencies and len(currencies) > 0:
+            parts.append(','.join(currencies))
+        
+        # Add booking method if specified
+        if booking:
+            parts.append(f'"{booking}"')
+        
+        return ' '.join(parts)
+
+    def generate_close_text(self, close_data: Dict[str, Any]) -> str:
+        """
+        Generate close directive text for Beancount file.
+
+        Args:
+            close_data (Dict[str, Any]): Close data including date and account.
+
+        Returns:
+            str: Formatted Beancount close string.
+        """
+        date_str = close_data['date']
+        account = close_data['account']
+        
+        return f"{date_str} close {account}"
+
     def add_transaction_to_file(self, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to add_entry_to_file"""
+        """
+        Legacy method - redirects to add_entry_to_file.
+
+        Args:
+            transaction_data (Dict[str, Any]): Transaction data.
+
+        Returns:
+            Dict[str, Any]: Result from add_entry_to_file.
+        """
         transaction_data['type'] = 'transaction'
         return self.add_entry_to_file(transaction_data)
 
 # Flask App Setup
-def create_app(beancount_file: str) -> Flask:
-    """Create and configure the Flask app"""
+def create_app(beancount_file: str, create_backups: bool = True, max_backup_files: int = 10) -> Flask:
+    """
+    Create and configure the Flask app.
+
+    Args:
+        beancount_file (str): Path to the Beancount file.
+        create_backups (bool): Whether to create backup files before modifications.
+        max_backup_files (int): Maximum number of backup files to keep (0 = unlimited).
+
+    Returns:
+        Flask: The configured Flask application instance.
+    """
     app = Flask(__name__)
     CORS(app)  # Enable CORS for all routes
     
-    # Initialize the API
-    api = BeancountJournalAPI(beancount_file)
+    # Initialize the API with backup settings
+    api = BeancountJournalAPI(beancount_file, create_backups, max_backup_files)
     
     @app.route('/health', methods=['GET'])
     def health():
@@ -1125,6 +1568,61 @@ def create_app(beancount_file: str) -> Flask:
         try:
             accounts = api.get_accounts()
             return jsonify({'accounts': accounts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/<path:account_name>/status', methods=['GET'])
+    def get_account_status(account_name: str):
+        """Get the open/close status of an account"""
+        try:
+            status = api.get_account_status(account_name)
+            return jsonify(status)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/open', methods=['POST'])
+    def open_account():
+        """Open a new account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'open'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/close', methods=['POST'])
+    def close_account():
+        """Close an existing account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'close'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
@@ -1292,13 +1790,19 @@ def create_app(beancount_file: str) -> Flask:
     return app
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point.
+
+    Parses command line arguments and starts the Flask server.
+    """
     parser = argparse.ArgumentParser(description='Beancount Journal API Server')
     parser.add_argument('beancount_file', help='Path to the Beancount file')
     parser.add_argument('--port', type=int, default=5001, help='Port to run the server on')
     parser.add_argument('--host', default='localhost', help='Host to bind the server to')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     parser.add_argument('--validate-only', action='store_true', help='Only validate the setup and exit (for testing)')
+    parser.add_argument('--no-backup', action='store_true', help='Disable automatic backup file creation')
+    parser.add_argument('--max-backups', type=int, default=10, help='Maximum number of backup files to keep (0 = unlimited)')
     
     args = parser.parse_args()
     
@@ -1325,7 +1829,7 @@ def main():
                 print(f"[OK] No parsing errors")
             
             # Test Flask app creation
-            app = create_app(args.beancount_file)
+            app = create_app(args.beancount_file, not args.no_backup, args.max_backups)
             print(f"[OK] Flask application created successfully")
             print(f"[OK] Server would run on: http://{args.host}:{args.port}")
             print("[OK] Backend validation completed successfully!")
@@ -1338,8 +1842,9 @@ def main():
     print(f"Starting Beancount Journal API server...")
     print(f"Beancount file: {args.beancount_file}")
     print(f"Server: http://{args.host}:{args.port}")
+    print(f"Backups: {'disabled' if args.no_backup else f'enabled (max {args.max_backups} files)'}")
     
-    app = create_app(args.beancount_file)
+    app = create_app(args.beancount_file, not args.no_backup, args.max_backups)
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 if __name__ == '__main__':

@@ -2,21 +2,42 @@
 
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
-import ConnectionSettings from './components/ConnectionSettings.svelte';
+import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 
+/**
+ * Interface defining the plugin settings.
+ */
 export interface BeancountPluginSettings {
+    /** Path to the main Beancount file. */
     beancountFilePath: string;
+    /** Command to run Beancount/Python (e.g. "bean-query", "python3"). */
     beancountCommand: string;
+    /** The primary currency for reporting and defaults. */
     operatingCurrency: string;
+    /** Max transactions to fetch in the dashboard. */
     maxTransactionResults: number;
+    /** Max entries to fetch in the journal. */
     maxJournalResults: number;
     // BQL Code Block Settings
+    /** Whether to show tool buttons (copy, refresh) on query blocks. */
     bqlShowTools: boolean;
+    /** Whether to show the query source code above results. */
     bqlShowQuery: boolean;
     // BQL Shorthand Template File
+    /** Path to the markdown file defining BQL shortcuts. */
     bqlShorthandsTemplatePath: string;
+    /** Whether to enable debug logging. */
+    debugMode: boolean;
+    // Backup Settings
+    /** Whether to create backup files when modifying the beancount file. */
+    createBackups: boolean;
+    /** Maximum number of backup files to keep (0 = unlimited). */
+    maxBackupFiles: number;
 }
 
+/**
+ * Default settings for the plugin.
+ */
 export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
@@ -27,51 +48,26 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     bqlShowTools: true,
     bqlShowQuery: false,
     // BQL Shorthand Template File
-    bqlShorthandsTemplatePath: ''
+    bqlShorthandsTemplatePath: '',
+    debugMode: false,
+    // Backup Settings
+    createBackups: true,
+    maxBackupFiles: 10
 }
 
+/**
+ * BeancountSettingTab
+ *
+ * The settings tab for the plugin in Obsidian's settings modal.
+ * Provides UI for configuring connection, currencies, limits, and templates.
+ */
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
+    private activeTab: string = 'general';
 
     constructor(app: App, plugin: BeancountPlugin) {
         super(app, plugin);
         this.plugin = plugin;
-    }
-
-    /**
-     * Validates currency code format
-     */
-    private validateCurrency(currency: string): { isValid: boolean; message: string } {
-        if (!currency.trim()) {
-            return { isValid: false, message: 'Currency is required' };
-        }
-
-        // Check if it's a valid 3-letter currency code
-        const currencyRegex = /^[A-Z]{3}$/;
-        if (!currencyRegex.test(currency.toUpperCase())) {
-            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
-        }
-
-        return { isValid: true, message: '✅ Valid currency code' };
-    }
-
-    /**
-     * Creates a validation display element
-     */
-    private createValidationElement(container: HTMLElement): HTMLElement {
-        const validationEl = container.createEl('div', { 
-            cls: 'beancount-validation-message',
-            attr: { style: 'margin-top: 5px; font-size: 0.9em; opacity: 0.8;' }
-        });
-        return validationEl;
-    }
-
-    /**
-     * Updates validation message display
-     */
-    private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
-        element.textContent = result.message;
-        element.style.color = result.isValid ? '#4CAF50' : '#f44336';
     }
 
     display(): void {
@@ -79,11 +75,58 @@ export class BeancountSettingTab extends PluginSettingTab {
         containerEl.empty();
         containerEl.createEl('h2', {text: 'Beancount Settings'});
 
-        // --- Enhanced Connection Settings ---
-        this.createConnectionSection(containerEl);
+        // Create tab navigation
+        const tabsContainer = containerEl.createDiv({cls: 'beancount-settings-tabs'});
+        const tabsNav = tabsContainer.createDiv({cls: 'beancount-tabs-nav'});
+        const tabsContent = tabsContainer.createDiv({cls: 'beancount-tabs-content'});
 
-        // --- Transaction Form Settings ---
-        containerEl.createEl('h3', { text: 'Transaction Form' });
+        // Define tabs
+        const tabs = [
+            {id: 'general', label: '⚙️ General'},
+            {id: 'connection', label: '🔌 Connection'},
+            {id: 'bql', label: '📊 BQL'},
+            {id: 'performance', label: '⚡ Performance'},
+            {id: 'backup', label: '💾 Backup'}
+        ];
+
+        // Create tab buttons
+        tabs.forEach(tab => {
+            const tabBtn = tabsNav.createDiv({cls: 'beancount-tab-button'});
+            tabBtn.textContent = tab.label;
+            if (this.activeTab === tab.id) {
+                tabBtn.addClass('active');
+            }
+            tabBtn.addEventListener('click', () => {
+                this.activeTab = tab.id;
+                this.display();
+            });
+        });
+
+        // Render active tab content
+        switch (this.activeTab) {
+            case 'general':
+                this.renderGeneralTab(tabsContent);
+                break;
+            case 'connection':
+                this.renderConnectionTab(tabsContent);
+                break;
+            case 'bql':
+                this.renderBQLTab(tabsContent);
+                break;
+            case 'performance':
+                this.renderPerformanceTab(tabsContent);
+                break;
+            case 'backup':
+                this.renderBackupTab(tabsContent);
+                break;
+        }
+
+        // Add CSS styles
+        this.addTabStyles();
+    }
+
+    private renderGeneralTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'General Settings' });
 
         new Setting(containerEl)
             .setName('Operating currency')
@@ -98,7 +141,6 @@ export class BeancountSettingTab extends PluginSettingTab {
                         this.plugin.settings.operatingCurrency = value.toUpperCase();
                         await this.plugin.saveSettings();
 
-                        // Real-time validation
                         if (value.trim()) {
                             const validation = this.validateCurrency(value);
                             this.updateValidationDisplay(validationEl, validation);
@@ -106,11 +148,9 @@ export class BeancountSettingTab extends PluginSettingTab {
                             validationEl.textContent = '';
                         }
 
-                        // Update the input field to show uppercase
                         text.setValue(this.plugin.settings.operatingCurrency);
                     });
 
-                // Initial validation
                 if (this.plugin.settings.operatingCurrency) {
                     const validation = this.validateCurrency(this.plugin.settings.operatingCurrency);
                     this.updateValidationDisplay(validationEl, validation);
@@ -118,12 +158,105 @@ export class BeancountSettingTab extends PluginSettingTab {
 
                 return text;
             });
-        
-        new Setting(containerEl)
-            // NOTE: Reporting currency has been consolidated into the single Operating Currency setting above.
 
-        // --- Performance Settings ---
-        containerEl.createEl('h3', { text: 'Performance' });
+        new Setting(containerEl)
+            .setName('Debug mode')
+            .setDesc('Enable debug logging to the console.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugMode)
+                .onChange(async (value) => {
+                    this.plugin.settings.debugMode = value;
+                    await this.plugin.saveSettings();
+                }));
+    }
+
+    private renderConnectionTab(containerEl: HTMLElement): void {
+        this.createConnectionSection(containerEl);
+    }
+
+    private renderBQLTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'BQL Code Block Settings' });
+
+        new Setting(containerEl)
+            .setName('Show query tools')
+            .setDesc('Display refresh, copy, and download buttons above BQL query results.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.bqlShowTools)
+                .onChange(async (value) => {
+                    this.plugin.settings.bqlShowTools = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Show query text')
+            .setDesc('Display the BQL query text above the results in a collapsible section.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.bqlShowQuery)
+                .onChange(async (value) => {
+                    this.plugin.settings.bqlShowQuery = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        containerEl.createEl('h3', { text: 'BQL Shortcuts' });
+
+        const templateSetting = new Setting(containerEl)
+            .setName('Shortcuts template file')
+            .setDesc('Path to markdown file containing BQL shortcut definitions. Leave empty to use defaults.');
+
+        const filePickerContainer = templateSetting.controlEl.createDiv({ cls: 'bql-template-file-picker' });
+        
+        const textInput = filePickerContainer.createEl('input', {
+            type: 'text',
+            placeholder: 'e.g., BQL_Shortcuts.md',
+            value: this.plugin.settings.bqlShorthandsTemplatePath
+        });
+        textInput.style.width = '300px';
+        textInput.style.marginRight = '8px';
+        
+        this.setupFileAutocomplete(textInput);
+        
+        textInput.addEventListener('input', async (event) => {
+            const value = (event.target as HTMLInputElement).value;
+            this.plugin.settings.bqlShorthandsTemplatePath = value;
+            await this.plugin.saveSettings();
+        });
+        
+        const browseButton = filePickerContainer.createEl('button', {
+            text: '📁 Browse',
+            cls: 'mod-cta'
+        });
+        browseButton.style.marginRight = '8px';
+        browseButton.addEventListener('click', () => {
+            this.showFileSuggestModal(textInput);
+        });
+        
+        const createButton = filePickerContainer.createEl('button', {
+            text: '✨ Create Template',
+        });
+        createButton.addEventListener('click', async () => {
+            const templatePath = this.plugin.settings.bqlShorthandsTemplatePath.trim();
+            if (!templatePath) {
+                new Notice('Please specify a template file path first');
+                return;
+            }
+            
+            const { ShorthandParser } = await import('./utils/shorthandParser');
+            try {
+                ShorthandParser.createDefaultTemplateFile(templatePath);
+                new Notice(`Created template file: ${templatePath}`);
+            } catch (error) {
+                new Notice(`Error creating template file: ${error.message}`);
+            }
+        });
+        
+        containerEl.createEl('p', { 
+            text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data.',
+            cls: 'setting-item-description' 
+        });
+    }
+
+    private renderPerformanceTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'Performance Settings' });
 
         new Setting(containerEl)
             .setName('Max transaction results')
@@ -152,98 +285,99 @@ export class BeancountSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }
                 }));
+    }
 
-        // --- BQL Code Block Settings ---
-        containerEl.createEl('h3', { text: 'BQL Code Blocks' });
+    private renderBackupTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'Backup Settings' });
 
         new Setting(containerEl)
-            .setName('Show query tools')
-            .setDesc('Display refresh, copy, and download buttons above BQL query results. When disabled, only a clean table is shown.')
+            .setName('Create backups')
+            .setDesc('Create timestamped backup files before modifying your Beancount file. Highly recommended for data safety.')
             .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.bqlShowTools)
+                .setValue(this.plugin.settings.createBackups)
                 .onChange(async (value) => {
-                    this.plugin.settings.bqlShowTools = value;
+                    this.plugin.settings.createBackups = value;
                     await this.plugin.saveSettings();
                 }));
 
         new Setting(containerEl)
-            .setName('Show query text')
-            .setDesc('Display the BQL query text above the results in a collapsible section.')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.bqlShowQuery)
+            .setName('Max backup files')
+            .setDesc('Maximum number of backup files to keep (oldest are deleted automatically). Set to 0 for unlimited backups.')
+            .addText(text => text
+                .setPlaceholder('10')
+                .setValue(this.plugin.settings.maxBackupFiles.toString())
                 .onChange(async (value) => {
-                    this.plugin.settings.bqlShowQuery = value;
-                    await this.plugin.saveSettings();
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue >= 0 && numValue <= 1000) {
+                        this.plugin.settings.maxBackupFiles = numValue;
+                        await this.plugin.saveSettings();
+                    }
                 }));
+    }
 
-        // --- BQL Shorthand Template File ---
-        containerEl.createEl('h3', { text: 'BQL Shortcuts Template' });
+    private renderAdvancedTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'Advanced Settings' });
 
-        const templateSetting = new Setting(containerEl)
-            .setName('Shortcuts template file')
-            .setDesc('Path to markdown file containing BQL shortcut definitions. Leave empty to use defaults.');
+        new Setting(containerEl)
+            .setName('Debug mode')
+            .setDesc('Enable detailed logging to the developer console for troubleshooting.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugMode)
+                .onChange(async (value) => {
+                    this.plugin.settings.debugMode = value;
+                    await this.plugin.saveSettings();
+                    const { Logger } = await import('./utils/logger');
+                    Logger.setDebugMode(value);
+                }));
+    }
 
-        // Create a container for the file picker components
-        const filePickerContainer = templateSetting.controlEl.createDiv({ cls: 'bql-template-file-picker' });
-        
-        // Create text input with autocomplete
-        const textInput = filePickerContainer.createEl('input', {
-            type: 'text',
-            placeholder: 'e.g., BQL_Shortcuts.md or /full/path/to/file.md',
-            value: this.plugin.settings.bqlShorthandsTemplatePath
+    private validateCurrency(currency: string): { isValid: boolean; message: string } {
+        if (!currency.trim()) {
+            return { isValid: false, message: 'Currency is required' };
+        }
+
+        const currencyRegex = /^[A-Z]{3}$/;
+        if (!currencyRegex.test(currency.toUpperCase())) {
+            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
+        }
+
+        return { isValid: true, message: '✅ Valid currency code' };
+    }
+
+    private createValidationElement(container: HTMLElement): HTMLElement {
+        const validationEl = container.createEl('div', { 
+            cls: 'beancount-validation-message',
+            attr: { style: 'margin-top: 5px; font-size: 0.9em; opacity: 0.8;' }
         });
-        textInput.style.width = '300px';
-        textInput.style.marginRight = '8px';
-        
-        // Add autocomplete functionality
-        this.setupFileAutocomplete(textInput);
-        
-        // Handle text input changes
-        textInput.addEventListener('input', async (event) => {
-            const value = (event.target as HTMLInputElement).value;
-            this.plugin.settings.bqlShorthandsTemplatePath = value;
-            await this.plugin.saveSettings();
-        });
-        
-        // Browse button for file selection
-        const browseButton = filePickerContainer.createEl('button', {
-            text: '📁 Browse',
-            cls: 'mod-cta'
-        });
-        browseButton.style.marginRight = '8px';
-        browseButton.addEventListener('click', () => {
-            this.showFileSuggestModal(textInput);
-        });
-        
-        // Create Template button
-        const createButton = filePickerContainer.createEl('button', {
-            text: '✨ Create Template',
-        });
-        createButton.addEventListener('click', async () => {
-            const templatePath = this.plugin.settings.bqlShorthandsTemplatePath.trim();
-            if (!templatePath) {
-                new Notice('Please specify a template file path first');
-                return;
+        return validationEl;
+    }
+
+    private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
+        element.textContent = result.message;
+        element.style.color = result.isValid ? '#4CAF50' : '#f44336';
+    }
+
+    private createConnectionSection(containerEl: HTMLElement) {
+        containerEl.createEl('h3', { text: 'Connection Configuration' });
+
+        const desc = containerEl.createDiv({ cls: 'setting-item-description' });
+        desc.style.marginBottom = '1em';
+        desc.innerHTML = `
+            <p>Configure your Beancount file path and connection settings. The plugin will automatically detect your Python environment and test the connection.</p>
+        `;
+
+        const settingsContainer = containerEl.createDiv({ cls: 'beancount-connection-settings-container' });
+
+        new ConnectionSettings({
+            target: settingsContainer,
+            props: {
+                plugin: this.plugin,
+                settings: this.plugin.settings,
+                app: this.app
             }
-            
-            const { ShorthandParser } = await import('./utils/shorthandParser');
-            try {
-                ShorthandParser.createDefaultTemplateFile(templatePath);
-                new Notice(`Created template file: ${templatePath}`);
-            } catch (error) {
-                new Notice(`Error creating template file: ${error.message}`);
-            }
-        });
-        
-        containerEl.createEl('p', { 
-            text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data. Edit the template file to customize shortcuts.',
-            cls: 'setting-item-description' 
         });
     }
 
-    /**
-     * Set up file autocomplete for the template file input
-     */
     private setupFileAutocomplete(input: HTMLInputElement) {
         let suggestionContainer: HTMLElement | null = null;
         
@@ -299,7 +433,6 @@ export class BeancountSettingTab extends PluginSettingTab {
                 suggestionContainer!.appendChild(item);
             });
             
-            // Position container relative to input
             const inputRect = input.getBoundingClientRect();
             const parent = input.parentElement!;
             parent.style.position = 'relative';
@@ -313,7 +446,6 @@ export class BeancountSettingTab extends PluginSettingTab {
             }
         };
         
-        // Setup input event listener for autocomplete
         input.addEventListener('input', () => {
             const value = input.value.toLowerCase();
             if (value.length < 1) {
@@ -321,70 +453,23 @@ export class BeancountSettingTab extends PluginSettingTab {
                 return;
             }
             
-            // Get markdown files from vault
             const markdownFiles = this.app.vault.getMarkdownFiles()
                 .map(file => file.path)
                 .filter(path => path.toLowerCase().includes(value))
-                .slice(0, 10); // Limit to 10 suggestions
+                .slice(0, 10);
             
             showSuggestions(markdownFiles);
         });
         
-        // Hide suggestions when clicking outside
         document.addEventListener('click', (event) => {
             if (!input.contains(event.target as Node) && !suggestionContainer?.contains(event.target as Node)) {
                 this.hideSuggestions();
-            }
-        });
-        
-        // Handle keyboard navigation
-        input.addEventListener('keydown', (event) => {
-            if (!suggestionContainer) return;
-            
-            const items = Array.from(suggestionContainer.querySelectorAll('.bql-file-suggestion-item'));
-            const activeIndex = items.findIndex(item => item.classList.contains('active'));
-            
-            switch (event.key) {
-                case 'ArrowDown':
-                    event.preventDefault();
-                    const nextIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
-                    this.setActiveSuggestion(items, nextIndex);
-                    break;
-                    
-                case 'ArrowUp':
-                    event.preventDefault();
-                    const prevIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
-                    this.setActiveSuggestion(items, prevIndex);
-                    break;
-                    
-                case 'Enter':
-                    event.preventDefault();
-                    if (activeIndex >= 0) {
-                        (items[activeIndex] as HTMLElement).click();
-                    }
-                    break;
-                    
-                case 'Escape':
-                    this.hideSuggestions();
-                    break;
             }
         });
     }
 
     private hideSuggestions: () => void = () => {};
 
-    private setActiveSuggestion(items: Element[], index: number) {
-        items.forEach((item, i) => {
-            item.classList.toggle('active', i === index);
-            if (i === index) {
-                item.scrollIntoView({ block: 'nearest' });
-            }
-        });
-    }
-
-    /**
-     * Show a file suggestion modal with all markdown files
-     */
     private showFileSuggestModal(input: HTMLInputElement) {
         const modal = document.createElement('div');
         modal.className = 'bql-file-modal';
@@ -397,7 +482,7 @@ export class BeancountSettingTab extends PluginSettingTab {
             background: rgba(0, 0, 0, 0.5);
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-center: center;
             z-index: 9999;
         `;
         
@@ -446,7 +531,7 @@ export class BeancountSettingTab extends PluginSettingTab {
             
             const markdownFiles = this.app.vault.getMarkdownFiles()
                 .filter(file => filter === '' || file.path.toLowerCase().includes(filter.toLowerCase()))
-                .slice(0, 50); // Limit to 50 files
+                .slice(0, 50);
             
             if (markdownFiles.length === 0) {
                 const noFiles = fileList.createEl('div', {
@@ -489,15 +574,12 @@ export class BeancountSettingTab extends PluginSettingTab {
             });
         };
         
-        // Initial file list
         updateFileList();
         
-        // Search functionality
         searchInput.addEventListener('input', () => {
             updateFileList(searchInput.value);
         });
         
-        // Close button
         const buttonContainer = modalContent.createEl('div');
         buttonContainer.style.cssText = `
             display: flex;
@@ -512,48 +594,82 @@ export class BeancountSettingTab extends PluginSettingTab {
         closeButton.style.cssText = `
             padding: 8px 16px;
             border-radius: 4px;
-            border: 1px solid var(--background-modifier-border);
+            cursor: pointer;
             background: var(--interactive-normal);
             color: var(--text-normal);
-            cursor: pointer;
+            border: 1px solid var(--background-modifier-border);
         `;
-        closeButton.addEventListener('click', () => modal.remove());
+        closeButton.addEventListener('click', () => {
+            modal.remove();
+        });
         
-        // Close on background click
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
                 modal.remove();
             }
         });
         
         document.body.appendChild(modal);
-        searchInput.focus();
     }
-    /**
-     * Create the enhanced connection section with Svelte component
-     */
-    private createConnectionSection(containerEl: HTMLElement): void {
-        containerEl.createEl('h3', { text: 'Connection' });
-        
-        // Create container for the Svelte component
-        const connectionContainer = containerEl.createEl('div', {
-            cls: 'connection-settings-container'
-        });
 
-        // Create and mount the Svelte component
-        const connectionSettings = new ConnectionSettings({
-            target: connectionContainer,
-            props: {
-                plugin: this.plugin
+    private addTabStyles() {
+        // Check if styles already exist
+        if (document.getElementById('beancount-tab-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'beancount-tab-styles';
+        style.textContent = `
+            .beancount-settings-tabs {
+                margin-top: 1em;
             }
-        });
-
-        // Listen for settings changes from the component
-        connectionSettings.$on('settingsChanged', (event) => {
-            // Settings changed - no additional action needed
-        });
-
-        // Store reference for cleanup (if needed)
-        (containerEl as any)._connectionSettings = connectionSettings;
+            
+            .beancount-tabs-nav {
+                display: flex;
+                gap: 4px;
+                border-bottom: 2px solid var(--background-modifier-border);
+                margin-bottom: 1.5em;
+                flex-wrap: wrap;
+            }
+            
+            .beancount-tab-button {
+                padding: 8px 16px;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                font-size: 0.95em;
+                transition: all 0.2s ease;
+                border-bottom: 2px solid transparent;
+                margin-bottom: -2px;
+                user-select: none;
+            }
+            
+            .beancount-tab-button:hover {
+                color: var(--text-normal);
+                background: var(--background-modifier-hover);
+            }
+            
+            .beancount-tab-button.active {
+                color: var(--text-accent);
+                border-bottom-color: var(--text-accent);
+                font-weight: 500;
+            }
+            
+            .beancount-tabs-content {
+                animation: fadeIn 0.2s ease;
+            }
+            
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(4px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
     }
 }

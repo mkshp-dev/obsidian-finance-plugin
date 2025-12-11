@@ -5,11 +5,25 @@ All notable changes to the Obsidian Finance Plugin will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.1] - 2025-11-10
+
+### 🚀 **Beta Release - Feature Complete**
+
+This release introduces critical debugging tools and a smooth onboarding experience for new users.
+
+### Added ⭐ **NEW FEATURES**
+
+#### **Debug Mode**
+- **Toggleable Debugging**: New settings option to enable/disable detailed logging.
+- **Granular Logs**: Detailed console logs for API calls, state changes, and UI events when enabled.
+- **Clean Console**: Production environment stays clean by default.
+
+#### **Onboarding Experience**
+- **Welcome Modal**: Auto-detection of unconfigured settings on startup.
+- **Demo Ledger Generator**: One-click creation of a fully functional example Beancount file (`example.beancount`) with Assets, Liabilities, Income, Expenses, and ~12 sample transactions.
+- **Smart Configuration**: Options to browse for existing files or start fresh with the demo.
+
 ## [1.0.0] - 2025-11-09
-
-### 🎉 **Major Release - Production Ready**
-
-This release marks the plugin as production-ready with comprehensive features, robust testing, and a streamlined user experience.
 
 ### Added ⭐ **NEW FEATURES**
 

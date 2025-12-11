@@ -3,17 +3,26 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
+/**
+ * Interface representing a parsed BQL shorthand definition.
+ */
 export interface BQLShorthand {
     name: string;
     description: string;
     query: string;
 }
 
+/**
+ * ShorthandParser
+ *
+ * Utility for parsing and managing BQL (Beancount Query Language) shorthands/shortcuts.
+ * Allows users to define custom query aliases in a markdown file.
+ */
 export class ShorthandParser {
     /**
      * Parse BQL shortcuts from a markdown template file
-     * @param filePath Absolute path to the template file
-     * @returns Record of shorthand name to query string
+     * @param {string} filePath Absolute path to the template file
+     * @returns {Record<string, string>} Record of shorthand name to query string
      */
     static parseShorthandsFromFile(filePath: string): Record<string, string> {
         if (!filePath || !existsSync(filePath)) {
@@ -30,8 +39,8 @@ export class ShorthandParser {
 
     /**
      * Parse BQL shortcuts from markdown content
-     * @param content Markdown content containing shorthand definitions
-     * @returns Record of shorthand name to query string
+     * @param {string} content Markdown content containing shorthand definitions
+     * @returns {Record<string, string>} Record of shorthand name to query string
      */
     static parseShorthandsFromContent(content: string): Record<string, string> {
         const shortcuts: Record<string, string> = {};
@@ -56,7 +65,7 @@ export class ShorthandParser {
 
     /**
      * Create a default template file if it doesn't exist
-     * @param filePath Path where to create the template file
+     * @param {string} filePath Path where to create the template file
      */
     static createDefaultTemplateFile(filePath: string): void {
         if (existsSync(filePath)) {

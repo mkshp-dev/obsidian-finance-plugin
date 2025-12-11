@@ -374,13 +374,9 @@ This approach provides a reliable, user-friendly way to configure automated pric
 
 #### **Balance Sheet Tab**
 - Real-time balance sheet with Assets, Liabilities, Equity
-- Hierarchical account grouping
+- Hierarchical account grouping with collapsible sections
 - Multi-currency conversion support
-
-#### **Accounts Tab**
-- Navigate account hierarchy interactively
-- View balances at each account level
-- Drill down to individual account details
+- Multiple valuation methods (Market Value, At Cost, Units)
 
 #### **Commodities Tab** ⭐ **ENHANCED**
 - **Compact Grid Layout**: Optimized card sizes that fit content better without excessive whitespace

@@ -6,39 +6,73 @@ import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies } from '../utils/index';
 
-// Define account hierarchy item
+/**
+ * Interface representing a node in the balance sheet hierarchy.
+ */
 export interface AccountItem {
+	/** Full account path (e.g., "Assets:Bank"). */
 	account: string;
+	/** Display name (e.g., "Bank"). */
 	displayName: string;
+	/** Hierarchy depth level (0-based). */
 	level: number;
+	/** Formatted amount string. */
 	amount: string;
+	/** Numeric amount value. */
 	amountNumber: number;
+	/** String representation of other currencies held. */
 	otherCurrencies: string;
+	/** True if this is a parent category, false if a leaf account. */
 	isCategory: boolean;
+	/** Child accounts/categories. */
 	children?: AccountItem[];
 }
 
-// Define the shape of our state
+/**
+ * Interface representing the state of the Balance Sheet view.
+ */
 export interface BalanceSheetState {
+	/** Whether data is loading. */
 	isLoading: boolean;
+	/** Error message if loading failed. */
 	error: string | null;
+	/** Tree of Asset accounts. */
 	assets: AccountItem[];
+	/** Tree of Liability accounts. */
 	liabilities: AccountItem[];
+	/** Tree of Equity accounts. */
 	equity: AccountItem[];
+	/** Total numeric value of Assets. */
 	totalAssets: number;
+	/** Total numeric value of Liabilities. */
 	totalLiabilities: number;
+	/** Total numeric value of Equity. */
 	totalEquity: number;
-	totalLiabEquity: number;
+	/** The reporting currency used. */
 	currency: string;
+	/** Whether multi-currency entries were detected. */
 	hasUnconvertedCommodities: boolean;
+	/** Warning message for unconverted commodities. */
 	unconvertedWarning: string | null;
+	/** Current valuation method used. */
 	valuationMethod: 'convert' | 'cost' | 'units';
 }
 
+/**
+ * BalanceSheetController
+ *
+ * Manages the data fetching and state for the Balance Sheet tab.
+ * Responsible for querying account balances, building the hierarchy,
+ * calculating totals, and handling different valuation methods.
+ */
 export class BalanceSheetController {
-	private plugin: BeancountPlugin;
+	public plugin: BeancountPlugin;
 	public state: Writable<BalanceSheetState>;
 
+	/**
+	 * Creates an instance of BalanceSheetController.
+	 * @param {BeancountPlugin} plugin - The main plugin instance.
+	 */
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
 		this.state = writable({
@@ -50,7 +84,6 @@ export class BalanceSheetController {
 			totalAssets: 0,
 			totalLiabilities: 0,
 			totalEquity: 0,
-			totalLiabEquity: 0,
 			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
@@ -58,7 +91,13 @@ export class BalanceSheetController {
 		});
 	}
 
-	// Helper method to build hierarchical account structure
+	/**
+	 * Builds a hierarchical structure from flat account entries.
+	 * @param {[string, string][]} accounts - List of [accountName, rawAmount] tuples.
+	 * @param {string} accountType - The root account type (e.g. 'Assets').
+	 * @param {'convert' | 'cost' | 'units'} [valuationMethod='convert'] - The valuation method.
+	 * @returns {AccountItem[]} The list of root account items.
+	 */
 	private buildAccountHierarchy(accounts: [string, string][], accountType: string, valuationMethod: 'convert' | 'cost' | 'units' = 'convert'): AccountItem[] {
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		const accountMap = new Map<string, AccountItem>();
@@ -69,15 +108,9 @@ export class BalanceSheetController {
 			let convertedAmount: string;
 			let otherCurrencies: string;
 			
-			if (valuationMethod === 'convert') {
-				// Use extractConvertedAmount to handle multi-currency results
-				convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
-				otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
-			} else {
-				// For cost and units, use the raw amount as-is (no currency extraction needed)
-				convertedAmount = rawAmount;
-				otherCurrencies = '';
-			}
+			// For all valuation methods, separate operating currency from other currencies
+			convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
+			otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
 			
 			const amountNumber = parseFloat(convertedAmount.split(' ')[0].replace(/,/g, '')) || 0;
 
@@ -91,12 +124,12 @@ export class BalanceSheetController {
 				currentPath = currentPath ? `${currentPath}:${part}` : part;
 				
 				if (!accountMap.has(currentPath)) {
-					const defaultCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
+					// Always use reporting currency for all valuation methods
 					const item: AccountItem = {
 						account: currentPath,
 						displayName: part,
 						level: i,
-						amount: i === parts.length - 1 ? convertedAmount : `0.00 ${defaultCurrency}`,
+						amount: i === parts.length - 1 ? convertedAmount : `0.00 ${reportingCurrency}`,
 						amountNumber: i === parts.length - 1 ? amountNumber : 0,
 						otherCurrencies: i === parts.length - 1 ? otherCurrencies : '',
 						isCategory: i < parts.length - 1,
@@ -122,13 +155,18 @@ export class BalanceSheetController {
 		}
 
 		// Calculate category totals (bottom-up)
-		const displayCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
-		this.calculateCategoryTotals(rootAccounts, displayCurrency);
+		// Always use reporting currency for all valuation methods
+		this.calculateCategoryTotals(rootAccounts, reportingCurrency);
 
 		return rootAccounts;
 	}
 
-	// Recursively calculate totals for category accounts
+	/**
+	 * Recursively calculates totals for category nodes based on children.
+	 * @param {AccountItem[]} accounts - The account nodes to process.
+	 * @param {string} currency - The reporting currency.
+	 * @returns {number} The sum of amounts.
+	 */
 	private calculateCategoryTotals(accounts: AccountItem[], currency: string): number {
 		let total = 0;
 		for (const account of accounts) {
@@ -136,15 +174,8 @@ export class BalanceSheetController {
 				const childTotal = this.calculateCategoryTotals(account.children, currency);
 				account.amountNumber = childTotal;
 				
-				// For units or cost view, show aggregated info differently
-				const currentState = get(this.state);
-				if (currentState.valuationMethod === 'units') {
-					account.amount = `${childTotal.toFixed(2)} units`;
-				} else if (currentState.valuationMethod === 'cost') {
-					account.amount = `${childTotal.toFixed(2)} ${currency}`;
-				} else {
-					account.amount = `${childTotal.toFixed(2)} ${currency}`;
-				}
+				// Always show amount with reporting currency
+				account.amount = `${childTotal.toFixed(2)} ${currency}`;
 				
 				// Aggregate other currencies from children - collect unique currencies
 				const childOtherCurrencies = account.children
@@ -163,12 +194,20 @@ export class BalanceSheetController {
 		return total;
 	}
 
-	// Method to change valuation method and reload data
+	/**
+	 * Sets the valuation method (market value, at cost, or units) and reloads data.
+	 * @param {'convert' | 'cost' | 'units'} method - The valuation method.
+	 */
 	async setValuationMethod(method: 'convert' | 'cost' | 'units') {
 		await this.loadData(method);
 	}
 
-	// Flatten hierarchy for display with proper indentation
+	/**
+	 * Flattens the hierarchy for a linear list display if needed (but keeps children property).
+	 * Useful for ensuring all nodes are traversable in a list.
+	 * @param {AccountItem[]} accounts - The root nodes.
+	 * @returns {AccountItem[]} Flattened list of all nodes.
+	 */
 	private flattenHierarchy(accounts: AccountItem[]): AccountItem[] {
 		const result: AccountItem[] = [];
 		
@@ -185,7 +224,11 @@ export class BalanceSheetController {
 		return result;
 	}
 
-	// The main data-fetching method
+	/**
+	 * Main data fetching method.
+	 * Runs Beancount queries based on the valuation method and updates state.
+	 * @param {'convert' | 'cost' | 'units'} [valuationMethod='convert'] - The valuation method to use.
+	 */
 	async loadData(valuationMethod: 'convert' | 'cost' | 'units' = 'convert') {
 		this.state.update(s => ({ ...s, isLoading: true, error: null }));
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
@@ -246,11 +289,10 @@ export class BalanceSheetController {
 			const liabilitiesHierarchy = this.buildAccountHierarchy(tempLiab, 'Liabilities', valuationMethod);
 			const equityHierarchy = this.buildAccountHierarchy(tempEquity, 'Equity', valuationMethod);
 
-			// Calculate totals
-			const displayCurrency = valuationMethod === 'convert' ? reportingCurrency : '';
-			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, displayCurrency);
-			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, displayCurrency);
-			const totalEquity = this.calculateCategoryTotals(equityHierarchy, displayCurrency);
+			// Calculate totals - always use reporting currency
+			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, reportingCurrency);
+			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, reportingCurrency);
+			const totalEquity = this.calculateCategoryTotals(equityHierarchy, reportingCurrency);
 
 			// Create warning message
 			let unconvertedWarning = null;
@@ -268,8 +310,7 @@ export class BalanceSheetController {
 				totalAssets,
 				totalLiabilities,
 				totalEquity,
-				totalLiabEquity: totalLiabilities + totalEquity,
-				currency: displayCurrency || 'Mixed',
+				currency: reportingCurrency,
 				hasUnconvertedCommodities,
 				unconvertedWarning,
 				valuationMethod

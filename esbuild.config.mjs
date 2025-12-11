@@ -40,6 +40,9 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	loader: {
+		".py": "text",
+	},
 	plugins: [
 		esbuildSvelte({
 			compilerOptions: { dev: !prod, css: "injected" },
