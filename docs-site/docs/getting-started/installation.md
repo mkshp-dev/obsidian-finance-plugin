@@ -24,9 +24,13 @@ This guide covers how to install the Obsidian Finance Plugin and set up the nece
 
 ---
 
-## 🐍 Backend Requirements
+## ⚠️ Important Prerequisites
 
-The plugin relies on a local Python backend to parse Beancount files and run queries efficiently.
+**Before installing this plugin, you must have a working Beancount environment.**
+
+This plugin is a **frontend** for Beancount. It **does not** include the core accounting engine itself.
+
+### Mandatory Requirements:
 
 ### 1. Python Environment
 You need **Python 3.8 or newer** installed on your system.
