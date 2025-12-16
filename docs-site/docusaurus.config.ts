@@ -39,11 +39,7 @@ const config: Config = {
           editUrl:
             'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/agent/docs-site/',
         },
-        blog: {
-          showReadingTime: true,
-          editUrl:
-            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/agent/docs-site/',
-        },
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -71,7 +67,6 @@ const config: Config = {
           position: 'left',
           label: 'Documentation',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
         {
           href: 'https://github.com/mkshp-dev/obsidian-finance-plugin',
           label: 'GitHub',
@@ -116,12 +111,12 @@ const config: Config = {
           title: 'More',
           items: [
             {
-              label: 'Blog',
-              to: '/blog',
-            },
-            {
               label: 'GitHub',
               href: 'https://github.com/mkshp-dev/obsidian-finance-plugin',
+            },
+            {
+              label: 'Report Issues',
+              href: 'https://github.com/mkshp-dev/obsidian-finance-plugin/issues/new',
             },
           ],
         },
