@@ -55,14 +55,18 @@ class BeancountJournalAPI:
             return {}
         return {k: v for k, v in meta.items() if k not in ('lineno', 'filename')}
     
-    def __init__(self, beancount_file: str):
+    def __init__(self, beancount_file: str, create_backups: bool = True, max_backup_files: int = 10):
         """
         Initialize the BeancountJournalAPI.
 
         Args:
             beancount_file (str): The file path to the main Beancount ledger file.
+            create_backups (bool): Whether to create backup files before modifications.
+            max_backup_files (int): Maximum number of backup files to keep (0 = unlimited).
         """
         self.beancount_file = beancount_file
+        self.create_backups = create_backups
+        self.max_backup_files = max_backup_files
         self.entries = None
         self.errors = None
         self.options_map = None
@@ -95,6 +99,57 @@ class BeancountJournalAPI:
         Useful when the file has been modified externally or by this API.
         """
         self.load_data()
+    
+    def create_backup_if_enabled(self, target_file: str = None) -> Optional[str]:
+        """
+        Create a backup of the target file if backups are enabled.
+        Also manages cleanup of old backups based on max_backup_files setting.
+
+        Args:
+            target_file (str): Path to the file to backup. Defaults to self.beancount_file.
+
+        Returns:
+            Optional[str]: Path to the backup file if created, None otherwise.
+        """
+        if not self.create_backups:
+            return None
+        
+        file_to_backup = target_file or self.beancount_file
+        backup_path = f"{file_to_backup}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        shutil.copy2(file_to_backup, backup_path)
+        print(f"[DEBUG] Created backup: {backup_path}")
+        
+        # Cleanup old backups if max_backup_files is set
+        if self.max_backup_files > 0:
+            self.cleanup_old_backups(file_to_backup)
+        
+        return backup_path
+    
+    def cleanup_old_backups(self, target_file: str = None):
+        """
+        Remove old backup files, keeping only the most recent max_backup_files.
+
+        Args:
+            target_file (str): Path to the original file. Backups will be identified by pattern.
+        """
+        file_to_check = target_file or self.beancount_file
+        backup_pattern = f"{file_to_check}.backup.*"
+        
+        import glob
+        backup_files = glob.glob(backup_pattern)
+        
+        if len(backup_files) > self.max_backup_files:
+            # Sort by modification time (oldest first)
+            backup_files.sort(key=os.path.getmtime)
+            
+            # Remove oldest files
+            files_to_remove = backup_files[:len(backup_files) - self.max_backup_files]
+            for old_backup in files_to_remove:
+                try:
+                    os.remove(old_backup)
+                    print(f"[DEBUG] Removed old backup: {old_backup}")
+                except Exception as e:
+                    print(f"[WARN] Failed to remove old backup {old_backup}: {e}")
     
     def get_entries(self, 
                    start_date: Optional[str] = None,
@@ -508,6 +563,32 @@ class BeancountJournalAPI:
         
         return sorted(list(accounts))
     
+    def get_account_status(self, account_name: str) -> Dict[str, Any]:
+        """
+        Get the open/close status of an account.
+
+        Args:
+            account_name (str): The account name to check.
+
+        Returns:
+            Dict[str, Any]: Dictionary with 'is_open' (bool), 'open_date' (str or None), 'close_date' (str or None).
+        """
+        open_date = None
+        close_date = None
+        
+        for entry in self.entries:
+            if isinstance(entry, data.Open) and entry.account == account_name:
+                open_date = str(entry.date)
+            elif isinstance(entry, data.Close) and entry.account == account_name:
+                close_date = str(entry.date)
+        
+        return {
+            'account': account_name,
+            'is_open': close_date is None,
+            'open_date': open_date,
+            'close_date': close_date
+        }
+    
     def get_payees(self) -> List[str]:
         """
         Get all unique payees from transactions.
@@ -729,9 +810,7 @@ class BeancountJournalAPI:
 
             # Backup and append to the target file
             print(f"[DEBUG] Appending commodity declaration to target_file={target_file}")
-            backup_path = f"{target_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            print(f"[DEBUG] Creating backup: {backup_path}")
-            shutil.copy2(target_file, backup_path)
+            backup_path = self.create_backup_if_enabled(target_file)
             with open(target_file, 'a', encoding='utf-8') as f:
                 f.write('\n' + text)
             print(f"[DEBUG] Appended declaration:\n{text}")
@@ -1022,8 +1101,7 @@ class BeancountJournalAPI:
                 return {'success': False, 'error': 'Transaction not found'}
 
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Read the file content
             with open(self.beancount_file, 'r', encoding='utf-8') as f:
@@ -1086,8 +1164,7 @@ class BeancountJournalAPI:
                 return {'success': False, 'error': 'Entry not found'}
 
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Read the file content
             with open(self.beancount_file, 'r', encoding='utf-8') as f:
@@ -1204,8 +1281,7 @@ class BeancountJournalAPI:
         """
         try:
             # Create backup
-            backup_path = f"{self.beancount_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            shutil.copy2(self.beancount_file, backup_path)
+            backup_path = self.create_backup_if_enabled()
 
             # Generate entry text based on type
             entry_type = entry_data.get('type', 'transaction')
@@ -1215,6 +1291,10 @@ class BeancountJournalAPI:
                 entry_text = self.generate_balance_text(entry_data)
             elif entry_type == 'note':
                 entry_text = self.generate_note_text(entry_data)
+            elif entry_type == 'open':
+                entry_text = self.generate_open_text(entry_data)
+            elif entry_type == 'close':
+                entry_text = self.generate_close_text(entry_data)
             else:
                 raise ValueError(f"Unsupported entry type: {entry_type}")
             
@@ -1271,6 +1351,49 @@ class BeancountJournalAPI:
         
         return f'{date_str} note {account} "{comment}"'
 
+    def generate_open_text(self, open_data: Dict[str, Any]) -> str:
+        """
+        Generate open directive text for Beancount file.
+
+        Args:
+            open_data (Dict[str, Any]): Open data including date, account, and optionally currencies and booking method.
+
+        Returns:
+            str: Formatted Beancount open string.
+        """
+        date_str = open_data['date']
+        account = open_data['account']
+        currencies = open_data.get('currencies', [])
+        booking = open_data.get('booking')
+        
+        # Build the open directive
+        parts = [date_str, 'open', account]
+        
+        # Add currencies if specified
+        if currencies and len(currencies) > 0:
+            parts.append(','.join(currencies))
+        
+        # Add booking method if specified
+        if booking:
+            parts.append(f'"{booking}"')
+        
+        return ' '.join(parts)
+
+    def generate_close_text(self, close_data: Dict[str, Any]) -> str:
+        """
+        Generate close directive text for Beancount file.
+
+        Args:
+            close_data (Dict[str, Any]): Close data including date and account.
+
+        Returns:
+            str: Formatted Beancount close string.
+        """
+        date_str = close_data['date']
+        account = close_data['account']
+        
+        return f"{date_str} close {account}"
+
     def add_transaction_to_file(self, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Legacy method - redirects to add_entry_to_file.
@@ -1285,12 +1408,14 @@ class BeancountJournalAPI:
         return self.add_entry_to_file(transaction_data)
 
 # Flask App Setup
-def create_app(beancount_file: str) -> Flask:
+def create_app(beancount_file: str, create_backups: bool = True, max_backup_files: int = 10) -> Flask:
     """
     Create and configure the Flask app.
 
     Args:
         beancount_file (str): Path to the Beancount file.
+        create_backups (bool): Whether to create backup files before modifications.
+        max_backup_files (int): Maximum number of backup files to keep (0 = unlimited).
 
     Returns:
         Flask: The configured Flask application instance.
@@ -1298,8 +1423,8 @@ def create_app(beancount_file: str) -> Flask:
     app = Flask(__name__)
     CORS(app)  # Enable CORS for all routes
     
-    # Initialize the API
-    api = BeancountJournalAPI(beancount_file)
+    # Initialize the API with backup settings
+    api = BeancountJournalAPI(beancount_file, create_backups, max_backup_files)
     
     @app.route('/health', methods=['GET'])
     def health():
@@ -1443,6 +1568,61 @@ def create_app(beancount_file: str) -> Flask:
         try:
             accounts = api.get_accounts()
             return jsonify({'accounts': accounts})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/<path:account_name>/status', methods=['GET'])
+    def get_account_status(account_name: str):
+        """Get the open/close status of an account"""
+        try:
+            status = api.get_account_status(account_name)
+            return jsonify(status)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/open', methods=['POST'])
+    def open_account():
+        """Open a new account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'open'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/accounts/close', methods=['POST'])
+    def close_account():
+        """Close an existing account"""
+        try:
+            if not request.json:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            required_fields = ['date', 'account']
+            for field in required_fields:
+                if field not in request.json:
+                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            entry_data = {**request.json, 'type': 'close'}
+            result = api.add_entry_to_file(entry_data)
+            
+            if result['success']:
+                return jsonify(result), 201
+            else:
+                return jsonify(result), 400
+                
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
@@ -1621,6 +1801,8 @@ def main():
     parser.add_argument('--host', default='localhost', help='Host to bind the server to')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode')
     parser.add_argument('--validate-only', action='store_true', help='Only validate the setup and exit (for testing)')
+    parser.add_argument('--no-backup', action='store_true', help='Disable automatic backup file creation')
+    parser.add_argument('--max-backups', type=int, default=10, help='Maximum number of backup files to keep (0 = unlimited)')
     
     args = parser.parse_args()
     
@@ -1647,7 +1829,7 @@ def main():
                 print(f"[OK] No parsing errors")
             
             # Test Flask app creation
-            app = create_app(args.beancount_file)
+            app = create_app(args.beancount_file, not args.no_backup, args.max_backups)
             print(f"[OK] Flask application created successfully")
             print(f"[OK] Server would run on: http://{args.host}:{args.port}")
             print("[OK] Backend validation completed successfully!")
@@ -1660,8 +1842,9 @@ def main():
     print(f"Starting Beancount Journal API server...")
     print(f"Beancount file: {args.beancount_file}")
     print(f"Server: http://{args.host}:{args.port}")
+    print(f"Backups: {'disabled' if args.no_backup else f'enabled (max {args.max_backups} files)'}")
     
-    app = create_app(args.beancount_file)
+    app = create_app(args.beancount_file, not args.no_backup, args.max_backups)
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 if __name__ == '__main__':

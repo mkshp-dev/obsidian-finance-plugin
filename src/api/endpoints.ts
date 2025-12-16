@@ -21,5 +21,9 @@ export const ENDPOINTS = {
     /** Endpoint for retrieving ledger statistics. */
     STATISTICS: '/statistics',
     /** Endpoint to trigger a reload of the Beancount file. */
-    RELOAD: '/reload'
+    RELOAD: '/reload',
+    /** Endpoint for opening accounts. */
+    ACCOUNTS_OPEN: '/accounts/open',
+    /** Endpoint for closing accounts. */
+    ACCOUNTS_CLOSE: '/accounts/close'
 };

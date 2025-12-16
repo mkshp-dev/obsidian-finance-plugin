@@ -3,6 +3,7 @@
 	import { writable, type Writable } from 'svelte/store';
 	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../../controllers/BalanceSheetController';
 	import { Logger } from '../../../utils/logger';
+	import { AccountManagementModal } from '../../modals/AccountManagementModal';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;
@@ -99,22 +100,61 @@
 	$: visibleAssets = state.assets ? state.assets.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 	$: visibleLiabilities = state.liabilities ? state.liabilities.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 	$: visibleEquity = state.equity ? state.equity.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
+
+	// Account management functions
+	function handleOpenAccount() {
+		const plugin = controller.plugin;
+		const modal = new AccountManagementModal(
+			plugin.app,
+			plugin,
+			'open',
+			async () => {
+				// Refresh callback
+				await controller.loadData();
+			}
+		);
+		modal.open();
+	}
+
+	function handleCloseAccount() {
+		const plugin = controller.plugin;
+		const modal = new AccountManagementModal(
+			plugin.app,
+			plugin,
+			'close',
+			async () => {
+				// Refresh callback
+				await controller.loadData();
+			}
+		);
+		modal.open();
+	}
 </script>
 
 <div class="balance-sheet-container">
 	<div class="balance-sheet-header">
-		<h2>Balance Sheet</h2>
-		<div class="valuation-method-selector">
-			<label for="valuation-method">Valuation:</label>
-			<select 
-				id="valuation-method" 
-				value={state.valuationMethod || 'convert'} 
-				on:change={handleValuationMethodChange}
-			>
-				<option value="convert">Market Value (Convert to {state.currency})</option>
-				<option value="cost">At Cost</option>
-				<option value="units">Units</option>
-			</select>
+		<h2>Accounts & Balance Sheet</h2>
+		<div class="header-controls">
+			<div class="account-management-section">
+				<button class="account-action-btn open-account-btn" on:click={handleOpenAccount}>
+					➕ Open Account
+				</button>
+				<button class="account-action-btn close-account-btn" on:click={handleCloseAccount}>
+					❌ Close Account
+				</button>
+			</div>
+			<div class="valuation-method-selector">
+				<label for="valuation-method">Valuation:</label>
+				<select 
+					id="valuation-method" 
+					value={state.valuationMethod || 'convert'} 
+					on:change={handleValuationMethodChange}
+				>
+					<option value="convert">Market Value (Convert to {state.currency})</option>
+					<option value="cost">At Cost</option>
+					<option value="units">Units</option>
+				</select>
+			</div>
 		</div>
 	</div>
 
@@ -264,6 +304,50 @@
 	}
 
 	.balance-sheet-header h2 {
+		margin: 0;
+		flex: 1;
+	}
+
+	.header-controls {
+		display: flex;
+		gap: var(--size-4-6);
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.account-management-section {
+		display: flex;
+		gap: var(--size-4-2);
+	}
+
+	.account-action-btn {
+		padding: var(--size-4-2) var(--size-4-3);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		background: var(--interactive-normal);
+		color: var(--text-normal);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.account-action-btn:hover {
+		background: var(--interactive-hover);
+		border-color: var(--interactive-accent);
+	}
+
+	.open-account-btn:hover {
+		background: var(--color-green);
+		color: var(--text-on-accent);
+	}
+
+	.close-account-btn:hover {
+		background: var(--color-red);
+		color: var(--text-on-accent);
+	}
+
+	.balance-sheet-header h2:not(:first-child) {
 		margin: 0;
 		color: var(--text-normal);
 	}
