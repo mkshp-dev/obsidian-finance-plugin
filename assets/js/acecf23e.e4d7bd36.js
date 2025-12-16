@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunkdocs_site=globalThis.webpackChunkdocs_site||[]).push([[1903],{1912:s=>{s.exports=JSON.parse('{"blogBasePath":"/obsidian-finance-plugin/blog","blogTitle":"Blog","authorsListPath":"/obsidian-finance-plugin/blog/authors"}')}}]);

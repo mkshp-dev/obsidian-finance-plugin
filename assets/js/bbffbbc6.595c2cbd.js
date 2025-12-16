@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunkdocs_site=globalThis.webpackChunkdocs_site||[]).push([[1452],{4242:a=>{a.exports=JSON.parse('{"metadata":{"permalink":"/obsidian-finance-plugin/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":4,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
