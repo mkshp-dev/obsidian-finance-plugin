@@ -11,32 +11,32 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+    title: 'Beancount Integration',
     Svg: require('@site/static/img/document-svg.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Seamlessly integrate with Beancount for powerful double-entry bookkeeping.
+        Track your finances with precision and generate comprehensive reports.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
+    title: 'Unified Dashboard',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Access balance sheets, transactions, commodities, and journal entries
+        all in one place. Visualize your financial data with interactive charts.
       </>
     ),
   },
   {
-    title: 'Documentation',
+    title: 'BQL Query Support',
     Svg: require('@site/static/img/document-svg.svg').default,
     description: (
       <>
-        Plugin comes with extensive documentation to help you get started
-        quickly and easily.
+        Run powerful Beancount Query Language (BQL) queries directly in your notes.
+        Embed live financial data and reports in your Obsidian vault.
       </>
     ),
   },
