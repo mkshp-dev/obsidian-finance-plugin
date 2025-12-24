@@ -617,37 +617,6 @@ class BeancountJournalAPI:
         
         return sorted(list(tags))
     
-    def get_commodities(self) -> List[Dict[str, Any]]:
-        """
-        Get all unique commodities/currencies from transactions and price entries.
-
-        Note: This remains a simple helper for backwards compatibility. Use
-        `get_commodities_detailed()` for rich metadata and latest-price information.
-
-        Returns:
-            List[Dict[str, Any]]: List of dicts, e.g. [{'name': 'USD'}, ...].
-        """
-        commodities = set()
-
-        # Extract commodities from transaction postings
-        for entry in self.entries:
-            if isinstance(entry, data.Transaction):
-                for posting in entry.postings:
-                    if posting.units and posting.units.currency:
-                        commodities.add(posting.units.currency)
-                    if posting.cost and posting.cost.currency:
-                        commodities.add(posting.cost.currency)
-                    if posting.price and posting.price.currency:
-                        commodities.add(posting.price.currency)
-            elif isinstance(entry, data.Commodity):
-                commodities.add(entry.currency)
-            elif isinstance(entry, data.Price):
-                commodities.add(entry.currency)
-                commodities.add(entry.amount.currency)
-
-        # Return as list of dictionaries for consistency with other endpoints
-        return [{'name': commodity} for commodity in sorted(list(commodities))]
-
     def find_first_directive_date(self) -> Optional[date]:
         """
         Return the earliest date found across all entries (best-effort).
@@ -664,102 +633,6 @@ class BeancountJournalAPI:
             except Exception:
                 continue
         return first
-
-    def get_commodities_detailed(self) -> List[Dict[str, Any]]:
-        """
-        Return detailed commodity information including metadata and latest price.
-
-        Returns:
-            List[Dict[str, Any]]: A list of commodity detail objects containing symbol,
-                                  metadata, logo_url, price_meta, latest_price, etc.
-        """
-        commodity_map: Dict[str, Dict[str, Any]] = {}
-
-        # Collect declared commodities and metadata
-        for entry in self.entries:
-            if isinstance(entry, data.Commodity):
-                symbol = entry.currency
-                commodity_map.setdefault(symbol, {
-                    'symbol': symbol,
-                    'metadata': {},
-                    'logo_url': None,
-                    'price_meta': None,
-                    'latest_price': None,
-                    'latest_price_date': None
-                })
-                if entry.meta:
-                    filtered_meta = self.filter_user_metadata(entry.meta)
-                    commodity_map[symbol]['metadata'] = filtered_meta
-                    commodity_map[symbol]['logo_url'] = filtered_meta.get('logo')
-                    commodity_map[symbol]['price_meta'] = filtered_meta.get('price')
-
-        # Ensure commodities seen in postings/prices are included
-        for entry in self.entries:
-            if isinstance(entry, data.Transaction):
-                for posting in entry.postings:
-                    currencies = []
-                    if posting.units and posting.units.currency:
-                        currencies.append(posting.units.currency)
-                    if posting.cost and posting.cost.currency:
-                        currencies.append(posting.cost.currency)
-                    if posting.price and posting.price.currency:
-                        currencies.append(posting.price.currency)
-                    for c in currencies:
-                        commodity_map.setdefault(c, {
-                            'symbol': c,
-                            'metadata': {},
-                            'logo_url': None,
-                            'price_meta': None,
-                            'latest_price': None,
-                            'latest_price_date': None
-                        })
-            elif isinstance(entry, data.Price):
-                # Price directives: entry.currency is the commodity being priced
-                symbol = entry.currency
-                commodity_map.setdefault(symbol, {
-                    'symbol': symbol,
-                    'metadata': {},
-                    'logo_url': None,
-                    'price_meta': None,
-                    'latest_price': None,
-                    'latest_price_date': None
-                })
-
-        # Find latest price per commodity
-        for entry in self.entries:
-            if isinstance(entry, data.Price):
-                symbol = entry.currency
-                try:
-                    current = commodity_map.get(symbol)
-                    if current:
-                        prev_date = current.get('latest_price_date')
-                        if prev_date is None or entry.date.isoformat() > prev_date:
-                            current['latest_price'] = f"{entry.amount.number} {entry.amount.currency}"
-                            current['latest_price_date'] = entry.date.isoformat()
-                except Exception:
-                    continue
-
-        # Return sorted list
-        return [commodity_map[k] for k in sorted(commodity_map.keys())]
-
-    def get_commodity_details(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """
-        Return detailed information for a specific commodity.
-
-        Args:
-            symbol (str): The commodity currency symbol (e.g. 'USD', 'AAPL').
-
-        Returns:
-            Optional[Dict[str, Any]]: The commodity detail object or None if not found.
-        """
-        details = None
-        for c in self.get_commodities_detailed():
-            if c['symbol'] == symbol:
-                # Ensure metadata is filtered (redundant, but safe)
-                c['metadata'] = self.filter_user_metadata(c.get('metadata', {}))
-                details = c
-                break
-        return details
 
     def create_commodity_declaration(self, symbol: str, metadata: Dict[str, Any], date_for_decl: Optional[date] = None) -> Dict[str, Any]:
         """
@@ -932,81 +805,6 @@ class BeancountJournalAPI:
             print(f"[DEBUG] Updated metadata for {symbol} written to {target_file}")
             return {'success': True, 'message': f'Updated metadata for {symbol}', 'backup_file': backup_path, 'target_file': target_file}
 
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def validate_price_source(self, price_meta: str) -> Dict[str, Any]:
-        """
-        Validate price metadata by running bean-price with -e and checking output.
-
-        Args:
-            price_meta (str): The price source definition (e.g. "yahoo/AAPL").
-
-        Returns:
-            Dict[str, Any]: Result object with 'success' (bool), and 'output' or 'error'.
-        """
-        try:
-            print(f"[DEBUG] validate_price_source called with price_meta={price_meta}")
-            if not price_meta or not isinstance(price_meta, str):
-                print("[DEBUG] Empty or invalid price_meta")
-                return {'success': False, 'error': 'Empty price metadata'}
-
-            # Try common executable names
-            executables = ['bean-price', 'bean-price.exe']
-            last_exc = None
-            for exe in executables:
-                try:
-                    print(f"[DEBUG] Trying bean-price executable: {exe}")
-                    proc = subprocess.run([exe, '-e', price_meta], capture_output=True, text=True, timeout=10)
-                    # Consider success when exit code 0 and some stdout returned
-                    if proc.returncode == 0 and proc.stdout and proc.stdout.strip():
-                        print(f"[DEBUG] bean-price success: returncode=0 stdout_len={len(proc.stdout or '')}")
-                        return {'success': True, 'output': proc.stdout.strip()}
-                    else:
-                        # Keep last output for debugging
-                        last_exc = {'returncode': proc.returncode, 'stdout': proc.stdout, 'stderr': proc.stderr}
-                        print(f"[DEBUG] bean-price returned code={proc.returncode} stderr_len={len(proc.stderr or '')}")
-                except FileNotFoundError:
-                    last_exc = {'error': f'{exe} not found'}
-                    print(f"[DEBUG] bean-price executable not found: {exe}")
-                except Exception as e:
-                    last_exc = {'error': str(e)}
-                    print(f"[ERROR] Exception when running {exe}: {e}")
-
-            return {'success': False, 'error': 'bean-price validation failed', 'details': last_exc}
-
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def validate_logo_url(self, url: str) -> Dict[str, Any]:
-        """
-        Check if a URL returns an image content-type.
-
-        Args:
-            url (str): The URL to check.
-
-        Returns:
-            Dict[str, Any]: Result object with 'success' (bool) and 'content_type' or 'error'.
-        """
-        try:
-            print(f"[DEBUG] validate_logo_url called with url={url}")
-            if not url or not isinstance(url, str):
-                print("[DEBUG] Empty or invalid URL provided")
-                return {'success': False, 'error': 'Empty URL'}
-
-            req = urllib.request.Request(url, headers={'User-Agent': 'Obsidian-Finance-Plugin/1.0'})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                ctype = resp.headers.get('Content-Type', '')
-                print(f"[DEBUG] URL responded with Content-Type: {ctype}")
-                if ctype.startswith('image/'):
-                    return {'success': True, 'content_type': ctype}
-                else:
-                    return {'success': False, 'error': f'URL did not return image (Content-Type: {ctype})'}
-
-        except urllib.error.HTTPError as e:
-            return {'success': False, 'error': f'HTTP error: {e.code}'}
-        except urllib.error.URLError as e:
-            return {'success': False, 'error': f'URL error: {e.reason}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
@@ -1644,42 +1442,6 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
-    @app.route('/commodities', methods=['GET'])
-    def get_commodities():
-        """Get all commodities/currencies"""
-        try:
-            # Support query param ?detailed=true to return rich commodity info
-            detailed = request.args.get('detailed', 'false').lower() in ['1', 'true', 'yes']
-            if detailed:
-                commodities = api.get_commodities_detailed()
-                return jsonify({'commodities': commodities})
-            else:
-                commodities = api.get_commodities()
-                return jsonify({'commodities': commodities})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/commodities/detailed', methods=['GET'])
-    def get_commodities_detailed():
-        """Explicit detailed commodities endpoint"""
-        try:
-            commodities = api.get_commodities_detailed()
-            return jsonify({'commodities': commodities})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/commodities/<symbol>', methods=['GET'])
-    def get_commodity(symbol: str):
-        """Get details for a single commodity"""
-        try:
-            details = api.get_commodity_details(symbol)
-            if details:
-                return jsonify(details)
-            else:
-                return jsonify({'error': 'Commodity not found'}), 404
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
     @app.route('/commodities/<symbol>', methods=['PUT'])
     def put_commodity(symbol: str):
         """Update or create commodity metadata"""
@@ -1692,30 +1454,6 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
                 return jsonify(result), 200
             else:
                 return jsonify(result), 400
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/commodities/<symbol>/validate_price', methods=['POST'])
-    def validate_price(symbol: str):
-        """Validate the commodity price metadata (accepts JSON { price: '<price_meta>' })"""
-        try:
-            if not request.json:
-                return jsonify({'error': 'No JSON data provided'}), 400
-            price_meta = request.json.get('price')
-            result = api.validate_price_source(price_meta)
-            return jsonify(result)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/commodities/<symbol>/validate_logo', methods=['POST'])
-    def validate_logo(symbol: str):
-        """Validate logo URL (accepts JSON { url: '<url>' })"""
-        try:
-            if not request.json:
-                return jsonify({'error': 'No JSON data provided'}), 400
-            url = request.json.get('url')
-            result = api.validate_logo_url(url)
-            return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     

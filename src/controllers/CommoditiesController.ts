@@ -3,6 +3,14 @@
 import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import type { ApiClient } from '../api/client';
+import * as queries from '../queries/index';
+import { 
+    parseCommoditiesListCSV, 
+    parseCommoditiesPriceDataCSV, 
+    parseCommodityDetailsCSV,
+    validatePriceSource,
+    validateLogoUrl
+} from '../utils/index';
 
 /**
  * Interface representing metadata and state of a single commodity.
@@ -20,6 +28,10 @@ export interface CommodityInfo {
     currentPrice?: string;
     /** Alias for fullMetadata for UI compatibility. */
     metadata?: Record<string, any>;
+    /** Logo URL from commodity metadata. */
+    logoUrl?: string | null;
+    /** Whether the price is latest (updated within last day). */
+    isPriceLatest?: boolean;
 }
 
 /**
@@ -122,8 +134,8 @@ export class CommoditiesController {
     }
 
     /**
-     * Load all commodities data from the backend.
-     * Fetches detailed information including metadata and latest prices.
+     * Load all commodities data using BQL queries.
+     * Fetches commodity list and price data, then merges them.
      */
     public async loadData(): Promise<void> {
         this.loading.set(true);
@@ -131,66 +143,79 @@ export class CommoditiesController {
 
         console.debug('[CommoditiesController] loadData: starting');
         try {
-            // Use API Client for detailed commodity data
-            // ensureConnected() will start the backend process if needed
-            const connected = await this.apiClient.ensureConnected();
-            console.debug('[CommoditiesController] ensureConnected ->', connected);
-            if (!connected) {
-                throw new Error('Failed to start Python backend for commodities');
-            }
-
-            // Using apiClient.get wrapper
-            const data = await this.apiClient.get<{ commodities: any[] }>('/commodities?detailed=true');
-            console.debug('[CommoditiesController] loadData: received data', data && { count: (data.commodities || []).length });
-            const commoditiesRaw = data.commodities || [];
-
-            // Map into CommodityInfo shape
-            const commodities = (commoditiesRaw as any[]).map(c => ({
-                symbol: c.symbol,
-                hasPriceMetadata: !!c.price_meta,
-                priceMetadata: c.price_meta || undefined,
-                fullMetadata: c.metadata || {},
-                // Alias for compatibility with existing modal component
-                metadata: c.metadata || {},
-                currentPrice: c.latest_price || undefined
-            } as CommodityInfo));
+            // Get operating currency from settings
+            const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';
+            
+            // Execute both queries in parallel
+            const [commoditiesCSV, priceDataCSV] = await Promise.all([
+                this.plugin.runQuery(queries.getAllCommoditiesQuery()),
+                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency))
+            ]);
+            
+            console.debug('[CommoditiesController] loadData: received CSV data');
+            
+            // Parse CSV results
+            const allSymbols = parseCommoditiesListCSV(commoditiesCSV);
+            const priceDataMap = parseCommoditiesPriceDataCSV(priceDataCSV);
+            
+            console.debug('[CommoditiesController] parsed', allSymbols.length, 'commodities and', priceDataMap.size, 'price entries');
+            
+            // Merge data: iterate all commodities and enrich with price data
+            const commodities: CommodityInfo[] = allSymbols.map(symbol => {
+                const priceData = priceDataMap.get(symbol);
+                
+                return {
+                    symbol,
+                    hasPriceMetadata: !!(priceData?.logo || priceData?.price),
+                    priceMetadata: priceData?.logo || undefined,
+                    fullMetadata: {
+                        ...(priceData?.logo ? { logo: priceData.logo } : {}),
+                    },
+                    metadata: {
+                        ...(priceData?.logo ? { logo: priceData.logo } : {}),
+                    },
+                    currentPrice: priceData?.price ? `${priceData.price} ${operatingCurrency}` : undefined,
+                    logoUrl: priceData?.logo || null,
+                    isPriceLatest: priceData?.isLatest || false
+                } as CommodityInfo;
+            });
 
             commodities.sort((a, b) => a.symbol.localeCompare(b.symbol));
             this.commodities.set(commodities);
             this.lastUpdated.set(new Date());
 
         } catch (error) {
-            console.error('Error loading commodities data:', error);
-            this.error.set(error instanceof Error ? error.message : 'Failed to load commodities data');
+            console.error('Error querying commodities via BQL:', error);
+            this.error.set(error instanceof Error ? error.message : 'Failed to query commodities from ledger');
         } finally {
             this.loading.set(false);
         }
     }
 
     /**
-     * Load detailed information for a specific commodity by symbol.
+     * Load detailed information for a specific commodity by symbol using BQL.
      * Updates selectedCommodity store.
      * @param {string} symbol - The commodity symbol.
      */
     public async loadCommodityDetails(symbol: string): Promise<void> {
         console.debug('[CommoditiesController] loadCommodityDetails:', symbol);
         try {
-            await this.apiClient.ensureConnected();
-
-            const details = await this.apiClient.get<any>(`/commodities/${encodeURIComponent(symbol)}`);
-            console.debug('[CommoditiesController] loadCommodityDetails: details ->', details);
+            const detailsCSV = await this.plugin.runQuery(queries.getCommodityDetailsQuery(symbol));
+            const details = parseCommodityDetailsCSV(detailsCSV);
+            
+            console.debug('[CommoditiesController] loadCommodityDetails: parsed ->', details);
+            
             this.selectedCommodity.set({
-                symbol: details.symbol,
-                hasPriceMetadata: !!details.price_meta,
-                priceMetadata: details.price_meta || undefined,
-                fullMetadata: details.metadata || {},
-                // Provide `metadata` alias for modal compatibility
-                metadata: details.metadata || {},
-                currentPrice: details.latest_price || undefined
+                symbol: details.symbol || symbol,
+                hasPriceMetadata: !!details.priceMetadata,
+                priceMetadata: details.priceMetadata || undefined,
+                fullMetadata: details.metadata,
+                metadata: details.metadata,
+                currentPrice: undefined  // Detail query doesn't include current price
             });
 
         } catch (error) {
-            console.warn('Could not load commodity details for', symbol, ':', error);
+            console.warn('Failed to query commodity details via BQL for', symbol, ':', error);
         }
     }
 
@@ -249,7 +274,7 @@ export class CommoditiesController {
     }
 
     /**
-     * Test price source string using the backend's validation (runs bean-price).
+     * Test price source string using native bean-price execution.
      * @param {string} symbol - The commodity symbol.
      * @returns {Promise<any>} The validation result.
      */
@@ -261,10 +286,12 @@ export class CommoditiesController {
             const priceMeta = current?.priceMetadata || (current?.fullMetadata || {})['price'];
             console.debug('[CommoditiesController] testPriceSource:', { symbol, priceMeta });
 
-            await this.apiClient.ensureConnected();
+            if (!priceMeta) {
+                return { success: false, error: 'No price metadata found for commodity' };
+            }
 
-            // Using post for testing price source
-            const result = await this.apiClient.post<any>(`/commodities/${encodeURIComponent(symbol)}/validate_price`, { price: priceMeta });
+            // Use native TypeScript validation (no backend needed)
+            const result = await validatePriceSource(this.plugin, priceMeta);
 
             console.debug('[CommoditiesController] testPriceSource result ->', result);
             return result;
@@ -278,7 +305,7 @@ export class CommoditiesController {
     }
 
     /**
-     * Validates a logo URL via the backend (checks content type).
+     * Validates a logo URL using native fetch (checks content type).
      * @param {string} symbol - The commodity symbol (for logging/context).
      * @param {string} url - The URL to test.
      * @returns {Promise<any>} The validation result.
@@ -286,9 +313,12 @@ export class CommoditiesController {
     public async testLogoUrl(symbol: string, url: string): Promise<any> {
         console.debug('[CommoditiesController] testLogoUrl:', { symbol, url });
         try {
-            await this.apiClient.ensureConnected();
+            if (!url || url.trim() === '') {
+                return { success: false, error: 'No URL provided' };
+            }
 
-            const result = await this.apiClient.post<any>(`/commodities/${encodeURIComponent(symbol)}/validate_logo`, { url });
+            // Use native TypeScript validation (no backend needed)
+            const result = await validateLogoUrl(url);
 
             console.debug('[CommoditiesController] testLogoUrl result ->', result);
             return result;

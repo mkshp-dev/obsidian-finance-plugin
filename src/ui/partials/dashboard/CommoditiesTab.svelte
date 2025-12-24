@@ -55,6 +55,13 @@
         // Use a single generic commodity icon for all items.
         return '🪙';
     }
+
+    function handleLogoError(e: Event) {
+        const target = e.target as HTMLImageElement;
+        if (target) {
+            target.style.display = 'none';
+        }
+    }
 </script>
 
 <div class="commodities-tab">
@@ -118,12 +125,18 @@
                         type="button"
                     >
                         <div class="commodity-header">
-                            <span class="commodity-icon">{getCommodityTypeIcon(commodity?.symbol)}</span>
-                            <span class="commodity-symbol">{commodity?.symbol || `UNKNOWN_${index}`}</span>
-                            {#if commodity?.hasPriceMetadata}
-                                <span class="price-metadata-indicator has-metadata" title="Has price metadata - automated price fetching enabled">🟢</span>
+                            {#if commodity?.logoUrl}
+                                <img src={commodity.logoUrl} alt="{commodity.symbol} logo" class="commodity-logo" on:error={handleLogoError} />
                             {:else}
-                                <span class="price-metadata-indicator no-metadata" title="No price metadata - manual price entry only">⚪</span>
+                                <span class="commodity-icon">{getCommodityTypeIcon(commodity?.symbol)}</span>
+                            {/if}
+                            <span class="commodity-symbol">{commodity?.symbol || `UNKNOWN_${index}`}</span>
+                            {#if !commodity?.currentPrice}
+                                <span class="price-status-indicator no-price" title="No price available">⚪</span>
+                            {:else if commodity?.isPriceLatest}
+                                <span class="price-status-indicator latest-price" title="Price is up to date (updated today)">🟢</span>
+                            {:else}
+                                <span class="price-status-indicator stale-price" title="Price is stale (older than yesterday)">🟠</span>
                             {/if}
                         </div>
                         
@@ -334,6 +347,13 @@
         font-size: 18px;
     }
 
+    .commodity-logo {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+
     .commodity-symbol {
         font-weight: 600;
         font-size: 16px;
@@ -341,16 +361,20 @@
         flex-grow: 1;
     }
 
-    .price-metadata-indicator {
+    .price-status-indicator {
         font-size: 14px;
         margin-left: auto;
     }
 
-    .price-metadata-indicator.has-metadata {
+    .price-status-indicator.latest-price {
         color: var(--text-success);
     }
 
-    .price-metadata-indicator.no-metadata {
+    .price-status-indicator.stale-price {
+        color: var(--text-warning);
+    }
+
+    .price-status-indicator.no-price {
         color: var(--text-muted);
         opacity: 0.7;
     }
