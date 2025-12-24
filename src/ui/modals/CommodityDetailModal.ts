@@ -49,9 +49,18 @@ export class CommodityDetailModal extends Modal {
             const result = await this.controller.saveMetadata(symbol, metadata);
             console.debug('[CommodityDetailModal] save-metadata result ->', result);
             if (result && result.success) {
-                const backupInfo = result.backup_file ? `Backup: ${result.backup_file}` : '';
-                const targetInfo = result.target_file ? `Target: ${result.target_file}` : '';
-                new Notice(`Metadata saved. ${backupInfo} ${targetInfo}`.trim());
+                new Notice('Metadata saved successfully');
+                
+                // Reload commodity details to reflect changes in the modal
+                try {
+                    await this.controller.loadCommodityDetails(symbol);
+                    const updated = get((this.controller as any).selectedCommodity) || { symbol, metadata: {} };
+                    // Update component props with fresh data
+                    this.component.$set({ commodity: updated });
+                    console.debug('[CommodityDetailModal] Commodity details reloaded and UI updated');
+                } catch (reloadError) {
+                    console.warn('[CommodityDetailModal] Failed to reload commodity details:', reloadError);
+                }
             } else {
                 new Notice('Failed to save metadata');
             }

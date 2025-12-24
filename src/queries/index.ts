@@ -175,3 +175,33 @@ export function getMonthlyExpensesQuery(startDate: string, endDate: string, curr
 export function getHistoricalNetWorthDataQuery(interval: string = 'month', currency: string): string { // Must accept 2 args
 	return `SELECT year, month, only('${currency}', convert(last(balance), '${currency}', last(date))) WHERE account ~ '^(Assets|Liabilities)' ORDER BY year, month`;
 }
+
+// --- Commodities Queries ---
+
+/**
+ * Gets all commodity symbols from Commodity directives.
+ * @returns {string} The BQL query string.
+ */
+export function getAllCommoditiesQuery(): string {
+	return `SELECT name AS name_ FROM #commodities GROUP BY name`;
+}
+
+/**
+ * Gets enriched price data for all commodities with price directives.
+ * Includes latest price, logo, date, and freshness indicator.
+ * @param {string} currency - The operating currency for price conversion.
+ * @returns {string} The BQL query string.
+ */
+export function getCommoditiesPriceDataQuery(currency: string): string {
+	return `SELECT last(date) AS date_, last(currency) AS currency_, round(getprice(last(currency), '${currency}'),2) AS price_, currency_meta(last(currency), 'logo') AS logo_, bool(today()-1<last(date)) AS islatest_ FROM #prices GROUP BY currency`;
+}
+
+/**
+ * Gets detailed information for a specific commodity.
+ * Includes all metadata, logo, price metadata, filename, and line number.
+ * @param {string} symbol - The commodity symbol.
+ * @returns {string} The BQL query string.
+ */
+export function getCommodityDetailsQuery(symbol: string): string {
+	return `SELECT name AS name_, last(meta) AS meta_, currency_meta(last(name),'logo') AS logo_, currency_meta(last(name), 'price') AS pricemetadata_, meta('filename') AS filename_, meta('lineno') AS lineno_ FROM #commodities WHERE name='${symbol}'`;
+}

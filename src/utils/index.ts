@@ -3,6 +3,8 @@ import { exec } from 'child_process';
 import type { ExecException } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
+import { readFile, writeFile, copyFile } from 'fs/promises';
+import { join, dirname, basename } from 'path';
 
 // --- QUERY RUNNER ---
 
@@ -55,6 +57,131 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 			resolve(cleanOutput);
 		});
 	});
+}
+
+// --- VALIDATION UTILITIES ---
+
+/**
+ * Validates a price source by executing bean-price command.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} priceMetadata - The price source string (e.g., "yahoo/AAPL").
+ * @returns {Promise<{success: boolean, output?: string, error?: string}>} Validation result.
+ */
+export function validatePriceSource(plugin: BeancountPlugin, priceMetadata: string): Promise<{success: boolean, output?: string, error?: string}> {
+	return new Promise((resolve) => {
+		if (!priceMetadata || typeof priceMetadata !== 'string' || priceMetadata.trim() === '') {
+			return resolve({ success: false, error: 'Empty price metadata' });
+		}
+
+		const commandName = plugin.settings.beancountCommand;
+		if (!commandName) {
+			return resolve({ success: false, error: 'Beancount command not set' });
+		}
+
+		// Replace bean-query with bean-price in the command
+		const beanPriceCommand = commandName.replace(/bean-query(\.exe)?$/, 'bean-price$1');
+		const command = `${beanPriceCommand} -e "${priceMetadata}"`;
+
+		exec(command, { timeout: 10000, maxBuffer: 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
+			// Success if exit code 0 and stdout has content
+			if (!error && stdout && stdout.trim()) {
+				return resolve({ success: true, output: stdout.trim() });
+			}
+
+			// Failed validation
+			const errorMsg = error?.message || stderr || 'bean-price validation failed';
+			resolve({ success: false, error: errorMsg });
+		});
+	});
+}
+
+/**
+ * Validates a logo URL by checking if it returns an image content-type.
+ * 
+ * @param {string} url - The URL to validate.
+ * @returns {Promise<{success: boolean, contentType?: string, error?: string}>} Validation result.
+ */
+export async function validateLogoUrl(url: string): Promise<{success: boolean, contentType?: string, error?: string}> {
+	try {
+		if (!url || typeof url !== 'string' || url.trim() === '') {
+			return { success: false, error: 'Empty URL' };
+		}
+
+		const response = await fetch(url, { 
+			method: 'HEAD',
+			headers: {
+				'User-Agent': 'Obsidian-Finance-Plugin/1.0'
+			},
+			signal: AbortSignal.timeout(10000) // 10 second timeout
+		});
+
+		const contentType = response.headers.get('Content-Type') || '';
+		
+		if (contentType.startsWith('image/')) {
+			return { success: true, contentType };
+		} else {
+			return { success: false, error: `URL did not return image (Content-Type: ${contentType})` };
+		}
+	} catch (error) {
+		if (error instanceof TypeError && error.message.includes('fetch')) {
+			return { success: false, error: 'Network error or invalid URL' };
+		}
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Validates that a filename and line number point to a commodity declaration for the given symbol.
+ * Reads the file and checks if the specified line contains "commodity" and the symbol.
+ * 
+ * @param {string} filename - The absolute path to the Beancount file.
+ * @param {number} lineno - The line number (1-based).
+ * @param {string} symbol - The commodity symbol to verify.
+ * @returns {Promise<{success: boolean, error?: string}>} Validation result.
+ */
+export async function validateCommodityLocation(filename: string, lineno: number, symbol: string): Promise<{success: boolean, error?: string}> {
+	try {
+		if (!filename || !lineno || !symbol) {
+			return { success: false, error: 'Missing filename, lineno, or symbol' };
+		}
+
+		// Read the file content
+		const content = await readFile(filename, 'utf-8');
+		const lines = content.split('\n');
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		if (lineIndex < 0 || lineIndex >= lines.length) {
+			return { success: false, error: `Line number ${lineno} out of range (file has ${lines.length} lines)` };
+		}
+
+		const line = lines[lineIndex].trim();
+
+		// Check if line contains "commodity" and the symbol
+		// Expected format: "YYYY-MM-DD commodity SYMBOL" or just "commodity SYMBOL"
+		if (!line.includes('commodity')) {
+			return { success: false, error: `Line ${lineno} does not contain 'commodity' keyword` };
+		}
+
+		if (!line.includes(symbol)) {
+			return { success: false, error: `Line ${lineno} does not contain symbol '${symbol}'` };
+		}
+
+		// More strict check: ensure it's actually a commodity declaration
+		const commodityPattern = new RegExp(`\\bcommodity\\s+${symbol}\\b`);
+		if (!commodityPattern.test(line)) {
+			return { success: false, error: `Line ${lineno} does not match commodity declaration pattern for '${symbol}'` };
+		}
+
+		return { success: true };
+	} catch (error) {
+		if ((error as any).code === 'ENOENT') {
+			return { success: false, error: `File not found: ${filename}` };
+		}
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
 }
 
 // --- CSV PARSER HELPER ---
@@ -322,3 +449,290 @@ export function formatCurrency(amount: number, currency: string): string {
 }
 
 // ----------------------------
+// --- COMMODITIES CSV PARSERS ---
+
+/**
+ * Parses BQL metadata dictionary string (e.g. "{'key': 'value', 'key2': 'value2'}") into plain object.
+ * Handles empty dictionaries "{}" and malformed strings gracefully.
+ * 
+ * @param {string} metaStr - The metadata string from BQL.
+ * @returns {Record<string, any>} Parsed metadata object or empty object on failure.
+ */
+export function parseMetadataString(metaStr: string): Record<string, any> {
+	try {
+		if (!metaStr || metaStr.trim() === '{}' || metaStr.trim() === '') {
+			return {};
+		}
+		
+		// Convert BQL format {'key': 'value'} to JSON format {"key": "value"}
+		const jsonStr = metaStr
+			.replace(/'/g, '"')  // Replace single quotes with double quotes
+			.trim();
+		
+		return JSON.parse(jsonStr);
+	} catch (e) {
+		console.warn('Failed to parse metadata string:', metaStr, e);
+		return {};
+	}
+}
+
+/**
+ * Parses CSV from getAllCommoditiesQuery into array of commodity symbols.
+ * 
+ * @param {string} csv - Raw CSV output from Query 1.
+ * @returns {string[]} Array of commodity symbols (e.g. ['USD', 'BTC', 'AAPL']).
+ */
+export function parseCommoditiesListCSV(csv: string): string[] {
+	try {
+		const cleanCsv = csv.replace(/\r/g, "").trim();
+		if (!cleanCsv) {
+			return [];
+		}
+		
+		const records: string[][] = parseCsv(cleanCsv, { 
+			columns: false, 
+			skip_empty_lines: true, 
+			relax_column_count: true 
+		});
+		
+		// Skip header row, extract first column
+		const symbols = records.slice(1)
+			.map(row => row[0]?.trim())
+			.filter(symbol => symbol && symbol.length > 0);
+		
+		return symbols;
+	} catch (e) {
+		console.error('Error parsing commodities list CSV:', e, 'CSV:', csv);
+		return [];
+	}
+}
+
+/**
+ * Parses CSV from getCommoditiesPriceDataQuery into map of price data keyed by symbol.
+ * 
+ * @param {string} csv - Raw CSV output from Query 2.
+ * @returns {Map<string, {price: string | null, logo: string | null, date: string | null, isLatest: boolean}>}
+ */
+export function parseCommoditiesPriceDataCSV(csv: string): Map<string, {
+	price: string | null;
+	logo: string | null;
+	date: string | null;
+	isLatest: boolean;
+}> {
+	const priceDataMap = new Map();
+	
+	try {
+		const cleanCsv = csv.replace(/\r/g, "").trim();
+		if (!cleanCsv) {
+			return priceDataMap;
+		}
+		
+		const records: string[][] = parseCsv(cleanCsv, { 
+			columns: false, 
+			skip_empty_lines: true, 
+			relax_column_count: true 
+		});
+		
+		// Skip header row, parse data rows
+		// Format: [date_, currency_, price_, logo_, islatest_]
+		for (let i = 1; i < records.length; i++) {
+			const row = records[i];
+			if (row.length < 5) continue;
+			
+			const date = row[0]?.trim() || null;
+			const currency = row[1]?.trim() || null;
+			const price = row[2]?.trim() || null;
+			const logo = row[3]?.trim() || null;
+			const isLatestStr = row[4]?.trim().toLowerCase() || 'false';
+			const isLatest = isLatestStr === 'true' || isLatestStr === '1';
+			
+			if (currency) {
+				priceDataMap.set(currency, { price, logo, date, isLatest });
+			}
+		}
+		
+		return priceDataMap;
+	} catch (e) {
+		console.error('Error parsing commodities price data CSV:', e, 'CSV:', csv);
+		return priceDataMap;
+	}
+}
+
+/**
+ * Parses CSV from getCommodityDetailsQuery into single commodity detail object.
+ * 
+ * @param {string} csv - Raw CSV output from Query 3.
+ * @returns {{symbol: string, metadata: Record<string, any>, logo: string | null, priceMetadata: string | null, filename: string | null, lineno: number | null}}
+ */
+export function parseCommodityDetailsCSV(csv: string): {
+	symbol: string;
+	metadata: Record<string, any>;
+	logo: string | null;
+	priceMetadata: string | null;
+	filename: string | null;
+	lineno: number | null;
+} {
+	const defaultResult = { symbol: '', metadata: {}, logo: null, priceMetadata: null, filename: null, lineno: null };
+	
+	try {
+		const cleanCsv = csv.replace(/\r/g, "").trim();
+		if (!cleanCsv) {
+			return defaultResult;
+		}
+		
+		const records: string[][] = parseCsv(cleanCsv, { 
+			columns: false, 
+			skip_empty_lines: true, 
+			relax_column_count: true 
+		});
+		
+		// Should have 2 rows: header + data
+		if (records.length < 2) {
+			return defaultResult;
+		}
+		
+		const row = records[1];
+		// Format: [name_, meta_, logo_, pricemetadata_, filename_, lineno_]
+		if (row.length < 6) {
+			return defaultResult;
+		}
+		
+		const symbol = row[0]?.trim() || '';
+		const metaStr = row[1]?.trim() || '{}';
+		const logo = row[2]?.trim() || null;
+		const priceMetadata = row[3]?.trim() || null;
+		const filename = row[4]?.trim() || null;
+		const linenoStr = row[5]?.trim() || null;
+		
+		const metadata = parseMetadataString(metaStr);
+		const lineno = linenoStr ? parseInt(linenoStr, 10) : null;
+		
+		return { symbol, metadata, logo, priceMetadata, filename, lineno: isNaN(lineno!) ? null : lineno };
+	} catch (e) {
+		console.error('Error parsing commodity details CSV:', e, 'CSV:', csv);
+		return defaultResult;
+	}
+}
+
+/**
+ * Saves metadata for a commodity directive using native TypeScript file operations.
+ * Provides identical functionality to the backend PUT endpoint without requiring Flask.
+ * 
+ * @param {string} symbol - The commodity symbol (e.g. "USD", "AAPL").
+ * @param {Record<string, any>} metadata - The metadata key-value pairs to save.
+ * @param {string} filename - The beancount file containing the commodity directive.
+ * @param {number} lineno - The line number (1-based) where the commodity directive starts.
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the save operation.
+ */
+export async function saveCommodityMetadata(
+	symbol: string,
+	metadata: Record<string, any>,
+	filename: string,
+	lineno: number,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		// Step 0: Convert WSL path to Windows path if needed
+		const normalizedPath = convertWslPathToWindows(filename);
+		console.debug(`[saveCommodityMetadata] Path conversion: ${filename} -> ${normalizedPath}`);
+		
+		// Step 1: Validate that the location points to the correct commodity
+		const locationValid = await validateCommodityLocation(normalizedPath, lineno, symbol);
+		if (!locationValid.success) {
+			return { success: false, error: `Invalid location: ${locationValid.error}` };
+		}
+
+		// Step 2: Read the entire file
+		const content = await readFile(normalizedPath, 'utf-8');
+		const lines = content.split('\n');
+
+		// Step 3: Find the commodity declaration block
+		const startIndex = lineno - 1; // Convert to 0-based
+		if (startIndex < 0 || startIndex >= lines.length) {
+			return { success: false, error: 'Line number out of range' };
+		}
+
+		// Extract date from existing commodity directive (if present)
+		const commodityLine = lines[startIndex];
+		const dateMatch = commodityLine.match(/^(\d{4}-\d{2}-\d{2})\s+commodity/);
+		const datePrefix = dateMatch ? `${dateMatch[1]} ` : '';
+		
+		// Find end of commodity block (lines with indentation are metadata)
+		let endIndex = startIndex;
+		for (let i = startIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			// If line starts with whitespace/tab, it's part of metadata
+			if (line.match(/^\s+\S/)) {
+				endIndex = i;
+			} else {
+				// Found non-indented line, end of block
+				break;
+			}
+		}
+
+		// Step 4: Build new commodity declaration with updated metadata
+		const metadataLines: string[] = [];
+		for (const [key, value] of Object.entries(metadata)) {
+			if (value !== undefined && value !== null) {
+				// Format metadata line with proper indentation
+				metadataLines.push(`  ${key}: "${String(value)}"`);
+			}
+		}
+
+		const newDeclaration = [`${datePrefix}commodity ${symbol}`, ...metadataLines];
+
+		// Step 5: Replace the old block with new declaration
+		const newLines = [
+			...lines.slice(0, startIndex),
+			...newDeclaration,
+			...lines.slice(endIndex + 1)
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Step 6: Create backup if requested
+		if (createBackup) {
+			const backupPath = `${normalizedPath}.bak`;
+			try {
+				await copyFile(normalizedPath, backupPath);
+				console.debug(`[saveCommodityMetadata] Created backup: ${backupPath}`);
+			} catch (backupError) {
+				console.warn(`[saveCommodityMetadata] Failed to create backup:`, backupError);
+				// Continue anyway - backup failure shouldn't block save
+			}
+		}
+
+		// Step 7: Atomic write (write to temp file, then rename)
+		const tempPath = `${normalizedPath}.tmp`;
+		await writeFile(tempPath, newContent, 'utf-8');
+		
+		// On Windows, we need to delete the target file first before renaming
+		try {
+			const fs = await import('fs');
+			if (fs.existsSync(normalizedPath)) {
+				fs.unlinkSync(normalizedPath);
+			}
+			fs.renameSync(tempPath, normalizedPath);
+		} catch (renameError) {
+			// Fallback: just overwrite directly
+			await writeFile(normalizedPath, newContent, 'utf-8');
+			try {
+				const fs = await import('fs');
+				if (fs.existsSync(tempPath)) {
+					fs.unlinkSync(tempPath);
+				}
+			} catch {}
+		}
+
+		console.debug(`[saveCommodityMetadata] Successfully saved metadata for ${symbol}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error('[saveCommodityMetadata] Error:', error);
+		return { 
+			success: false, 
+			error: error instanceof Error ? error.message : String(error) 
+		};
+	}
+}
