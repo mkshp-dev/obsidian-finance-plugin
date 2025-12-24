@@ -3,7 +3,8 @@ import { exec } from 'child_process';
 import type { ExecException } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
-import { readFile } from 'fs/promises';
+import { readFile, writeFile, copyFile } from 'fs/promises';
+import { join, dirname, basename } from 'path';
 
 // --- QUERY RUNNER ---
 
@@ -610,5 +611,128 @@ export function parseCommodityDetailsCSV(csv: string): {
 	} catch (e) {
 		console.error('Error parsing commodity details CSV:', e, 'CSV:', csv);
 		return defaultResult;
+	}
+}
+
+/**
+ * Saves metadata for a commodity directive using native TypeScript file operations.
+ * Provides identical functionality to the backend PUT endpoint without requiring Flask.
+ * 
+ * @param {string} symbol - The commodity symbol (e.g. "USD", "AAPL").
+ * @param {Record<string, any>} metadata - The metadata key-value pairs to save.
+ * @param {string} filename - The beancount file containing the commodity directive.
+ * @param {number} lineno - The line number (1-based) where the commodity directive starts.
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the save operation.
+ */
+export async function saveCommodityMetadata(
+	symbol: string,
+	metadata: Record<string, any>,
+	filename: string,
+	lineno: number,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		// Step 0: Convert WSL path to Windows path if needed
+		const normalizedPath = convertWslPathToWindows(filename);
+		console.debug(`[saveCommodityMetadata] Path conversion: ${filename} -> ${normalizedPath}`);
+		
+		// Step 1: Validate that the location points to the correct commodity
+		const locationValid = await validateCommodityLocation(normalizedPath, lineno, symbol);
+		if (!locationValid.success) {
+			return { success: false, error: `Invalid location: ${locationValid.error}` };
+		}
+
+		// Step 2: Read the entire file
+		const content = await readFile(normalizedPath, 'utf-8');
+		const lines = content.split('\n');
+
+		// Step 3: Find the commodity declaration block
+		const startIndex = lineno - 1; // Convert to 0-based
+		if (startIndex < 0 || startIndex >= lines.length) {
+			return { success: false, error: 'Line number out of range' };
+		}
+
+		// Extract date from existing commodity directive (if present)
+		const commodityLine = lines[startIndex];
+		const dateMatch = commodityLine.match(/^(\d{4}-\d{2}-\d{2})\s+commodity/);
+		const datePrefix = dateMatch ? `${dateMatch[1]} ` : '';
+		
+		// Find end of commodity block (lines with indentation are metadata)
+		let endIndex = startIndex;
+		for (let i = startIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			// If line starts with whitespace/tab, it's part of metadata
+			if (line.match(/^\s+\S/)) {
+				endIndex = i;
+			} else {
+				// Found non-indented line, end of block
+				break;
+			}
+		}
+
+		// Step 4: Build new commodity declaration with updated metadata
+		const metadataLines: string[] = [];
+		for (const [key, value] of Object.entries(metadata)) {
+			if (value !== undefined && value !== null) {
+				// Format metadata line with proper indentation
+				metadataLines.push(`  ${key}: "${String(value)}"`);
+			}
+		}
+
+		const newDeclaration = [`${datePrefix}commodity ${symbol}`, ...metadataLines];
+
+		// Step 5: Replace the old block with new declaration
+		const newLines = [
+			...lines.slice(0, startIndex),
+			...newDeclaration,
+			...lines.slice(endIndex + 1)
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Step 6: Create backup if requested
+		if (createBackup) {
+			const backupPath = `${normalizedPath}.bak`;
+			try {
+				await copyFile(normalizedPath, backupPath);
+				console.debug(`[saveCommodityMetadata] Created backup: ${backupPath}`);
+			} catch (backupError) {
+				console.warn(`[saveCommodityMetadata] Failed to create backup:`, backupError);
+				// Continue anyway - backup failure shouldn't block save
+			}
+		}
+
+		// Step 7: Atomic write (write to temp file, then rename)
+		const tempPath = `${normalizedPath}.tmp`;
+		await writeFile(tempPath, newContent, 'utf-8');
+		
+		// On Windows, we need to delete the target file first before renaming
+		try {
+			const fs = await import('fs');
+			if (fs.existsSync(normalizedPath)) {
+				fs.unlinkSync(normalizedPath);
+			}
+			fs.renameSync(tempPath, normalizedPath);
+		} catch (renameError) {
+			// Fallback: just overwrite directly
+			await writeFile(normalizedPath, newContent, 'utf-8');
+			try {
+				const fs = await import('fs');
+				if (fs.existsSync(tempPath)) {
+					fs.unlinkSync(tempPath);
+				}
+			} catch {}
+		}
+
+		console.debug(`[saveCommodityMetadata] Successfully saved metadata for ${symbol}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error('[saveCommodityMetadata] Error:', error);
+		return { 
+			success: false, 
+			error: error instanceof Error ? error.message : String(error) 
+		};
 	}
 }

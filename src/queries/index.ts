@@ -203,5 +203,5 @@ export function getCommoditiesPriceDataQuery(currency: string): string {
  * @returns {string} The BQL query string.
  */
 export function getCommodityDetailsQuery(symbol: string): string {
-	return `SELECT name AS name_, last(meta) AS meta_, currency_meta(last(name),"logo") AS logo_, currency_meta(last(name), "price") AS pricemetadata_, meta("filename") AS filename_, meta("lineno") AS lineno_ FROM #commodities WHERE name='${symbol}'`;
+	return `SELECT name AS name_, last(meta) AS meta_, currency_meta(last(name),'logo') AS logo_, currency_meta(last(name), 'price') AS pricemetadata_, meta('filename') AS filename_, meta('lineno') AS lineno_ FROM #commodities WHERE name='${symbol}'`;
 }

@@ -9,7 +9,8 @@ import {
     parseCommoditiesPriceDataCSV, 
     parseCommodityDetailsCSV,
     validatePriceSource,
-    validateLogoUrl
+    validateLogoUrl,
+    saveCommodityMetadata
 } from '../utils/index';
 
 /**
@@ -211,8 +212,10 @@ export class CommoditiesController {
                 priceMetadata: details.priceMetadata || undefined,
                 fullMetadata: details.metadata,
                 metadata: details.metadata,
-                currentPrice: undefined  // Detail query doesn't include current price
-            });
+                currentPrice: undefined,  // Detail query doesn't include current price
+                filename: details.filename || undefined,
+                lineno: details.lineno || undefined
+            } as any);
 
         } catch (error) {
             console.warn('Failed to query commodity details via BQL for', symbol, ':', error);
@@ -230,17 +233,24 @@ export class CommoditiesController {
         this.error.set(null);
         try {
             console.debug('[CommoditiesController] saveMetadata:', { symbol, metadata });
-            await this.apiClient.ensureConnected();
+            
+            // Get file location from selected commodity
+            const current = get(this.selectedCommodity);
+            const filename = (current as any)?.filename;
+            const lineno = (current as any)?.lineno;
+            
+            if (!filename || !lineno) {
+                throw new Error('Commodity location not available. Please reload the commodity details.');
+            }
 
-            const result = await this.apiClient.put<any>(`/commodities/${encodeURIComponent(symbol)}`, { metadata });
+            // Use native TypeScript save function (no backend needed!)
+            const createBackup = this.plugin.settings.createBackups ?? true;
+            const result = await saveCommodityMetadata(symbol, metadata, filename, lineno, createBackup);
 
             console.debug('[CommoditiesController] saveMetadata: result ->', result);
 
             if (!result.success) {
-                const err = new Error(result.error || `Failed to save metadata`);
-                // Attach full backend payload for richer diagnostics in the catch block
-                try { (err as any).payload = result; } catch {}
-                throw err;
+                throw new Error(result.error || 'Failed to save metadata');
             }
 
             // Refresh list and selected commodity
@@ -248,24 +258,8 @@ export class CommoditiesController {
             await this.loadCommodityDetails(symbol);
             return result;
         } catch (error) {
-            // Log full error and any attached backend payload for diagnostics
             console.error('Error saving commodity metadata:', error);
-            let msg = 'Failed to save metadata';
-            if (error instanceof Error) {
-                msg = error.message || msg;
-                const payload = (error as any)?.payload;
-                if (payload) {
-                    try {
-                        // Include concise payload info when available
-                        msg = `${msg} — ${JSON.stringify(payload)}`;
-                    } catch {
-                        // ignore stringify errors
-                    }
-                }
-            } else {
-                try { msg = JSON.stringify(error); } catch { /* ignore */ }
-            }
-
+            const msg = error instanceof Error ? error.message : 'Failed to save metadata';
             this.error.set(msg);
             return false;
         } finally {
