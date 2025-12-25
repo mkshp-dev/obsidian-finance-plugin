@@ -57,7 +57,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If this project helps your workflow, consider supporting its development ☕
 
 <a href="https://www.buymeacoffee.com/mkshp" target="_blank">
-  <img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=☕&slug=mkshp&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00"
-       alt="Buy me a coffee"
-       height="45" />
+  <img
+    src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=mkshp&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00"
+    alt="Buy me a coffee"
+    height="45"
+  />
 </a>
+
