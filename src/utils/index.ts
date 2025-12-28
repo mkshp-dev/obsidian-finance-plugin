@@ -654,9 +654,10 @@ export function parseCommodityDetailsCSV(csv: string): {
 		const linenoStr = row[5]?.trim() || null;
 		
 		const metadata = parseMetadataString(metaStr);
-		const lineno = linenoStr ? parseInt(linenoStr, 10) : null;
+		const parsedLineno = linenoStr ? parseInt(linenoStr, 10) : Number.NaN;
+		const lineno = Number.isNaN(parsedLineno) ? null : parsedLineno;
 		
-		return { symbol, metadata, logo, priceMetadata, filename, lineno: lineno !== null && !Number.isNaN(lineno) ? lineno : null };
+		return { symbol, metadata, logo, priceMetadata, filename, lineno };
 	} catch (e) {
 		console.error('Error parsing commodity details CSV:', e, 'CSV:', csv);
 		return defaultResult;
