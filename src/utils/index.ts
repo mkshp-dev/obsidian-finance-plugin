@@ -4,6 +4,7 @@ import type { ExecException } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
 import { readFile, writeFile, copyFile } from 'fs/promises';
+import { existsSync, unlinkSync, renameSync } from 'fs';
 import { join, dirname, basename } from 'path';
 
 // --- QUERY RUNNER ---
@@ -271,6 +272,54 @@ export function convertWslPathToWindows(wslPath: string): string {
 		return wslPath.replace(/^\/mnt\/[a-zA-Z]\//, `${driveLetter}:\\`).replace(/\//g, '\\');
 	}
 	return wslPath;
+}
+/**
+ * Performs an atomic file write operation using temp file + rename strategy.
+ * On Windows, handles the requirement to delete target file before rename.
+ * 
+ * @param {string} filePath - The target file path to write to.
+ * @param {string} content - The content to write.
+ * @returns {Promise<void>}
+ */
+async function atomicFileWrite(filePath: string, content: string): Promise<void> {
+	const tempPath = `${filePath}.tmp`;
+	await writeFile(tempPath, content, 'utf-8');
+	
+	try {
+		// On Windows, we need to delete the target file first before renaming
+		if (existsSync(filePath)) {
+			unlinkSync(filePath);
+		}
+		renameSync(tempPath, filePath);
+	} catch (renameError) {
+		// Fallback: just overwrite directly
+		await writeFile(filePath, content, 'utf-8');
+		// Clean up temp file if it still exists
+		if (existsSync(tempPath)) {
+			unlinkSync(tempPath);
+		}
+	}
+}
+
+/**
+ * Creates a backup of a file if requested.
+ * 
+ * @param {string} filePath - The file path to back up.
+ * @param {boolean} createBackup - Whether to create the backup.
+ * @param {string} functionName - The calling function name for logging.
+ * @returns {Promise<void>}
+ */
+async function createBackupFile(filePath: string, createBackup: boolean, functionName: string): Promise<void> {
+	if (!createBackup) return;
+	
+	const backupPath = `${filePath}.bak`;
+	try {
+		await copyFile(filePath, backupPath);
+		console.debug(`[${functionName}] Created backup: ${backupPath}`);
+	} catch (backupError) {
+		console.warn(`[${functionName}] Failed to create backup:`, backupError);
+		// Continue anyway - backup failure shouldn't block save
+	}
 }
 
 // --- ACCOUNT TREE BUILDER ---
@@ -607,7 +656,7 @@ export function parseCommodityDetailsCSV(csv: string): {
 		const metadata = parseMetadataString(metaStr);
 		const lineno = linenoStr ? parseInt(linenoStr, 10) : null;
 		
-		return { symbol, metadata, logo, priceMetadata, filename, lineno: isNaN(lineno!) ? null : lineno };
+		return { symbol, metadata, logo, priceMetadata, filename, lineno: lineno !== null && !Number.isNaN(lineno) ? lineno : null };
 	} catch (e) {
 		console.error('Error parsing commodity details CSV:', e, 'CSV:', csv);
 		return defaultResult;
@@ -692,38 +741,10 @@ export async function saveCommodityMetadata(
 		const newContent = newLines.join('\n');
 
 		// Step 6: Create backup if requested
-		if (createBackup) {
-			const backupPath = `${normalizedPath}.bak`;
-			try {
-				await copyFile(normalizedPath, backupPath);
-				console.debug(`[saveCommodityMetadata] Created backup: ${backupPath}`);
-			} catch (backupError) {
-				console.warn(`[saveCommodityMetadata] Failed to create backup:`, backupError);
-				// Continue anyway - backup failure shouldn't block save
-			}
-		}
+		await createBackupFile(normalizedPath, createBackup, 'saveCommodityMetadata');
 
 		// Step 7: Atomic write (write to temp file, then rename)
-		const tempPath = `${normalizedPath}.tmp`;
-		await writeFile(tempPath, newContent, 'utf-8');
-		
-		// On Windows, we need to delete the target file first before renaming
-		try {
-			const fs = await import('fs');
-			if (fs.existsSync(normalizedPath)) {
-				fs.unlinkSync(normalizedPath);
-			}
-			fs.renameSync(tempPath, normalizedPath);
-		} catch (renameError) {
-			// Fallback: just overwrite directly
-			await writeFile(normalizedPath, newContent, 'utf-8');
-			try {
-				const fs = await import('fs');
-				if (fs.existsSync(tempPath)) {
-					fs.unlinkSync(tempPath);
-				}
-			} catch {}
-		}
+		await atomicFileWrite(normalizedPath, newContent);
 
 		console.debug(`[saveCommodityMetadata] Successfully saved metadata for ${symbol}`);
 		return { success: true };
@@ -803,16 +824,7 @@ export async function saveOpenDirective(
 		const directiveText = parts.join(' ');
 
 		// Step 3: Create backup if requested
-		if (createBackup) {
-			const backupPath = `${normalizedPath}.bak`;
-			try {
-				await copyFile(normalizedPath, backupPath);
-				console.debug(`[saveOpenDirective] Created backup: ${backupPath}`);
-			} catch (backupError) {
-				console.warn(`[saveOpenDirective] Failed to create backup:`, backupError);
-				// Continue anyway - backup failure shouldn't block save
-			}
-		}
+		await createBackupFile(normalizedPath, createBackup, 'saveOpenDirective');
 
 		// Step 4: Read file and append directive
 		const content = await readFile(normalizedPath, 'utf-8');
@@ -821,26 +833,7 @@ export async function saveOpenDirective(
 			: `${content}\n${directiveText}\n`;
 
 		// Step 5: Atomic write (write to temp file, then rename)
-		const tempPath = `${normalizedPath}.tmp`;
-		await writeFile(tempPath, newContent, 'utf-8');
-		
-		// On Windows, we need to delete the target file first before renaming
-		try {
-			const fs = await import('fs');
-			if (fs.existsSync(normalizedPath)) {
-				fs.unlinkSync(normalizedPath);
-			}
-			fs.renameSync(tempPath, normalizedPath);
-		} catch (renameError) {
-			// Fallback: just overwrite directly
-			await writeFile(normalizedPath, newContent, 'utf-8');
-			try {
-				const fs = await import('fs');
-				if (fs.existsSync(tempPath)) {
-					fs.unlinkSync(tempPath);
-				}
-			} catch {}
-		}
+		await atomicFileWrite(normalizedPath, newContent);
 
 		console.debug(`[saveOpenDirective] Successfully saved open directive for ${account}`);
 		return { success: true };
@@ -879,16 +872,7 @@ export async function saveCloseDirective(
 		const directiveText = `${date} close ${account}`;
 
 		// Step 3: Create backup if requested
-		if (createBackup) {
-			const backupPath = `${normalizedPath}.bak`;
-			try {
-				await copyFile(normalizedPath, backupPath);
-				console.debug(`[saveCloseDirective] Created backup: ${backupPath}`);
-			} catch (backupError) {
-				console.warn(`[saveCloseDirective] Failed to create backup:`, backupError);
-				// Continue anyway - backup failure shouldn't block save
-			}
-		}
+		await createBackupFile(normalizedPath, createBackup, 'saveCloseDirective');
 
 		// Step 4: Read file and append directive
 		const content = await readFile(normalizedPath, 'utf-8');
@@ -897,26 +881,7 @@ export async function saveCloseDirective(
 			: `${content}\n${directiveText}\n`;
 
 		// Step 5: Atomic write (write to temp file, then rename)
-		const tempPath = `${normalizedPath}.tmp`;
-		await writeFile(tempPath, newContent, 'utf-8');
-		
-		// On Windows, we need to delete the target file first before renaming
-		try {
-			const fs = await import('fs');
-			if (fs.existsSync(normalizedPath)) {
-				fs.unlinkSync(normalizedPath);
-			}
-			fs.renameSync(tempPath, normalizedPath);
-		} catch (renameError) {
-			// Fallback: just overwrite directly
-			await writeFile(normalizedPath, newContent, 'utf-8');
-			try {
-				const fs = await import('fs');
-				if (fs.existsSync(tempPath)) {
-					fs.unlinkSync(tempPath);
-				}
-			} catch {}
-		}
+		await atomicFileWrite(normalizedPath, newContent);
 
 		console.debug(`[saveCloseDirective] Successfully saved close directive for ${account}`);
 		return { success: true };
