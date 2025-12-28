@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { debounce } from '../../../utils/index';
+    import { debounce, getOpenAccounts } from '../../../utils/index';
     import TransactionCard from './cards/TransactionCard.svelte';
     import BalanceCard from './cards/BalanceCard.svelte';
     import NoteCard from './cards/NoteCard.svelte';
@@ -80,11 +80,11 @@
     }, 500);
 
     async function fetchSuggestions() {
-        if (!plugin || !plugin.apiClient) return;
+        if (!plugin) return;
         try {
             // Run requests in parallel
             const [accountsRes, payeesRes, tagsRes] = await Promise.allSettled([
-                plugin.apiClient.get('/accounts'),
+                getOpenAccounts(plugin),
                 plugin.apiClient.get('/payees'),
                 plugin.apiClient.get('/tags')
             ]);
@@ -94,8 +94,7 @@
             const MAX_SUGGESTIONS = 200;
 
             if (accountsRes.status === 'fulfilled') {
-                const accounts = accountsRes.value.accounts || [];
-                availableAccounts = accounts.slice(0, MAX_SUGGESTIONS);
+                availableAccounts = accountsRes.value.slice(0, MAX_SUGGESTIONS);
             }
             if (payeesRes.status === 'fulfilled') {
                 const payees = payeesRes.value.payees || [];

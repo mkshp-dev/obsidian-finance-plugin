@@ -6,6 +6,7 @@ import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
+import { getOpenAccounts } from '../../utils';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -91,13 +92,13 @@ export class UnifiedTransactionModal extends Modal {
 
             // Run all requests in parallel for better performance
             const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
-                apiClient.get<{accounts: string[]}>('/accounts'),
+                getOpenAccounts(this.plugin),
                 apiClient.get<{payees: string[]}>('/payees'),
                 apiClient.get<{tags: string[]}>('/tags'),
                 apiClient.get<{commodities: {name: string}[]}>('/commodities')
             ]);
 
-            const accounts = accountsResult.status === 'fulfilled' ? accountsResult.value.accounts : [];
+            const accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : [];
             const payees = payeesResult.status === 'fulfilled' ? payeesResult.value.payees : [];
             const tags = tagsResult.status === 'fulfilled' ? tagsResult.value.tags : [];
             const fetchedCurrencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.commodities.map(c => c.name) : [];

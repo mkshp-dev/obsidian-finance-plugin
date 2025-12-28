@@ -546,49 +546,6 @@ class BeancountJournalAPI:
             'has_more': result['has_more']
         }
     
-    def get_accounts(self) -> List[str]:
-        """
-        Get all unique account names from the journal.
-
-        Returns:
-            List[str]: A sorted list of account strings.
-        """
-        accounts = set()
-        for entry in self.entries:
-            if isinstance(entry, data.Transaction):
-                for posting in entry.postings:
-                    accounts.add(posting.account)
-            elif isinstance(entry, data.Open):
-                accounts.add(entry.account)
-        
-        return sorted(list(accounts))
-    
-    def get_account_status(self, account_name: str) -> Dict[str, Any]:
-        """
-        Get the open/close status of an account.
-
-        Args:
-            account_name (str): The account name to check.
-
-        Returns:
-            Dict[str, Any]: Dictionary with 'is_open' (bool), 'open_date' (str or None), 'close_date' (str or None).
-        """
-        open_date = None
-        close_date = None
-        
-        for entry in self.entries:
-            if isinstance(entry, data.Open) and entry.account == account_name:
-                open_date = str(entry.date)
-            elif isinstance(entry, data.Close) and entry.account == account_name:
-                close_date = str(entry.date)
-        
-        return {
-            'account': account_name,
-            'is_open': close_date is None,
-            'open_date': open_date,
-            'close_date': close_date
-        }
-    
     def get_payees(self) -> List[str]:
         """
         Get all unique payees from transactions.
@@ -1358,70 +1315,6 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
             print(f"[ERROR] get_entries failed: {e}")
             import traceback
             traceback.print_exc()
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/accounts', methods=['GET'])
-    def get_accounts():
-        """Get all account names"""
-        try:
-            accounts = api.get_accounts()
-            return jsonify({'accounts': accounts})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/accounts/<path:account_name>/status', methods=['GET'])
-    def get_account_status(account_name: str):
-        """Get the open/close status of an account"""
-        try:
-            status = api.get_account_status(account_name)
-            return jsonify(status)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/accounts/open', methods=['POST'])
-    def open_account():
-        """Open a new account"""
-        try:
-            if not request.json:
-                return jsonify({'error': 'No JSON data provided'}), 400
-            
-            required_fields = ['date', 'account']
-            for field in required_fields:
-                if field not in request.json:
-                    return jsonify({'error': f'Missing required field: {field}'}), 400
-            
-            entry_data = {**request.json, 'type': 'open'}
-            result = api.add_entry_to_file(entry_data)
-            
-            if result['success']:
-                return jsonify(result), 201
-            else:
-                return jsonify(result), 400
-                
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/accounts/close', methods=['POST'])
-    def close_account():
-        """Close an existing account"""
-        try:
-            if not request.json:
-                return jsonify({'error': 'No JSON data provided'}), 400
-            
-            required_fields = ['date', 'account']
-            for field in required_fields:
-                if field not in request.json:
-                    return jsonify({'error': f'Missing required field: {field}'}), 400
-            
-            entry_data = {**request.json, 'type': 'close'}
-            result = api.add_entry_to_file(entry_data)
-            
-            if result['success']:
-                return jsonify(result), 201
-            else:
-                return jsonify(result), 400
-                
-        except Exception as e:
             return jsonify({'error': str(e)}), 500
     
     @app.route('/payees', methods=['GET'])
