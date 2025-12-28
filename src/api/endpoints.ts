@@ -10,8 +10,6 @@ export const ENDPOINTS = {
     ENTRIES: '/entries',
     /** Endpoint for managing specific transactions (GET, POST, PUT, DELETE). */
     TRANSACTIONS: '/transactions',
-    /** Endpoint for retrieving list of accounts. */
-    ACCOUNTS: '/accounts',
     /** Endpoint for retrieving list of payees. */
     PAYEES: '/payees',
     /** Endpoint for retrieving list of tags. */
@@ -21,9 +19,5 @@ export const ENDPOINTS = {
     /** Endpoint for retrieving ledger statistics. */
     STATISTICS: '/statistics',
     /** Endpoint to trigger a reload of the Beancount file. */
-    RELOAD: '/reload',
-    /** Endpoint for opening accounts. */
-    ACCOUNTS_OPEN: '/accounts/open',
-    /** Endpoint for closing accounts. */
-    ACCOUNTS_CLOSE: '/accounts/close'
+    RELOAD: '/reload'
 };

@@ -63,7 +63,7 @@ export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- 
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQuery(currency: string): string {
-	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
@@ -71,7 +71,7 @@ export function getBalanceSheetQuery(currency: string): string {
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQueryByCost(): string {
-	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
@@ -79,7 +79,7 @@ export function getBalanceSheetQueryByCost(): string {
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQueryByUnits(): string {
-	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
