@@ -902,6 +902,157 @@ class BeancountJournalAPI:
         except Exception as e:
             return {'success': False, 'error': f'Failed to update transaction: {str(e)}'}
 
+    def update_balance_in_file(self, balance_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update a balance assertion in the Beancount file.
+
+        Args:
+            balance_id (str): The ID of the balance entry to update.
+            updated_data (Dict[str, Any]): The new balance data (date, account, amount, currency).
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
+        try:
+            # Find the original balance entry
+            original_entry = self.find_entry_by_id(balance_id)
+            if not original_entry or not isinstance(original_entry, data.Balance):
+                return {'success': False, 'error': 'Balance entry not found'}
+
+            # Create backup
+            backup_path = self.create_backup_if_enabled()
+
+            # Read the file content
+            with open(self.beancount_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Find the entry in the file by looking for its line number
+            if hasattr(original_entry, 'meta') and 'lineno' in original_entry.meta:
+                lineno = original_entry.meta['lineno']
+                lines = content.split('\n')
+                
+                # Generate new balance text
+                new_balance_text = self.generate_balance_text(updated_data)
+                
+                # Find the start and end of the balance entry
+                start_line = lineno - 1  # Convert to 0-based indexing
+                end_line = start_line
+                
+                # Balance assertions are typically single-line, but check for continuations
+                while end_line + 1 < len(lines):
+                    next_line = lines[end_line + 1].strip()
+                    if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
+                        break
+                    end_line += 1
+                
+                # Replace the balance entry
+                lines[start_line:end_line + 1] = [new_balance_text]
+                
+                # Write back to file
+                with open(self.beancount_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                
+                # Reload the data
+                self.reload_data()
+                
+                return {
+                    'success': True, 
+                    'message': 'Balance entry updated successfully',
+                    'backup_file': backup_path
+                }
+            else:
+                return {'success': False, 'error': 'Could not locate balance entry in file'}
+
+        except Exception as e:
+            return {'success': False, 'error': f'Failed to update balance entry: {str(e)}'}
+
+    def update_note_in_file(self, note_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update a note in the Beancount file.
+
+        Args:
+            note_id (str): The ID of the note to update.
+            updated_data (Dict[str, Any]): The new note data (date, account, comment).
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
+        try:
+            # Find the original note entry
+            original_entry = self.find_entry_by_id(note_id)
+            if not original_entry or not isinstance(original_entry, data.Note):
+                return {'success': False, 'error': 'Note entry not found'}
+
+            # Create backup
+            backup_path = self.create_backup_if_enabled()
+
+            # Read the file content
+            with open(self.beancount_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Find the entry in the file by looking for its line number
+            if hasattr(original_entry, 'meta') and 'lineno' in original_entry.meta:
+                lineno = original_entry.meta['lineno']
+                lines = content.split('\n')
+                
+                # Generate new note text
+                new_note_text = self.generate_note_text(updated_data)
+                
+                # Find the start and end of the note entry
+                start_line = lineno - 1  # Convert to 0-based indexing
+                end_line = start_line
+                
+                # Notes are typically single-line, but check for continuations
+                while end_line + 1 < len(lines):
+                    next_line = lines[end_line + 1].strip()
+                    if next_line == '' or not lines[end_line + 1].startswith((' ', '\t')):
+                        break
+                    end_line += 1
+                
+                # Replace the note entry
+                lines[start_line:end_line + 1] = [new_note_text]
+                
+                # Write back to file
+                with open(self.beancount_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                
+                # Reload the data
+                self.reload_data()
+                
+                return {
+                    'success': True, 
+                    'message': 'Note entry updated successfully',
+                    'backup_file': backup_path
+                }
+            else:
+                return {'success': False, 'error': 'Could not locate note entry in file'}
+
+        except Exception as e:
+            return {'success': False, 'error': f'Failed to update note entry: {str(e)}'}
+
+    def update_entry_in_file(self, entry_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update any entry (transaction, balance, or note) in the Beancount file.
+        Routes to the appropriate specific update method based on entry type.
+
+        Args:
+            entry_id (str): The ID of the entry to update.
+            updated_data (Dict[str, Any]): The new entry data.
+
+        Returns:
+            Dict[str, Any]: Result object with 'success' (bool).
+        """
+        entry_type = updated_data.get('type', 'transaction')
+        
+        if entry_type == 'transaction':
+            return self.update_transaction_in_file(entry_id, updated_data)
+        elif entry_type == 'balance':
+            return self.update_balance_in_file(entry_id, updated_data)
+        elif entry_type == 'note':
+            return self.update_note_in_file(entry_id, updated_data)
+        else:
+            return {'success': False, 'error': f'Unsupported entry type: {entry_type}'}
+
     def delete_entry_from_file(self, entry_id: str) -> Dict[str, Any]:
         """
         Delete an entry (Transaction, Note, Balance, Pad) from the Beancount file.
@@ -996,10 +1147,13 @@ class BeancountJournalAPI:
         # Build the transaction header with tags and links
         header_parts = [date_str, flag, payee_narration]
         
-        # Add tags (with # prefix)
+        # Add tags (with # prefix, strip any existing # to avoid double prefixes)
         if tags:
             for tag in tags:
-                header_parts.append(f"#{tag}")
+                # Strip any existing # prefix to avoid duplication
+                clean_tag = tag.lstrip('#')
+                if clean_tag:  # Only add non-empty tags
+                    header_parts.append(f"#{clean_tag}")
         
         # Add links (with ^ prefix)
         if links:
@@ -1361,27 +1515,50 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
 
     @app.route('/transactions/<transaction_id>', methods=['PUT'])
     def update_transaction(transaction_id: str):
-        """Update a transaction"""
+        """Update a transaction, balance, or note entry"""
         try:
             if not request.json:
                 return jsonify({'error': 'No JSON data provided'}), 400
             
-            # Validate required fields
-            required_fields = ['date', 'narration', 'postings']
-            for field in required_fields:
-                if field not in request.json:
-                    return jsonify({'error': f'Missing required field: {field}'}), 400
+            entry_type = request.json.get('type', 'transaction')
             
-            # Validate postings
-            postings = request.json['postings']
-            if not isinstance(postings, list) or len(postings) < 2:
-                return jsonify({'error': 'At least 2 postings are required'}), 400
+            # Validate required fields based on entry type
+            if entry_type == 'transaction':
+                # For transactions: date and postings are required
+                # narration is optional (can be empty string)
+                required_fields = ['date', 'postings']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
+                
+                # Validate postings
+                postings = request.json['postings']
+                if not isinstance(postings, list) or len(postings) < 2:
+                    return jsonify({'error': 'At least 2 postings are required'}), 400
+                
+                for i, posting in enumerate(postings):
+                    if 'account' not in posting:
+                        return jsonify({'error': f'Posting {i + 1} missing account'}), 400
             
-            for i, posting in enumerate(postings):
-                if 'account' not in posting:
-                    return jsonify({'error': f'Posting {i + 1} missing account'}), 400
+            elif entry_type == 'balance':
+                # For balance assertions: date, account, amount, and currency are required
+                required_fields = ['date', 'account', 'amount', 'currency']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
             
-            result = api.update_transaction_in_file(transaction_id, request.json)
+            elif entry_type == 'note':
+                # For notes: date, account, and comment are required
+                required_fields = ['date', 'account', 'comment']
+                for field in required_fields:
+                    if field not in request.json:
+                        return jsonify({'error': f'Missing required field: {field}'}), 400
+            
+            else:
+                return jsonify({'error': f'Unsupported entry type: {entry_type}'}), 400
+            
+            # Use the new unified update method
+            result = api.update_entry_in_file(transaction_id, request.json)
             
             if result['success']:
                 return jsonify(result), 200
