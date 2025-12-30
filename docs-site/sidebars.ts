@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'core-features/adding-directives',
+        'core-features/beancount-syntax',
         'core-features/snapshot-view',
         {
           type: 'category',

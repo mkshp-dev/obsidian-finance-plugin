@@ -6,6 +6,10 @@ sidebar_position: 1
 
 One of the primary actions you will perform is adding new financial data to your ledger. The plugin provides a streamlined **Unified Transaction Modal** for this purpose.
 
+:::tip
+This guide covers how to use the transaction modal UI. For details on the underlying Beancount syntax and advanced features, see the [Beancount Transaction Syntax Reference](./beancount-syntax.md).
+:::
+
 ## 🚀 Accessing the Modal
 
 You can open the "Add Transaction" modal in three ways:
