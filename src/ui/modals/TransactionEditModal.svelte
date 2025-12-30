@@ -36,11 +36,38 @@
     // Transaction-specific fields
     let payee = transaction?.payee || '';
     let narration = transaction?.narration || '';
-    let postings: JournalPosting[] = transaction ? [...transaction.postings] : [
-        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null },
-        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null }
+    let postings: JournalPosting[] = transaction ? transaction.postings.map(p => ({
+        ...p,
+        // Ensure cost and price have complete structures with all required fields
+        cost: p.cost ? {
+            number: p.cost.number || '',
+            currency: p.cost.currency || operatingCurrency,
+            date: p.cost.date || '',
+            label: p.cost.label || '',
+            isTotal: p.cost.isTotal || false
+        } : { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false },
+        price: p.price ? {
+            amount: p.price.amount || '',
+            currency: p.price.currency || operatingCurrency,
+            isTotal: p.price.isTotal || false
+        } : { amount: '', currency: operatingCurrency, isTotal: false }
+    })) : [
+        { account: '', amount: null, currency: operatingCurrency, 
+          price: { amount: '', currency: operatingCurrency, isTotal: false },
+          cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false } },
+        { account: '', amount: null, currency: operatingCurrency,
+          price: { amount: '', currency: operatingCurrency, isTotal: false },
+          cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false } }
     ];
     let selectedTags: string[] = transaction ? [...transaction.tags] : [];
+    
+    // Track which postings have advanced options expanded
+    // Safely check if cost/price data exists to determine if advanced section should be shown
+    let showAdvanced: boolean[] = postings.map(p => {
+        const hasCost = p.cost && (p.cost.number || p.cost.date || p.cost.label);
+        const hasPrice = p.price && p.price.amount;
+        return !!(hasCost || hasPrice);
+    });
     
     // Balance-specific fields
     let balanceAccount = (entry?.type === 'balance') ? (entry as JournalBalance).account : '';
@@ -63,15 +90,29 @@
             account: '',
             amount: null,
             currency: operatingCurrency,
-            price: null,
-            cost: null
+            price: { amount: '', currency: operatingCurrency, isTotal: false },
+            cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false }
         }];
+        showAdvanced = [...showAdvanced, false];
     }
     
     // Remove a posting
     function removePosting(index: number) {
         if (postings.length > 2) {
             postings = postings.filter((_, i) => i !== index);
+            showAdvanced = showAdvanced.filter((_, i) => i !== index);
+        }
+    }
+    
+    // Toggle advanced options for a posting
+    function toggleAdvanced(index: number) {
+        showAdvanced[index] = !showAdvanced[index];
+        // Ensure cost/price structures are properly initialized
+        if (!postings[index].cost || typeof postings[index].cost !== 'object') {
+            postings[index].cost = { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false };
+        }
+        if (!postings[index].price || typeof postings[index].price !== 'object') {
+            postings[index].price = { amount: '', currency: operatingCurrency, isTotal: false };
         }
     }
     
@@ -88,6 +129,55 @@
             for (let i = 0; i < postings.length; i++) {
                 if (!postings[i].account) {
                     errors.push(`Posting ${i + 1}: Account is required`);
+                }
+                
+                const posting = postings[i];
+                
+                // Validate cost if present
+                if (posting.cost && (posting.cost.number || posting.cost.date || posting.cost.label)) {
+                    // Cost requires amount and currency on posting
+                    if (!posting.amount || !posting.currency) {
+                        errors.push(`Posting ${i + 1}: Cost requires an amount and currency`);
+                    }
+                    
+                    // Cost number must be positive if specified
+                    if (posting.cost.number) {
+                        const costNum = parseFloat(posting.cost.number);
+                        if (isNaN(costNum) || costNum <= 0) {
+                            errors.push(`Posting ${i + 1}: Cost amount must be a positive number`);
+                        }
+                    }
+                    
+                    // Cost date must be <= transaction date if specified
+                    if (posting.cost.date) {
+                        if (posting.cost.date > date) {
+                            errors.push(`Posting ${i + 1}: Cost date cannot be after transaction date`);
+                        }
+                    }
+                    
+                    // Cost currency is required if cost number is specified
+                    if (posting.cost.number && !posting.cost.currency) {
+                        errors.push(`Posting ${i + 1}: Cost currency is required`);
+                    }
+                }
+                
+                // Validate price if present
+                if (posting.price && posting.price.amount) {
+                    // Price requires amount and currency on posting
+                    if (!posting.amount || !posting.currency) {
+                        errors.push(`Posting ${i + 1}: Price requires an amount and currency`);
+                    }
+                    
+                    // Price amount must be positive
+                    const priceNum = parseFloat(posting.price.amount);
+                    if (isNaN(priceNum) || priceNum <= 0) {
+                        errors.push(`Posting ${i + 1}: Price amount must be a positive number`);
+                    }
+                    
+                    // Price currency is required
+                    if (!posting.price.currency) {
+                        errors.push(`Posting ${i + 1}: Price currency is required`);
+                    }
                 }
             }
             
@@ -134,13 +224,35 @@
                 date,
                 payee: payee || null,
                 narration,
-                postings: postings.map(p => ({
-                    account: p.account,
-                    amount: p.amount,
-                    currency: p.currency,
-                    price: p.price,
-                    cost: p.cost
-                })),
+                postings: postings.map(p => {
+                    const posting: any = {
+                        account: p.account,
+                        amount: p.amount,
+                        currency: p.currency
+                    };
+                    
+                    // Only include cost if at least one field is filled
+                    if (p.cost && (p.cost.number || p.cost.date || p.cost.label)) {
+                        posting.cost = {
+                            number: p.cost.number || null,
+                            currency: p.cost.currency || null,
+                            date: p.cost.date || null,
+                            label: p.cost.label || null,
+                            isTotal: p.cost.isTotal || false
+                        };
+                    }
+                    
+                    // Only include price if amount is filled
+                    if (p.price && p.price.amount) {
+                        posting.price = {
+                            amount: p.price.amount,
+                            currency: p.price.currency,
+                            isTotal: p.price.isTotal || false
+                        };
+                    }
+                    
+                    return posting;
+                }),
                 tags: selectedTags
             };
         } else if (activeTab === 'balance') {
@@ -288,46 +400,176 @@
             <div class="postings-section">
                 <h4>Postings</h4>
                 {#each postings as posting, index}
-                    <div class="posting-row">
-                        <div class="posting-account">
-                            <label>Account *</label>
-                            <input 
-                                type="text" 
-                                bind:value={posting.account}
-                                list="accounts-list"
-                                placeholder="Account name"
-                                required
-                            />
+                    <div class="posting-container">
+                        <div class="posting-row">
+                            <div class="posting-account">
+                                <label>Account *</label>
+                                <input 
+                                    type="text" 
+                                    bind:value={posting.account}
+                                    list="accounts-list"
+                                    placeholder="Account name"
+                                    required
+                                />
+                            </div>
+                            
+                            <div class="posting-amount">
+                                <label>Amount</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    bind:value={posting.amount}
+                                    placeholder="Optional amount"
+                                />
+                            </div>
+                            
+                            <div class="posting-currency">
+                                <label>Currency</label>
+                                <input 
+                                    type="text" 
+                                    bind:value={posting.currency}
+                                    list="currencies-list"
+                                    placeholder="INR"
+                                    maxlength="3"
+                                />
+                            </div>
+                            
+                            <div class="posting-actions">
+                                {#if postings.length > 2}
+                                    <button type="button" class="remove-posting" on:click={() => removePosting(index)}>
+                                        🗑️
+                                    </button>
+                                {/if}
+                            </div>
                         </div>
                         
-                        <div class="posting-amount">
-                            <label>Amount</label>
-                            <input 
-                                type="number" 
-                                step="0.01"
-                                bind:value={posting.amount}
-                                placeholder="Optional amount"
-                            />
+                        <!-- Advanced Cost/Price Section -->
+                        <div class="posting-advanced-toggle">
+                            <button 
+                                type="button" 
+                                class="toggle-advanced"
+                                on:click={() => toggleAdvanced(index)}
+                            >
+                                {showAdvanced[index] ? '▼' : '▶'} Advanced (Cost/Price)
+                            </button>
                         </div>
                         
-                        <div class="posting-currency">
-                            <label>Currency</label>
-                            <input 
-                                type="text" 
-                                bind:value={posting.currency}
-                                list="currencies-list"
-                                placeholder="INR"
-                                maxlength="3"
-                            />
-                        </div>
-                        
-                        <div class="posting-actions">
-                            {#if postings.length > 2}
-                                <button type="button" class="remove-posting" on:click={() => removePosting(index)}>
-                                    🗑️
-                                </button>
-                            {/if}
-                        </div>
+                        {#if showAdvanced[index]}
+                            <div class="posting-advanced">
+                                <!-- Cost Section -->
+                                <div class="advanced-section">
+                                    <h5>Cost Basis (for investments)</h5>
+                                    <div class="advanced-grid">
+                                        <div class="advanced-field">
+                                            <label>Cost Amount</label>
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                bind:value={posting.cost.number}
+                                                placeholder="e.g., 150.00"
+                                            />
+                                            <span class="field-hint">Per-unit cost (use &#123;&#125; in Beancount)</span>
+                                        </div>
+                                        
+                                        <div class="advanced-field">
+                                            <label>Cost Currency</label>
+                                            <input 
+                                                type="text" 
+                                                bind:value={posting.cost.currency}
+                                                list="currencies-list"
+                                                placeholder="USD"
+                                                maxlength="3"
+                                            />
+                                        </div>
+                                        
+                                        <div class="advanced-field">
+                                            <label>Cost Date</label>
+                                            <input 
+                                                type="date" 
+                                                bind:value={posting.cost.date}
+                                                max={date}
+                                            />
+                                            <span class="field-hint">Acquisition date (for lot matching)</span>
+                                        </div>
+                                        
+                                        <div class="advanced-field">
+                                            <label>Cost Label</label>
+                                            <input 
+                                                type="text" 
+                                                bind:value={posting.cost.label}
+                                                placeholder="e.g., lot-001"
+                                            />
+                                            <span class="field-hint">Custom lot identifier</span>
+                                        </div>
+                                        
+                                        <div class="advanced-field checkbox-field">
+                                            <label>
+                                                <input 
+                                                    type="checkbox" 
+                                                    bind:checked={posting.cost.isTotal}
+                                                />
+                                                Total Cost (use &#123;&#123;&#125;&#125; instead of &#123;&#125;)
+                                            </label>
+                                            <span class="field-hint">Total cost including fees</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Price Section -->
+                                <div class="advanced-section">
+                                    <h5>Conversion Price (for currency/value reference)</h5>
+                                    <div class="advanced-grid">
+                                        <div class="advanced-field">
+                                            <label>Price Amount</label>
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                bind:value={posting.price.amount}
+                                                placeholder="e.g., 1.09"
+                                            />
+                                            <span class="field-hint">Per-unit price (use @ in Beancount)</span>
+                                        </div>
+                                        
+                                        <div class="advanced-field">
+                                            <label>Price Currency</label>
+                                            <input 
+                                                type="text" 
+                                                bind:value={posting.price.currency}
+                                                list="currencies-list"
+                                                placeholder="USD"
+                                                maxlength="3"
+                                            />
+                                        </div>
+                                        
+                                        <div class="advanced-field checkbox-field">
+                                            <label>
+                                                <input 
+                                                    type="checkbox" 
+                                                    bind:checked={posting.price.isTotal}
+                                                />
+                                                Total Price (use @@ instead of @)
+                                            </label>
+                                            <span class="field-hint">Total amount in price currency</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="advanced-help">
+                                    <strong>When to use Cost vs Price:</strong>
+                                    <ul>
+                                        <li><strong>Cost:</strong> For investments (stocks, commodities) where you need to track acquisition cost for capital gains</li>
+                                        <li><strong>Price:</strong> For currency conversions or recording market value without affecting cost basis</li>
+                                        <li><strong>Both:</strong> When selling investments - cost for balance calculation, price for market value</li>
+                                    </ul>
+                                    <strong>Lot Matching (when selling):</strong>
+                                    <ul>
+                                        <li><strong>By cost:</strong> Specify exact cost amount to match (e.g., -10 AAPL &#123;150.00 USD&#125;)</li>
+                                        <li><strong>By date:</strong> Leave cost amount empty, fill date only (e.g., -10 AAPL &#123;2024-01-15&#125;)</li>
+                                        <li><strong>By label:</strong> Leave cost amount and date empty, fill label only (e.g., -10 AAPL &#123;"lot-001"&#125;)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        {/if}
                     </div>
                 {/each}
                 
@@ -571,15 +813,143 @@
         color: var(--text-normal);
     }
     
-    .posting-row {
-        display: grid;
-        grid-template-columns: 3fr 1.2fr 1fr auto; /* Give more space to account field and amount */
-        gap: 1rem; /* Increased gap from 0.75rem to 1rem */
-        align-items: end;
+    .posting-container {
         margin-bottom: 1rem;
-        padding: 1.25rem; /* Increased padding from 1rem to 1.25rem */
+        padding: 1.25rem;
         background: var(--background-secondary);
         border-radius: 6px;
+    }
+    
+    .posting-row {
+        display: grid;
+        grid-template-columns: 3fr 1.2fr 1fr auto;
+        gap: 1rem;
+        align-items: end;
+    }
+    
+    .posting-advanced-toggle {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--background-modifier-border);
+    }
+    
+    .toggle-advanced {
+        background: none;
+        border: none;
+        color: var(--text-accent);
+        cursor: pointer;
+        padding: 0.5rem 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .toggle-advanced:hover {
+        color: var(--text-accent-hover);
+    }
+    
+    .posting-advanced {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: var(--background-primary);
+        border-radius: 4px;
+        border: 1px solid var(--background-modifier-border);
+    }
+    
+    .advanced-section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .advanced-section:last-of-type {
+        margin-bottom: 1rem;
+    }
+    
+    .advanced-section h5 {
+        margin: 0 0 0.75rem 0;
+        color: var(--text-normal);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    
+    .advanced-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .advanced-field {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .advanced-field label {
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: var(--text-muted);
+    }
+    
+    .advanced-field input[type="number"],
+    .advanced-field input[type="text"],
+    .advanced-field input[type="date"] {
+        padding: 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-modifier-form-field);
+        color: var(--text-normal);
+        font-size: 0.875rem;
+    }
+    
+    .advanced-field.checkbox-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .advanced-field.checkbox-field label {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+    
+    .advanced-field.checkbox-field input[type="checkbox"] {
+        cursor: pointer;
+    }
+    
+    .field-hint {
+        font-size: 0.75rem;
+        color: var(--text-faint);
+        margin-top: 0.25rem;
+        font-style: italic;
+    }
+    
+    .advanced-help {
+        padding: 1rem;
+        background: var(--background-secondary);
+        border-radius: 4px;
+        border-left: 3px solid var(--interactive-accent);
+        font-size: 0.85rem;
+    }
+    
+    .advanced-help strong {
+        color: var(--text-normal);
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .advanced-help ul {
+        margin: 0;
+        padding-left: 1.5rem;
+        color: var(--text-muted);
+    }
+    
+    .advanced-help li {
+        margin: 0.25rem 0;
+        line-height: 1.4;
     }
     
     .posting-account,
@@ -846,6 +1216,10 @@
         
         .posting-actions {
             justify-self: end;
+        }
+        
+        .advanced-grid {
+            grid-template-columns: 1fr;
         }
 
         .modal-footer {

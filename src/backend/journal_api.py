@@ -1139,6 +1139,8 @@ class BeancountJournalAPI:
         # Format payee and narration
         if payee and narration:
             payee_narration = f'"{payee}" "{narration}"'
+        elif payee:
+            payee_narration = f'"{payee}" ""'
         elif narration:
             payee_narration = f'"{narration}"'
         else:
@@ -1168,11 +1170,54 @@ class BeancountJournalAPI:
             account = posting['account']
             amount = posting.get('amount')
             currency = posting.get('currency')
+            cost = posting.get('cost')
+            price = posting.get('price')
+            
+            posting_line = f"  {account}"
             
             if amount and currency:
-                posting_line = f"  {account}  {amount} {currency}"
-            else:
-                posting_line = f"  {account}"
+                posting_line += f"  {amount} {currency}"
+                
+                # Add cost if present (e.g., {100.00 USD} or {100.00 USD, 2024-01-15} or {100.00 USD, "label"})
+                if cost:
+                    cost_number = cost.get('number')
+                    cost_currency = cost.get('currency')
+                    cost_date = cost.get('date')
+                    cost_label = cost.get('label')
+                    is_total_cost = cost.get('isTotal', False)
+                    
+                    if cost_number and cost_currency:
+                        # Use {{}} for total cost, {} for per-unit cost
+                        open_brace = '{{' if is_total_cost else '{'
+                        close_brace = '}}' if is_total_cost else '}'
+                        
+                        posting_line += f" {open_brace}{cost_number} {cost_currency}"
+                        
+                        # Add cost date if present
+                        if cost_date:
+                            posting_line += f", {cost_date}"
+                        
+                        # Add cost label if present
+                        if cost_label:
+                            posting_line += f', "{cost_label}"'
+                        
+                        posting_line += close_brace
+                    elif cost_date:
+                        # Cost with only date (for lot matching) {2014-02-11}
+                        posting_line += f" {{{cost_date}}}"
+                    elif cost_label:
+                        # Cost with only label (for lot matching) {"ref-001"}
+                        posting_line += f' {{"{cost_label}"}}'
+                
+                # Add price if present (e.g., @ 100.00 USD or @@ 1000.00 USD)
+                if price and price.get('amount') and price.get('currency'):
+                    price_amount = price.get('amount')
+                    price_currency = price.get('currency')
+                    is_total_price = price.get('isTotal', False)
+                    
+                    # Use @@ for total price, @ for per-unit price
+                    price_symbol = '@@' if is_total_price else '@'
+                    posting_line += f" {price_symbol} {price_amount} {price_currency}"
             
             lines.append(posting_line)
         
