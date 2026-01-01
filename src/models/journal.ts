@@ -24,6 +24,12 @@ export interface JournalPosting {
         /** If true, use {{}} (total cost) instead of {} (per-unit cost). */
         isTotal?: boolean;
     };
+    /** Optional posting flag ("!" for incomplete, "*" for complete). */
+    flag?: string | null;
+    /** Optional inline comment for this posting. */
+    comment?: string | null;
+    /** Optional posting-level metadata. */
+    metadata?: Record<string, string>;
 }
 
 /**

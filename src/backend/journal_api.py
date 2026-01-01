@@ -417,8 +417,19 @@ class BeancountJournalAPI:
                 'amount': None,
                 'currency': None,
                 'price': None,
-                'cost': None
+                'cost': None,
+                'flag': posting.flag if hasattr(posting, 'flag') and posting.flag else None,
+                'comment': None,
+                'metadata': {}
             }
+            
+            # Extract posting-level metadata
+            if hasattr(posting, 'meta') and posting.meta:
+                for key, value in posting.meta.items():
+                    # Skip internal beancount metadata fields
+                    if key not in ['filename', 'lineno']:
+                        if isinstance(value, (str, int, float, bool)):
+                            posting_data['metadata'][key] = str(value)
             
             if posting.units:
                 posting_data['amount'] = str(posting.units.number)
@@ -1165,6 +1176,12 @@ class BeancountJournalAPI:
         # Start with the transaction line
         lines = [" ".join(header_parts)]
         
+        # Add transaction-level metadata if present
+        txn_metadata = transaction_data.get('metadata', {})
+        if txn_metadata:
+            for key, value in txn_metadata.items():
+                lines.append(f"  {key}: \"{value}\"")
+        
         # Add postings
         for posting in transaction_data.get('postings', []):
             account = posting['account']
@@ -1172,8 +1189,15 @@ class BeancountJournalAPI:
             currency = posting.get('currency')
             cost = posting.get('cost')
             price = posting.get('price')
+            posting_flag = posting.get('flag')
+            posting_comment = posting.get('comment')
+            posting_metadata = posting.get('metadata', {})
             
-            posting_line = f"  {account}"
+            # Start posting line with optional flag
+            posting_line = f"  "
+            if posting_flag:
+                posting_line += f"{posting_flag} "
+            posting_line += account
             
             if amount and currency:
                 posting_line += f"  {amount} {currency}"
@@ -1219,7 +1243,17 @@ class BeancountJournalAPI:
                     price_symbol = '@@' if is_total_price else '@'
                     posting_line += f" {price_symbol} {price_amount} {price_currency}"
             
+            # Add inline comment if present
+            if posting_comment:
+                posting_line += f"  ; {posting_comment}"
+            
             lines.append(posting_line)
+            
+            # Add posting-level metadata if present (indented 4 spaces total)
+            # Beancount posting metadata: 2 spaces for posting + 2 more for metadata
+            if posting_metadata:
+                for key, value in posting_metadata.items():
+                    lines.append(f"    {key}: \"{value}\"")
         
         return '\n'.join(lines)
 
