@@ -136,7 +136,7 @@ Beancount can automatically calculate one missing amount to balance the transact
 ### Elided Amount with Cost
 ```beancount
 2024-12-30 * "Sold stocks"
-  Assets:Brokerage:AAPL           -10 AAPL {150.00 USD\}
+  Assets:Brokerage:AAPL           -10 AAPL {150.00 USD}
   Assets:Brokerage:Cash          1750.00 USD
   Income:CapitalGains
 ```
@@ -198,7 +198,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 ### Per-Unit Cost - Buying Stocks
 ```beancount
 2024-12-30 * "Buy Apple shares"
-  Assets:Brokerage:AAPL            10 AAPL \{150.00 USD\}
+  Assets:Brokerage:AAPL            10 AAPL {150.00 USD}
   Assets:Brokerage:Cash         -1500.00 USD
 ```
 **Status:** ✅ Fully Supported
@@ -213,7 +213,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 ### Total Cost - With Fees
 ```beancount
 2024-12-30 * "Buy shares with commission"
-  Assets:Brokerage:IVV             10 IVV \{\{1850.00 USD\}\}
+  Assets:Brokerage:IVV             10 IVV {{1850.00 USD}}
   Assets:Brokerage:Cash         -1850.00 USD
 ```
 **Status:** ✅ Fully Supported
@@ -228,7 +228,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 ### Cost with Date
 ```beancount
 2024-12-30 * "Buy shares"
-  Assets:Brokerage:MSFT            20 MSFT \{183.07 USD, 2024-12-30\}
+  Assets:Brokerage:MSFT            20 MSFT {183.07 USD, 2024-12-30}
   Assets:Brokerage:Cash         -3661.40 USD
 ```
 **Status:** ✅ Fully Supported
@@ -240,7 +240,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 ### Cost with Label
 ```beancount
 2024-12-30 * "Buy shares with label"
-  Assets:Brokerage:GOOG            15 GOOG \{140.50 USD, "lot-2024-001"\}
+  Assets:Brokerage:GOOG            15 GOOG {140.50 USD, "lot-2024-001"}
   Assets:Brokerage:Cash         -2107.50 USD
 ```
 **Status:** ✅ Fully Supported
@@ -252,7 +252,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 ### Cost with Both Date and Label
 ```beancount
 2024-12-30 * "Buy shares fully labeled"
-  Assets:Brokerage:TSLA            5 TSLA \{250.00 USD, 2024-12-30, "tesla-dec"\}
+  Assets:Brokerage:TSLA            5 TSLA {250.00 USD, 2024-12-30, "tesla-dec"}
   Assets:Brokerage:Cash         -1250.00 USD
 ```
 **Status:** ✅ Fully Supported
@@ -269,7 +269,7 @@ You can specify both cost and price on the same posting. The cost is used for ba
 
 ```beancount
 2024-12-30 * "Sell Apple shares at profit"
-  Assets:Brokerage:AAPL           -10 AAPL \{150.00 USD\} @ 175.00 USD
+  Assets:Brokerage:AAPL           -10 AAPL {150.00 USD} @ 175.00 USD
   Assets:Brokerage:Cash          1750.00 USD
   Income:CapitalGains            -250.00 USD
 ```
@@ -292,7 +292,7 @@ When selling investments, you can specify which lot to reduce using various matc
 ### Match by Exact Cost
 ```beancount
 2024-12-30 * "Sell specific lot by cost"
-  Assets:Brokerage:MSFT           -20 MSFT \{183.07 USD\}
+  Assets:Brokerage:MSFT           -20 MSFT {183.07 USD}
   Assets:Brokerage:Cash          3900.00 USD
   Income:CapitalGains
 ```
@@ -303,7 +303,7 @@ When selling investments, you can specify which lot to reduce using various matc
 ### Match by Date Only
 ```beancount
 2024-12-30 * "Sell by acquisition date"
-  Assets:Brokerage:MSFT           -20 MSFT \{2024-01-15\}
+  Assets:Brokerage:MSFT           -20 MSFT {2024-01-15}
   Assets:Brokerage:Cash          3900.00 USD
   Income:CapitalGains
 ```
@@ -321,7 +321,7 @@ When selling investments, you can specify which lot to reduce using various matc
 ### Match by Label Only
 ```beancount
 2024-12-30 * "Sell by label"
-  Assets:Brokerage:GOOG           -15 GOOG \{"lot-2024-001"\}
+  Assets:Brokerage:GOOG           -15 GOOG {"lot-2024-001"}
   Assets:Brokerage:Cash          2250.00 USD
   Income:CapitalGains
 ```
@@ -461,7 +461,7 @@ Metadata allows attaching arbitrary key-value data to transactions and postings.
 ### Posting-Level Metadata
 ```beancount
 2024-12-30 * "Stock purchase"
-  Assets:Brokerage:AAPL            10 AAPL \{150.00 USD\}
+  Assets:Brokerage:AAPL            10 AAPL {150.00 USD}
     broker: "E-Trade"
     order-id: "12345"
   Assets:Brokerage:Cash         -1500.00 USD
@@ -671,14 +671,14 @@ The backend generates these formats based on your inputs:
 
 | Your Input | Generated Syntax |
 |------------|------------------|
-| Cost: 150.00 USD | `\{150.00 USD\}` |
-| Cost: 1850.00 USD (total) | `\{\{1850.00 USD\}\}` |
-| Cost date: 2024-01-15 | `\{2024-01-15\}` |
-| Cost label: "lot-001" | `\{"lot-001"\}` |
-| Cost: 150 USD, date + label | `\{150.00 USD, 2024-01-15, "lot-001"\}` |
+| Cost: 150.00 USD | `{150.00 USD}` |
+| Cost: 1850.00 USD (total) | `{{1850.00 USD}}` |
+| Cost date: 2024-01-15 | `{2024-01-15}` |
+| Cost label: "lot-001" | `{"lot-001"}` |
+| Cost: 150 USD, date + label | `{150.00 USD, 2024-01-15, "lot-001"}` |
 | Price: 1.09 CAD | `@ 1.09 CAD` |
 | Price: 436.00 CAD (total) | `@@ 436.00 CAD` |
-| Cost + Price | `\{150.00 USD\} @ 175.00 USD` |
+| Cost + Price | `{150.00 USD} @ 175.00 USD` |
 
 ---
 
