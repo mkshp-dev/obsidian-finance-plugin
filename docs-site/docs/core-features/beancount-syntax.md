@@ -6,7 +6,7 @@ sidebar_position: 2
 
 ## 📝 Overview
 
-While the Unified Transaction Modal simplifies data entry through a friendly interface, understanding the underlying Beancount plain-text syntax is valuable for:
+While the Unified Transaction Modal simplifies data entry through a friendly interface, understanding the underlying Beancount plain-text syntax is valuable for :
 
 - **Direct file editing** in your preferred text editor
 - **Power-user workflows** with scripts and automation
