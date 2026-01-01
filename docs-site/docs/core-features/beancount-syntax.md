@@ -87,7 +87,7 @@ Transaction flags indicate the status of a transaction.
   Expenses:Misc                    10.00 USD
   Assets:Cash                     -10.00 USD
 ```
-**Status:** ⚠️ Partially Supported - Modal requires at least a description, but such transactions can be created via manual editing
+**Status:** ✅ Fully Supported
 
 ---
 
@@ -136,7 +136,7 @@ Beancount can automatically calculate one missing amount to balance the transact
 ### Elided Amount with Cost
 ```beancount
 2024-12-30 * "Sold stocks"
-  Assets:Brokerage:AAPL           -10 AAPL \{150.00 USD\}
+  Assets:Brokerage:AAPL           -10 AAPL {150.00 USD\}
   Assets:Brokerage:Cash          1750.00 USD
   Income:CapitalGains
 ```
