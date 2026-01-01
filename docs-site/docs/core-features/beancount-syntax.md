@@ -223,7 +223,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 2. Click "▶ Advanced (Cost/Price)"
 3. Fill in **Cost Amount**: `1850.00`
 4. Fill in **Cost Currency**: `USD`
-5. **Check** "Total Cost (use \\{\\{\\}\\} instead of \\{\\})"
+5. **Check** "Total Cost (use &#123;&#123;&#125;&#125; instead of &#123;&#125;)"
 
 ### Cost with Date
 ```beancount
@@ -560,8 +560,8 @@ Transactions can mix multiple currencies, useful for forex trading, gifts, or in
 | **Prices & Costs** | | |
 | Per-unit price (@) | ✅ Full | Click **@** button |
 | Total price (@@) | ✅ Full | Via checkbox |
-| Per-unit cost (\\{\\}) | ✅ Full | Click **$** button |
-| Total cost (\\{\\{\\}\\}) | ✅ Full | Via checkbox |
+| Per-unit cost (&#123;&#125;) | ✅ Full | Click **$** button |
+| Total cost (&#123;&#123;&#125;&#125;) | ✅ Full | Via checkbox |
 | Cost with date | ✅ Full | Via date picker |
 | Cost with label | ✅ Full | Via text field |
 | Cost + Price together | ✅ Full | Fill both sections |
@@ -621,7 +621,7 @@ The **$** (Cost) and **@** (Price) buttons expand sections on each posting:
    - **Cost Currency**: Currency of the cost
    - **Cost Date**: Acquisition date (for lot matching)
    - **Cost Label**: Custom identifier for the lot
-   - **Checkbox**: Check for total cost `\\{\\{\\}\\}` instead of per-unit `\\{\\}`
+   - **Checkbox**: Check for total cost &#123;&#123;&#125;&#125; instead of per-unit &#123;&#125;
 
 2. **Conversion Price Section**
    - **Price Amount**: Exchange rate or total amount
