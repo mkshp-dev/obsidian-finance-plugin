@@ -6,7 +6,7 @@ import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
-import { getOpenAccounts } from '../../utils';
+import { getOpenAccounts, getPayees, getTags, getCommodities } from '../../utils';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -87,21 +87,19 @@ export class UnifiedTransactionModal extends Modal {
 
     async fetchData() {
         try {
-            // Use ApiClient to fetch data directly or via Service if exposed
-            const { apiClient } = this.plugin;
-
+            // Use direct BQL queries instead of backend API
             // Run all requests in parallel for better performance
             const [accountsResult, payeesResult, tagsResult, commoditiesResult] = await Promise.allSettled([
                 getOpenAccounts(this.plugin),
-                apiClient.get<{payees: string[]}>('/payees'),
-                apiClient.get<{tags: string[]}>('/tags'),
-                apiClient.get<{commodities: {name: string}[]}>('/commodities')
+                getPayees(this.plugin),
+                getTags(this.plugin),
+                getCommodities(this.plugin)
             ]);
 
             const accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : [];
-            const payees = payeesResult.status === 'fulfilled' ? payeesResult.value.payees : [];
-            const tags = tagsResult.status === 'fulfilled' ? tagsResult.value.tags : [];
-            const fetchedCurrencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.commodities.map(c => c.name) : [];
+            const payees = payeesResult.status === 'fulfilled' ? payeesResult.value : [];
+            const tags = tagsResult.status === 'fulfilled' ? tagsResult.value : [];
+            const fetchedCurrencies = commoditiesResult.status === 'fulfilled' ? commoditiesResult.value.map(c => c.name) : [];
 
             const currencies = fetchedCurrencies.length > 0 ? fetchedCurrencies : ['INR', 'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
 

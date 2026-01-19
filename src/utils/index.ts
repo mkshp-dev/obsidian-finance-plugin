@@ -787,6 +787,109 @@ export async function getOpenAccounts(plugin: BeancountPlugin): Promise<string[]
 }
 
 /**
+ * Fetches all distinct payees from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<string[]>} Array of distinct payee names.
+ */
+export async function getPayees(plugin: BeancountPlugin): Promise<string[]> {
+	try {
+		const query = `SELECT DISTINCT payee`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract payee names
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		return records
+			.map((row: any) => row.payee)
+			.filter((payee: string) => payee && payee.trim() !== '')
+			.sort();
+	} catch (error) {
+		console.error('[getPayees] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
+ * Fetches all distinct tags from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<string[]>} Array of distinct tag names.
+ */
+export async function getTags(plugin: BeancountPlugin): Promise<string[]> {
+	try {
+		const query = `SELECT DISTINCT joinstr(tags) FROM entries WHERE tags IS NOT NULL`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract tags
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		// The query returns unique sets of tags as comma-separated strings
+		// e.g., "trip,food", "groceries", "trip,flight"
+		// We need to split each set and flatten to get individual distinct tags
+		const allTags = new Set<string>();
+		
+		records.forEach((row: any) => {
+			// The column name from BQL is 'joinstr(tags)' or might be the first property
+			const tagSet = row['joinstr(tags)'] || row.tags || Object.values(row)[0];
+			
+			if (tagSet && typeof tagSet === 'string') {
+				// Split the comma-separated tags and clean each one
+				const tags = tagSet.split(',').map((t: string) => t.trim().replace(/^#/, ''));
+				tags.forEach((tag: string) => {
+					if (tag) allTags.add(tag);
+				});
+			}
+		});
+		
+		return Array.from(allTags).sort();
+	} catch (error) {
+		console.error('[getTags] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
+ * Fetches all distinct commodities from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<Array<{name: string}>>} Array of commodity objects with name property.
+ */
+export async function getCommodities(plugin: BeancountPlugin): Promise<Array<{name: string}>> {
+	try {
+		const query = `SELECT name AS name_ FROM #commodities GROUP BY name`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract commodity names
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		// Map to the expected format: array of objects with 'name' property
+		return records
+			.map((row: any) => ({ name: row.name_ || row.name || Object.values(row)[0] as string }))
+			.filter((commodity: {name: string}) => commodity.name && commodity.name.trim() !== '')
+			.sort((a: {name: string}, b: {name: string}) => a.name.localeCompare(b.name));
+	} catch (error) {
+		console.error('[getCommodities] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
  * Appends an Open directive to the end of the Beancount file.
  * 
  * @param {BeancountPlugin} plugin - The plugin instance (for settings).

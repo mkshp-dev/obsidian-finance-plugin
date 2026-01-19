@@ -557,33 +557,7 @@ class BeancountJournalAPI:
             'has_more': result['has_more']
         }
     
-    def get_payees(self) -> List[str]:
-        """
-        Get all unique payees from transactions.
 
-        Returns:
-            List[str]: A sorted list of payee strings.
-        """
-        payees = set()
-        for entry in self.entries:
-            if isinstance(entry, data.Transaction) and entry.payee:
-                payees.add(entry.payee)
-        
-        return sorted(list(payees))
-    
-    def get_tags(self) -> List[str]:
-        """
-        Get all unique tags from transactions.
-
-        Returns:
-            List[str]: A sorted list of tag strings.
-        """
-        tags = set()
-        for entry in self.entries:
-            if isinstance(entry, data.Transaction) and entry.tags:
-                tags.update(entry.tags)
-        
-        return sorted(list(tags))
     
     def find_first_directive_date(self) -> Optional[date]:
         """
@@ -1550,47 +1524,7 @@ def create_app(beancount_file: str, create_backups: bool = True, max_backup_file
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
     
-    @app.route('/payees', methods=['GET'])
-    def get_payees():
-        """Get all payees"""
-        try:
-            payees = api.get_payees()
-            return jsonify({'payees': payees})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/tags', methods=['GET'])
-    def get_tags():
-        """Get all tags"""
-        try:
-            tags = api.get_tags()
-            return jsonify({'tags': tags})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/commodities/<symbol>', methods=['PUT'])
-    def put_commodity(symbol: str):
-        """Update or create commodity metadata"""
-        try:
-            if not request.json:
-                return jsonify({'error': 'No JSON data provided'}), 400
-            metadata = request.json.get('metadata', {})
-            result = api.update_commodity_metadata(symbol, metadata)
-            if result.get('success'):
-                return jsonify(result), 200
-            else:
-                return jsonify(result), 400
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/statistics', methods=['GET'])
-    def get_statistics():
-        """Get ledger statistics"""
-        try:
-            stats = api.get_statistics()
-            return jsonify(stats)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+
 
     @app.route('/transactions/<transaction_id>', methods=['PUT'])
     def update_transaction(transaction_id: str):
