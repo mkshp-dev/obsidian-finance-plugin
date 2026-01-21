@@ -6,7 +6,7 @@ import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
-import { getOpenAccounts, getPayees, getTags, getCommodities } from '../../utils';
+import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote } from '../../utils';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -120,24 +120,155 @@ export class UnifiedTransactionModal extends Modal {
     async onAdd(entryData: any) {
         try {
             Logger.log('Adding entry', entryData);
-            // Use JournalService
-            const success = await this.plugin.journalService.createEntry(entryData);
-            if (success) {
-                new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} added successfully!`);
+            
+            // Handle different entry types
+            if (entryData.type === 'transaction') {
+                // Use direct file writing for transactions
+                const result = await createTransaction(this.plugin, entryData);
                 
-                // Refresh the store
-                await this.plugin.journalStore.refresh();
+                if (result.success) {
+                    new Notice('Transaction added successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
 
-                // Call refresh callback if provided (legacy)
-                if (this.onRefreshCallback) {
-                    try {
-                        await this.onRefreshCallback();
-                    } catch (error) {
-                        console.error('Error refreshing dashboard:', error);
+                    // Call refresh callback if provided (legacy)
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
                     }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to add transaction: ${result.error || 'Unknown error'}`);
                 }
+            } else if (entryData.type === 'balance') {
+                // Use direct file writing for balance assertions
+                const result = await createBalanceAssertion(
+                    this.plugin,
+                    entryData.date,
+                    entryData.account,
+                    entryData.amount,
+                    entryData.currency,
+                    entryData.tolerance,
+                    this.plugin.settings.createBackups ?? true
+                );
                 
-                this.close();
+                if (result.success) {
+                    new Notice('Balance assertion added successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to add balance: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryData.type === 'open') {
+                // Use direct file writing for open directives
+                const result = await saveOpenDirective(
+                    this.plugin,
+                    entryData.date,
+                    entryData.account,
+                    entryData.currencies || [],
+                    entryData.booking,
+                    this.plugin.settings.createBackups ?? true
+                );
+                
+                if (result.success) {
+                    new Notice('Open directive added successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to add open directive: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryData.type === 'close') {
+                // Use direct file writing for close directives
+                const result = await saveCloseDirective(
+                    this.plugin,
+                    entryData.date,
+                    entryData.account,
+                    this.plugin.settings.createBackups ?? true
+                );
+                
+                if (result.success) {
+                    new Notice('Close directive added successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to add close directive: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryData.type === 'note') {
+                // Use direct file writing for notes
+                const result = await createNote(
+                    this.plugin,
+                    entryData.date,
+                    entryData.account,
+                    entryData.comment,
+                    entryData.tags || [],
+                    entryData.links || [],
+                    this.plugin.settings.createBackups ?? true
+                );
+                
+                if (result.success) {
+                    new Notice('Note added successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to add note: ${result.error || 'Unknown error'}`);
+                }
+            } else {
+                // Pad entries have no UI - this code path is unreachable
+                new Notice(`Creating ${entryData.type} entries is not supported through the UI.`);
+                Logger.warn(`Attempted to create ${entryData.type} entry without UI support`);
             }
         } catch (error) {
             Logger.error('Error adding entry:', error);
@@ -151,24 +282,35 @@ export class UnifiedTransactionModal extends Modal {
         try {
             const entryId = this.transaction?.id || this.entry?.id;
             Logger.log('Updating entry', { id: entryId, data: entryData });
-            // Use JournalService
-            const success = await this.plugin.journalService.updateTransaction(entryId!, entryData);
-            if (success) {
-                new Notice(`${entryData.type.charAt(0).toUpperCase() + entryData.type.slice(1)} updated successfully!`);
+            
+            // Handle different entry types
+            if (entryData.type === 'transaction') {
+                // Use direct file writing for transactions
+                const result = await updateTransaction(this.plugin, entryId!, entryData);
                 
-                // Refresh the store
-                await this.plugin.journalStore.refresh();
+                if (result.success) {
+                    new Notice('Transaction updated successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
 
-                // Call refresh callback if provided
-                if (this.onRefreshCallback) {
-                    try {
-                        await this.onRefreshCallback();
-                    } catch (error) {
-                        console.error('Error refreshing dashboard:', error);
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
                     }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to update transaction: ${result.error || 'Unknown error'}`);
                 }
-                
-                this.close();
+            } else {
+                // Open/Close entries have no edit UI - this code path is unreachable
+                new Notice(`Updating ${entryData.type} entries is not supported through the UI.`);
+                Logger.warn(`Attempted to update ${entryData.type} entry without UI support`);
             }
         } catch (error) {
             Logger.error('Error updating entry:', error);
@@ -178,25 +320,39 @@ export class UnifiedTransactionModal extends Modal {
 
     async onDelete(entryId: string) {
         try {
-             Logger.log('Deleting entry', entryId);
-             // Use JournalService
-            const success = await this.plugin.journalService.deleteTransaction(entryId);
-            if (success) {
-                new Notice('Entry deleted successfully!');
+            Logger.log('Deleting entry', entryId);
+            
+            // Determine entry type
+            const entryType = this.transaction?.type || this.entry?.type || 'transaction';
+            
+            if (entryType === 'transaction') {
+                // Use direct file writing for transactions
+                const result = await deleteTransaction(this.plugin, entryId);
                 
-                // Refresh the store
-                await this.plugin.journalStore.refresh();
+                if (result.success) {
+                    new Notice('Transaction deleted successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
 
-                // Call refresh callback if provided
-                if (this.onRefreshCallback) {
-                    try {
-                        await this.onRefreshCallback();
-                    } catch (error) {
-                        console.error('Error refreshing dashboard:', error);
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
                     }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to delete transaction: ${result.error || 'Unknown error'}`);
                 }
-                
-                this.close();
+            } else {
+                // Open/Close entries have no delete UI - this code path is unreachable
+                const entryType = entryId.split('_')[0];
+                new Notice(`Deleting ${entryType} entries is not supported through the UI.`);
+                Logger.warn(`Attempted to delete ${entryType} entry without UI support`);
             }
         } catch (error) {
             console.error('Error deleting entry:', error);
