@@ -41,9 +41,9 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 ### 📋 **Journal View** ⭐ **ENHANCED**
 - **Complete Transaction Display**: Full Beancount ledger format with all postings and metadata
 - **Comprehensive Entry Management**: View, edit, and delete all entry types (transactions, balance assertions, notes)
-- **Auto-starting Backend**: Python backend starts automatically when needed
-- **Advanced Filtering**: Server-side filtering by account, payee, tags, date ranges, or search terms
-- **Real-time API Status**: Visual connection indicator and automatic backend management
+- **BQL-Powered Queries**: Efficient data retrieval using Beancount Query Language
+- **Advanced Filtering**: Client-side filtering by account, payee, tags, date ranges, or search terms
+- **Direct File Operations**: All CRUD operations performed directly on Beancount files with atomic writes
 - **Fava-style Interface**: Clean, expandable transaction cards with proper formatting
 
 ### 🔍 **BQL Code Blocks & Inline Queries** ⭐ **NEW**
@@ -64,11 +64,13 @@ A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md
 
 This plugin integrates with your existing Beancount setup:
 
-1. **Python 3.8+**
-2. **Beancount v3+**: Install via `pip install beancount`
-3. **bean-query**: Command-line tool for querying Beancount files
+1. **Beancount v3+**: Install via `pip install beancount`
+2. **bean-query**: Command-line tool for querying Beancount files (included with Beancount)
+3. **bean-check**: Validation tool (included with Beancount)
 4. **bean-price** *(optional)*: For automatic commodity price fetching
 5. **WSL Support**: Full compatibility for Windows users running Beancount in WSL
+
+**Note**: Python is only required for Beancount CLI tools. No separate backend server needed.
 
 ---
 
@@ -111,35 +113,21 @@ This plugin integrates with your existing Beancount setup:
 - **BQL Code Blocks**: Display preferences for query results  
 - **BQL Shortcuts Template**: Custom shorthand query configuration
 
-## Python Backend (Auto-starting)
+### Architecture
 
-The **Journal tab** uses a Python backend that **starts automatically** when needed.
+The plugin uses a **pure TypeScript/Svelte architecture** with no backend server:
 
-### Prerequisites
-
-1. **Python 3.8+** installed and available in your system PATH
-2. **Beancount** package: `pip install beancount`
-
-The backend will automatically install Flask and flask-cors when first started.
+- **BQL Queries**: Direct execution via `bean-query` CLI for all data retrieval
+- **File Operations**: Atomic writes with backup support for all CRUD operations
+- **Transaction Parsing**: Smart line-based parsing to preserve formatting and comments
+- **Cross-platform**: Full support for Windows, macOS, Linux, and WSL
 
 ### How It Works
 
-- When you open the Journal tab, the backend starts automatically as a child process
-- No manual commands or scripts needed
-- The backend runs on `http://localhost:5001` by default
-- Backend stops automatically when you close Obsidian
-
-### Backend Features
-
-- **Automatic Process Management**: Starts and stops with the plugin
-- **Complete Transaction Parsing**: Full Beancount file parsing with all postings, metadata, and tags
-- **Server-side Filtering**: High-performance filtering by date, account, payee, tags, and search terms
-- **Auto-reload**: Reload Beancount files without restarting
-- **Error Recovery**: Automatic retry on startup failures
-
-### Troubleshooting
-
-If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
+- All data queries execute via Beancount's `bean-query` command-line tool
+- Transactions, balances, and notes are read/written directly to your Beancount file
+- File modifications use atomic writes (temp file + rename) with optional backups
+- No server processes, no network calls, no API dependencies
 
 ---
 
@@ -263,16 +251,15 @@ SELECT year, month, sum(position) WHERE account ~ '^Expenses' GROUP BY year, mon
 
 ## 🛠️ Troubleshooting
 
-### Backend Issues
+### Command Execution Issues
 
-If the Journal tab shows "Backend API Starting..." for more than 30 seconds:
+If queries or operations fail:
 
-1. **Check Python Installation**: Ensure `python3` or `python` command works in terminal
-2. **Install Beancount**: Run `pip install beancount`
-3. **Check Console**: Open Developer Tools (Ctrl+Shift+I) for error messages
-4. **Verify File Path**: Ensure Beancount file path is correct in plugin settings
-
-**Note**: Other tabs work independently. The Journal tab requires Python 3.8+ and Beancount, but handles all setup automatically.
+1. **Check Beancount Installation**: Ensure `bean-query` and `bean-check` commands work in terminal
+2. **Verify File Path**: Ensure Beancount file path is correct in plugin settings
+3. **Test Commands**: Use Settings → Connection → "Test All Commands" for validation
+4. **Check Console**: Open Developer Tools (Ctrl+Shift+I) for detailed error messages
+5. **WSL Users**: Ensure path conversion is working properly for Windows/WSL file access
 
 ### Liabilities & Net Worth Presentation
 
@@ -287,11 +274,10 @@ This presentation makes the Snapshot easier to read while preserving accounting 
 
 The plugin includes a comprehensive connection validation panel that ensures all components work correctly:
 
-**4-Command Testing Suite**:
+**3-Command Testing Suite**:
 - **Bean Check**: Validates Beancount file syntax and reports errors
 - **Bean Query**: Tests BQL query execution with sample queries
 - **Bean Query CSV**: Validates CSV output format for data export
-- **Backend API Server**: Tests Python backend startup with --validate-only mode
 
 **Smart System Detection**:
 - Platform detection (Windows, macOS, Linux, WSL)
@@ -393,9 +379,9 @@ This approach provides a reliable, user-friendly way to configure automated pric
 - **Edit and Delete**: Full CRUD operations with inline editing modals
 - **Multiple Entry Types**: Support for transactions, balance assertions, and notes
 - Expand transactions to see full details including metadata and tags
-- Advanced server-side filtering by account, payee, tags, date ranges
-- **Auto-starting backend** - Python API starts automatically when needed
-- Real-time backend status monitoring and automatic reconnection
+- Advanced filtering by account, payee, tags, date ranges
+- **Direct file operations** - All changes written atomically with backups
+- Real-time updates reflected immediately across all views
 
 ### Creating Entries ⭐ **NEW UNIFIED MODAL**
 1. **Command Palette**: `Ctrl/Cmd + P` → "Add Beancount Transaction"

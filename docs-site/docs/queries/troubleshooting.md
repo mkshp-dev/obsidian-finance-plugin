@@ -8,17 +8,20 @@ This guide addresses common issues with connectivity, queries, and data display.
 
 ## 🔌 Connection Issues
 
-### "Backend API Starting..." loops forever
-1.  **Check Console**: Open Developer Tools (`Ctrl+Shift+I`) and look for red errors in the Console.
-2.  **Verify Python**: Ensure `flask` and `flask-cors` are installed (`pip install flask flask-cors`).
-3.  **Port Conflict**: The backend runs on port `5013`. Ensure no other service is using it.
-
 ### "bean-query: command not found"
 - **PATH Issue**: Obsidian might not inherit your shell's PATH.
-- **Solution**: Go to Settings and enter the **absolute path** to the executable (e.g., `/usr/local/bin/bean-query`).
+- **Solution**: Go to Settings → Connection and enter the **absolute path** to the executable (e.g., `/usr/local/bin/bean-query`).
+- **Test**: Use the "Test All Commands" button to verify detection.
+
+### "File not found" errors
+- Ensure your **Beancount File Path** in settings is correct and uses the appropriate format:
+  - Windows: `C:\Users\YourName\Documents\finances.beancount`
+  - macOS/Linux: `/home/username/finances.beancount`
+  - WSL: `/mnt/c/Users/YourName/Documents/finances.beancount`
 
 ### WSL Path Errors
 - If using WSL, ensure your **File Path** in settings uses the Linux format (`/mnt/c/Users/...`), not Windows format (`C:\Users\...`).
+- The plugin will automatically convert paths for command execution.
 
 ## 📊 Query Issues
 

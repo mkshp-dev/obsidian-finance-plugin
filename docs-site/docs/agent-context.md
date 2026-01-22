@@ -8,74 +8,87 @@ This document provides technical context for AI agents and developers working on
 
 ## 🏗️ Architecture
 
-The plugin uses a hybrid architecture:
+The plugin uses a **pure TypeScript/Svelte architecture**:
 
 1.  **Frontend (TypeScript/Svelte)**:
     - Runs within Obsidian (Electron).
-    - Manages UI, Settings, and File I/O for simple operations.
-    - Uses Svelte for views (`src/views/`, `src/components/`).
-    - Organized by modules: `src/models`, `src/services`, `src/stores`.
+    - Manages UI, Settings, and all File I/O operations.
+    - Uses Svelte for views (`src/ui/views/`, `src/ui/partials/`).
+    - Organized by modules: `src/models`, `src/services`, `src/stores`, `src/controllers`.
 
-2.  **Backend (Python/Flask)**:
-    - Independent process managed by `src/core/backend-process.ts`.
-    - `src/backend/journal_api.py`: The main entry point.
-    - Handles complex Beancount parsing, BQL queries, and filtering.
-    - Exposes a local REST API (default port 5001).
+2.  **Beancount Integration**:
+    - Direct CLI execution of `bean-query`, `bean-check`, `bean-price`.
+    - All data queries use BQL (Beancount Query Language).
+    - No intermediate server or API layer.
 
-3.  **Communication**:
-    - Frontend calls Backend via HTTP (`src/api/client.ts`).
-    - `BackendManager` handles process lifecycle (start, stop, health checks).
+3.  **File Operations**:
+    - Direct file reads/writes with atomic operations.
+    - Backup support before modifications.
+    - Line-based parsing to preserve formatting.
 
 ## 📂 Key Directories
 
 - **`src/`**: TypeScript source code.
     - **`main.ts`**: Plugin entry point.
     - **`settings.ts`**: Settings tab definition.
-    - **`core/`**: Core logic (BackendProcess, Lifecycle).
-    - **`backend/`**: Python source code.
-    - **`ui/`**: Svelte components and views.
-    - **`services/`**: Business logic services (JournalService, TransactionService).
+    - **`ui/`**: Svelte components, views, and modals.
+    - **`controllers/`**: Tab controllers managing state and data flow.
+    - **`services/`**: Business logic services (JournalService).
+    - **`stores/`**: Svelte stores for reactive state management.
+    - **`utils/`**: Utility functions including all CRUD operations.
     - **`types/`**: TypeScript definitions.
 
 - **`docs-site/`**: Docusaurus documentation.
 
 ## 🧩 Key Patterns
 
-### Backend Management
-- The backend is "Auto-starting".
-- `BackendProcess` spawns the python script.
-- It polls `/health` to check readiness.
-- It creates a dedicated `.venv` if needed (logic in `journal_api.py` or startup scripts).
+### Direct CLI Execution
+- All BQL queries execute via `runQuery()` function in `src/utils/index.ts`.
+- Spawns `bean-query` as child process with proper shell escaping.
+- Parses CSV output using `csv-parse/sync` library.
+- Handles WSL path conversion automatically via `SystemDetector`.
 
 ### Safe File Writes
 - **NEVER** overwrite user data without a backup.
 - Pattern:
-    1.  Read file.
-    2.  Write `<file>.backup.<timestamp>`.
-    3.  Perform modification.
-    4.  Write new content to `<file>`.
+    1.  Read file content.
+    2.  Create backup: `<file>.backup.<timestamp>` (if enabled).
+    3.  Perform modification in-memory.
+    4.  Write to temp file: `<file>.tmp`.
+    5.  Atomic rename temp to original.
 
 ### BQL Execution
-- **Code Blocks**: Handled by `src/main.ts` registering a markdown code block processor.
-- **Inline Queries**: Handled by regex parsing in `src/main.ts` (or dedicated processor).
-- Both use `BeanQueryService` to call `bean-query` (either via CLI or Backend API).
+- **Code Blocks**: Handled by `src/ui/markdown/BQLCodeBlockProcessor.ts` registering a markdown code block processor.
+- **Inline Queries**: Handled by `src/ui/markdown/InlineBQLProcessor.ts` with regex parsing.
+- Both use `runQuery()` function for CLI execution.
 
-### System Detection
-- `src/utils/SystemDetector.ts` is the source of truth for paths.
-- Handles `wsl` path conversion (`/mnt/c/...` to/from `C:\...`).
+### CRUD Operations
+All entry creation, updates, and deletions are handled by functions in `src/utils/index.ts`:
+- `createTransaction()`, `updateTransaction()`, `deleteTransaction()`
+- `createBalanceAssertion()`, `updateBalance()`, `deleteBalance()`
+- `createNote()`, `updateNote()`, `deleteNote()`
+- Each uses BQL queries to find line numbers, then performs atomic file operations.
 
-## 🛠️ Development Tips
-
-- **Build**: `npm run build` (uses esbuild).
-- **Hot Reload**: `npm run dev` (watches changes).
-- **Logs**: Backend stdout/stderr is piped to Obsidian's Developer Console.
+### System DEnable debug mode in settings, check Obsidian's Developer Console (Ctrl+Shift+I).
 - **Styles**: `styles.css` contains global styles; Svelte components use scoped styles.
+- **Testing**: Use Settings → Connection → "Test All Commands" to validate setup.
 
 ## 🤖 Common Tasks for Agents
 
-1.  **Adding a new Visual**:
+1.  **Adding a new Visual Component**:
     - Create Svelte component in `src/ui/partials/`.
-    - Register in `UnifiedDashboardView.svelte`.
+    - Register in appropriate view (e.g., `UnifiedDashboardView.svelte`).
+    - Fetch data via BQL queries using `runQuery()`.
+
+2.  **Adding New CRUD Operations**:
+    - Add function to `src/utils/index.ts`.
+    - Follow atomic write pattern (read → backup → modify → temp write → rename).
+    - Use BQL to find line numbers, scan to find boundaries.
+
+3.  **Updating Documentation**:
+    - Edit files in `docs-site/docs/`.
+    - Follow the structure defined in `sidebars.ts`.
+    - Update README.md for user-facing feature changes
     - Fetch data via `BeanQueryService`.
 
 2.  **Extending the API**:

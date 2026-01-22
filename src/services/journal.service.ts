@@ -48,7 +48,6 @@ export class JournalService {
             promises.push(getNoteEntries(this.plugin, filters, 1, 10000)); // Fetch all for merging
         }
         
-        // TODO: Implement pad entries via BQL queries
         
         if (promises.length === 0) {
             return {
