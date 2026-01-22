@@ -2,7 +2,6 @@
 
 import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
-import type { ApiClient } from '../api/client';
 import * as queries from '../queries/index';
 import { 
     parseCommoditiesListCSV, 
@@ -64,7 +63,6 @@ export interface CommoditiesState {
  */
 export class CommoditiesController {
     private plugin: BeancountPlugin;
-    private apiClient: ApiClient;
     
     // Reactive stores
     /** Store for the full list of commodities. */
@@ -92,8 +90,6 @@ export class CommoditiesController {
      */
     constructor(plugin: BeancountPlugin) {
         this.plugin = plugin;
-        // Inject ApiClient directly from the plugin instance
-        this.apiClient = plugin.apiClient;
         this.setupReactivity();
         console.debug('[CommoditiesController] initialized');
     }

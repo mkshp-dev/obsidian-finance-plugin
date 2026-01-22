@@ -23,8 +23,7 @@
     let commandTests = {
         beanCheck: { isRunning: false, isValid: null, command: '', output: '', error: '' },
         beanQuery: { isRunning: false, isValid: null, command: '', output: '', error: '' },
-        beanQueryCsv: { isRunning: false, isValid: null, command: '', output: '', error: '' },
-        backend: { isRunning: false, isValid: null, command: '', output: '', error: '' }
+        beanQueryCsv: { isRunning: false, isValid: null, command: '', output: '', error: '' }
     };
     
     // Auto-detection results
@@ -335,55 +334,6 @@
         }
     }
 
-    async function testBackend() {
-        if (!optimalCommands.python || !fullFilePath) {
-            commandTests.backend.error = 'Python executable or file path not available';
-            return;
-        }
-
-        commandTests.backend.isRunning = true;
-        commandTests.backend.isValid = null;
-
-        // Construct backend script path
-        const vaultPath = plugin.app.vault.adapter.getBasePath();
-        let backendScriptPath;
-        
-        if (optimalCommands.useWSL && platform === 'win32') {
-            // For WSL: Convert Windows vault path to WSL format, then append Unix-style plugin path
-            const match = vaultPath.match(/^([A-Za-z]):(.*)/);
-            if (match) {
-                const driveLetter = match[1].toLowerCase();
-                const restOfPath = match[2].replace(/\\/g, '/');
-                const wslVaultPath = `/mnt/${driveLetter}${restOfPath}`;
-                backendScriptPath = `${wslVaultPath}/.obsidian/plugins/obsidian-finance-plugin/src/backend/journal_api.py`;
-            } else {
-                // Fallback if path doesn't match expected Windows format
-                backendScriptPath = `${vaultPath}/.obsidian/plugins/obsidian-finance-plugin/src/backend/journal_api.py`;
-            }
-        } else {
-            // For Windows native: Use Windows-style path separators throughout
-            backendScriptPath = `${vaultPath}\\.obsidian\\plugins\\obsidian-finance-plugin\\src\\backend\\journal_api.py`;
-        }
-
-        commandTests.backend.command = `${optimalCommands.python} "${backendScriptPath}" "${fullFilePath}" --port 5013 --host localhost --validate-only`;
-        
-        try {
-            const systemDetector = SystemDetector.getInstance();
-            // Use shorter timeout for backend test since it should start quickly or fail fast
-            const testResult = await systemDetector.testCommand(commandTests.backend.command, 10000);
-            
-            commandTests.backend.isValid = testResult.success;
-            commandTests.backend.output = testResult.output || '';
-            commandTests.backend.error = testResult.error || '';
-            
-        } catch (error) {
-            commandTests.backend.isValid = false;
-            commandTests.backend.error = `Error: ${error.message}`;
-        } finally {
-            commandTests.backend.isRunning = false;
-        }
-    }
-
     async function runAllTests() {
         if (!selectedFile) {
             validationResult = { isValid: false, message: 'Please select a beancount file first' };
@@ -397,13 +347,11 @@
             await testBeanCheck();
             await testBeanQuery();
             await testBeanQueryCsv();
-            await testBackend();
 
             // Update overall validation result
             const allValid = commandTests.beanCheck.isValid && 
                            commandTests.beanQuery.isValid && 
-                           commandTests.beanQueryCsv.isValid &&
-                           commandTests.backend.isValid;
+                           commandTests.beanQueryCsv.isValid;
             
             if (allValid) {
                 validationResult = { 
@@ -972,50 +920,6 @@
                     {#if commandTests.beanQueryCsv.output}
                         <div class="test-output">
                             <strong>Output:</strong> <pre>{commandTests.beanQueryCsv.output.slice(0, 200)}{commandTests.beanQueryCsv.output.length > 200 ? '...' : ''}</pre>
-                        </div>
-                    {/if}
-                </div>
-
-                <!-- Backend Test -->
-                <div class="command-test-item">
-                    <div class="test-header">
-                        <h5>4. Backend API Server</h5>
-                        <button 
-                            on:click={testBackend} 
-                            disabled={commandTests.backend.isRunning || !optimalCommands.python}
-                            class="test-individual-btn"
-                            class:running={commandTests.backend.isRunning}
-                        >
-                            {#if commandTests.backend.isRunning}
-                                🔄 Testing...
-                            {:else}
-                                🧪 Test
-                            {/if}
-                        </button>
-                        <span class="test-status">
-                            {#if commandTests.backend.isRunning}
-                                🔄
-                            {:else if commandTests.backend.isValid === true}
-                                ✅
-                            {:else if commandTests.backend.isValid === false}
-                                ❌
-                            {:else}
-                                ⭕
-                            {/if}
-                        </span>
-                    </div>
-                    <div class="test-command">
-                        <strong>Command:</strong> 
-                        <code>{commandTests.backend.command || `${optimalCommands.python || 'python'} "vault/.obsidian/plugins/obsidian-finance-plugin/src/backend/journal_api.py" "${fullFilePath}" --port 5013 --host localhost --validate-only`}</code>
-                    </div>
-                    {#if commandTests.backend.error}
-                        <div class="test-error">
-                            <strong>Error:</strong> {commandTests.backend.error}
-                        </div>
-                    {/if}
-                    {#if commandTests.backend.output}
-                        <div class="test-output">
-                            <strong>Output:</strong> <pre>{commandTests.backend.output.slice(0, 200)}{commandTests.backend.output.length > 200 ? '...' : ''}</pre>
                         </div>
                     {/if}
                 </div>

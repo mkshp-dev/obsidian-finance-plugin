@@ -1,9 +1,88 @@
-# Changelog
+6# Changelog
 
 All notable changes to the Obsidian Finance Plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.0.0] - 2026-01-22
+
+### 🚀 **Major Architecture Overhaul**
+
+This is a **breaking release** that fundamentally changes the plugin architecture, removing the Python backend entirely for a simpler, more reliable design.
+
+### Changed 🔄 **BREAKING CHANGES**
+
+#### **Complete Backend Removal**
+- **Removed Python Flask Backend**: Eliminated the auto-starting Python server (`journal_api.py`)
+- **Direct CLI Integration**: All operations now use direct `bean-query` execution
+- **No API Layer**: Removed HTTP API client and backend process management
+- **Simpler Dependencies**: No longer requires Flask, flask-cors, or virtual environment setup
+
+#### **New Pure TypeScript Architecture**
+- **BQL-Only Queries**: All data retrieval via direct Beancount Query Language execution
+- **Atomic File Operations**: Direct file reads/writes with backup support
+- **Client-Side Processing**: All filtering and processing done in TypeScript
+- **Improved Reliability**: No server startup delays or connection issues
+
+### Added ⭐ **NEW FEATURES**
+
+#### **Direct File CRUD Operations**
+- **New Transaction Functions**: `updateTransaction()` with proper header detection (scans backward from posting lines)
+- **Balance Operations**: `updateBalance()`, `deleteBalance()` with correct BQL queries using `#entries` table
+- **Note Operations**: `updateNote()`, `deleteNote()` with proper entry type filtering
+- **Smart Line Detection**: Automatic scanning to find transaction boundaries preserving formatting
+
+#### **Enhanced Testing**
+- **3-Command Test Suite**: Bean Check, Bean Query, Bean Query CSV (removed backend test)
+- **Streamlined Validation**: Faster, simpler command testing without server dependencies
+
+### Fixed 🐛 **BUG FIXES**
+
+#### **Transaction Editing**
+- **Fixed Duplicate Headers**: Transaction edits now properly replace entire transaction instead of creating duplicate header lines
+- **Proper Line Detection**: BQL queries return posting lines, code now scans backward to find transaction headers
+- **Complete Replacement**: Full transaction block (header + all postings) replaced atomically
+
+#### **BQL Query Corrections**
+- **Fixed Balance Queries**: Changed from non-existent `#balances` table to `#entries` with `type='balance'` filter
+- **Fixed Note Queries**: Changed from non-existent `#notes` table to `#entries` with `type='note'` filter
+- **Proper Column Access**: Updated queries to use `filename` and `lineno` columns from `#entries` table
+
+### Removed 🗑️ **DEPRECATED**
+
+#### **Backend Infrastructure**
+- Removed `src/backend/journal_api.py` (1673 lines)
+- Removed `src/core/backend-process.ts` (289 lines)
+- Removed `src/api/client.ts` (116 lines)
+- Removed `src/api/endpoints.ts` (16 lines)
+- Removed backend API methods from `JournalService`
+- Removed backend startup/management code from `main.ts`
+- Removed Flask dependency from requirements
+
+#### **Settings & UI**
+- Removed backend testing from Connection settings
+- Removed backend status indicators
+- Removed API connection monitoring
+- Updated documentation to reflect new architecture
+
+### Migration Guide
+
+For users upgrading from v1.x:
+
+1. **No Action Required**: The plugin will automatically use direct CLI execution
+2. **Dependencies**: Only Beancount CLI tools needed (`bean-query`, `bean-check`, `bean-price`)
+3. **Performance**: May notice slightly slower initial queries (no caching), but more reliable
+4. **Functionality**: All features work identically, just via different implementation
+
+### Benefits of New Architecture
+
+- ✅ **Simpler Setup**: No Python backend to configure or troubleshoot
+- ✅ **More Reliable**: No server startup failures or connection issues
+- ✅ **Faster Startup**: Plugin loads instantly without waiting for backend
+- ✅ **Smaller Footprint**: ~2000 lines of code removed
+- ✅ **Easier Debugging**: All operations visible in Developer Console
+- ✅ **Cross-Platform**: Better WSL support without HTTP layer complications
 
 ## [1.0.0-beta.1] - 2025-11-10
 
