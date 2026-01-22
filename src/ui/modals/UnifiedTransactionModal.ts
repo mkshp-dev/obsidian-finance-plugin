@@ -6,7 +6,7 @@ import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
-import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote } from '../../utils';
+import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote, updateBalance, deleteBalance, updateNote, deleteNote } from '../../utils';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -307,6 +307,52 @@ export class UnifiedTransactionModal extends Modal {
                 } else {
                     new Notice(`Failed to update transaction: ${result.error || 'Unknown error'}`);
                 }
+            } else if (entryData.type === 'balance') {
+                // Use direct file writing for balance updates
+                const result = await updateBalance(this.plugin, entryId!, entryData);
+                
+                if (result.success) {
+                    new Notice('Balance updated successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to update balance: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryData.type === 'note') {
+                // Use direct file writing for note updates
+                const result = await updateNote(this.plugin, entryId!, entryData);
+                
+                if (result.success) {
+                    new Notice('Note updated successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to update note: ${result.error || 'Unknown error'}`);
+                }
             } else {
                 // Open/Close entries have no edit UI - this code path is unreachable
                 new Notice(`Updating ${entryData.type} entries is not supported through the UI.`);
@@ -347,6 +393,50 @@ export class UnifiedTransactionModal extends Modal {
                     this.close();
                 } else {
                     new Notice(`Failed to delete transaction: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryType === 'balance') {
+                // Use direct file deletion for balance
+                const result = await deleteBalance(this.plugin, entryId);
+                if (result.success) {
+                    new Notice('Balance deleted successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to delete balance: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryType === 'note') {
+                // Use direct file deletion for note
+                const result = await deleteNote(this.plugin, entryId);
+                if (result.success) {
+                    new Notice('Note deleted successfully!');
+                    
+                    // Refresh the store
+                    await this.plugin.journalStore.refresh();
+
+                    // Call refresh callback if provided
+                    if (this.onRefreshCallback) {
+                        try {
+                            await this.onRefreshCallback();
+                        } catch (error) {
+                            console.error('Error refreshing dashboard:', error);
+                        }
+                    }
+                    
+                    this.close();
+                } else {
+                    new Notice(`Failed to delete note: ${result.error || 'Unknown error'}`);
                 }
             } else {
                 // Open/Close entries have no delete UI - this code path is unreachable

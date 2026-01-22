@@ -1081,6 +1081,386 @@ export async function createNote(
 }
 
 /**
+ * Updates a balance assertion in the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} balanceId - The balance ID (e.g., "balance_2026-01-21_Assets_Bank_Checking").
+ * @param {any} balanceData - The updated balance data (date, account, amount, currency, tolerance).
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function updateBalance(
+	plugin: BeancountPlugin,
+	balanceId: string,
+	balanceData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "balance_2026-01-21_Assets_Bank_Checking"
+		const parts = balanceId.split('_');
+		if (parts.length < 3 || parts[0] !== 'balance') {
+			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[updateBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the balance assertion using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Generate new balance assertion text
+		let newBalanceText = `${balanceData.date} balance ${balanceData.account}  ${balanceData.amount} ${balanceData.currency}`;
+		if (balanceData.tolerance) {
+			newBalanceText += ` ~ ${balanceData.tolerance}`;
+		}
+
+		// Replace the balance line
+		lines[lineIndex] = newBalanceText;
+		const newContent = lines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[updateBalance] Successfully updated balance ${balanceId} in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[updateBalance] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Deletes a balance assertion from the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} balanceId - The balance ID (e.g., "balance_2026-01-21_Assets_Bank_Checking").
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function deleteBalance(
+	plugin: BeancountPlugin,
+	balanceId: string
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "balance_2026-01-21_Assets_Bank_Checking"
+		const parts = balanceId.split('_');
+		if (parts.length < 3 || parts[0] !== 'balance') {
+			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[deleteBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the balance assertion using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		console.debug(`[deleteBalance] Found balance assertion at line ${lineno}`);
+
+		// Remove the balance line
+		const beforeBalance = lines.slice(0, lineIndex);
+		const afterBalance = lines.slice(lineIndex + 1);
+		const newLines = [
+			...beforeBalance,
+			...afterBalance
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[deleteBalance] Successfully deleted balance ${balanceId} from ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[deleteBalance] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Updates a note directive in the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} noteId - The note ID (e.g., "note_2026-01-21_Assets_Bank_Checking").
+ * @param {any} noteData - The updated note data (date, account, comment, tags, links).
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function updateNote(
+	plugin: BeancountPlugin,
+	noteId: string,
+	noteData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "note_2026-01-21_Assets_Bank_Checking"
+		const parts = noteId.split('_');
+		if (parts.length < 3 || parts[0] !== 'note') {
+			return { success: false, error: `Invalid note ID format: ${noteId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[updateNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the note using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Note not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Generate new note text
+		const noteParts = [noteData.date, 'note', noteData.account, `"${noteData.comment}"`];
+		
+		// Add tags (with # prefix)
+		if (noteData.tags && noteData.tags.length > 0) {
+			for (const tag of noteData.tags) {
+				const cleanTag = tag.replace(/^#/, '');
+				if (cleanTag) {
+					noteParts.push(`#${cleanTag}`);
+				}
+			}
+		}
+		
+		// Add links (with ^ prefix)
+		if (noteData.links && noteData.links.length > 0) {
+			for (const link of noteData.links) {
+				noteParts.push(`^${link}`);
+			}
+		}
+		
+		const newNoteText = noteParts.join(' ');
+
+		// Replace the note line
+		lines[lineIndex] = newNoteText;
+		const newContent = lines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[updateNote] Successfully updated note ${noteId} in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[updateNote] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Deletes a note directive from the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} noteId - The note ID (e.g., "note_2026-01-21_Assets_Bank_Checking").
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function deleteNote(
+	plugin: BeancountPlugin,
+	noteId: string
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "note_2026-01-21_Assets_Bank_Checking"
+		const parts = noteId.split('_');
+		if (parts.length < 3 || parts[0] !== 'note') {
+			return { success: false, error: `Invalid note ID format: ${noteId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[deleteNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the note using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Note not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		console.debug(`[deleteNote] Found note at line ${lineno}`);
+
+		// Remove the note line
+		const beforeNote = lines.slice(0, lineIndex);
+		const afterNote = lines.slice(lineIndex + 1);
+		const newLines = [
+			...beforeNote,
+			...afterNote
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[deleteNote] Successfully deleted note ${noteId} from ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[deleteNote] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
  * Fetches balance entries from Beancount using BQL query.
  * 
  * @param {BeancountPlugin} plugin - The plugin instance.
@@ -1562,7 +1942,23 @@ export async function updateTransaction(
 		const lineIndex = lineno - 1;
 
 		// Find the start and end of the transaction block
+		// Note: BQL returns a posting line, not the transaction header, so we need to scan backward first
 		let startIndex = lineIndex;
+		
+		// Scan backward to find the transaction header (first non-indented, non-empty line)
+		for (let i = lineIndex - 1; i >= 0; i--) {
+			const line = lines[i];
+			if (line.trim() === '') {
+				// Empty line means we've gone past the transaction start
+				break;
+			} else if (!line.startsWith(' ') && !line.startsWith('\t')) {
+				// Found non-indented line - this is the transaction header
+				startIndex = i;
+				break;
+			}
+			// Otherwise it's an indented line (metadata, other posting), keep scanning backward
+		}
+		
 		let endIndex = lineIndex;
 
 		// Scan forward to find the end of the transaction (next non-indented line or blank line followed by non-indented)
