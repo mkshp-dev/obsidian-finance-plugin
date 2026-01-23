@@ -1,11 +1,25 @@
 // src/ui/modals/OnboardingModal.ts
-import { App, Modal, Setting, Notice } from 'obsidian';
+import { App, Modal, Setting, Notice, TFile } from 'obsidian';
 import type BeancountPlugin from '../../main';
 import { DEMO_LEDGER_CONTENT } from '../../services/demo-ledger';
 import { Logger } from '../../utils/logger';
+import { createStructuredFolder, getMainLedgerPath, getDemoTransactionsForYear, migrateToStructuredLayout } from '../../utils/structuredLayout';
+
+type OnboardingStep = 1 | 2;
+type DataChoice = 'demo' | 'existing';
+type LayoutChoice = 'single' | 'structured';
 
 export class OnboardingModal extends Modal {
     plugin: BeancountPlugin;
+    private currentStep: OnboardingStep = 1;
+    
+    // Step 1 choices
+    private dataChoice: DataChoice | null = null;
+    private existingFilePath: string = '';
+    
+    // Step 2 choices
+    private layoutChoice: LayoutChoice | null = null;
+    private structuredFolderName: string = 'Finances';
 
     constructor(app: App, plugin: BeancountPlugin) {
         super(app);
@@ -13,100 +27,379 @@ export class OnboardingModal extends Modal {
     }
 
     onOpen() {
+        this.render();
+    }
+
+    private render() {
         const { contentEl } = this;
         contentEl.empty();
 
+        if (this.currentStep === 1) {
+            this.renderStep1(contentEl);
+        } else {
+            this.renderStep2(contentEl);
+        }
+    }
+
+    private renderStep1(contentEl: HTMLElement) {
         contentEl.createEl('h2', { text: 'Welcome to Obsidian Finance' });
-        contentEl.createEl('p', { text: 'To get started, we need to know where your Beancount ledger file is located.' });
+        contentEl.createEl('p', { 
+            text: 'Step 1 of 2: Choose your starting point',
+            cls: 'setting-item-description'
+        });
 
-        // Option 1: Existing File
-        const existingSection = contentEl.createDiv({ cls: 'onboarding-section' });
-        existingSection.style.marginBottom = '20px';
-        existingSection.createEl('h3', { text: 'Option 1: I have an existing file' });
-
-        new Setting(existingSection)
-            .setName('Beancount File Path')
-            .setDesc('Absolute path to your .beancount file')
-            .addText(text => text
-                .setPlaceholder('/path/to/ledger.beancount')
-                .onChange(async (value) => {
-                    // We just store it in the plugin settings temporarily or validation?
-                    // Ideally we have a "Save" button.
-                    this.plugin.settings.beancountFilePath = value;
-                }));
-
-        const saveBtn = existingSection.createEl('button', { text: 'Save & Continue' });
-        saveBtn.onclick = async () => {
-            if (this.plugin.settings.beancountFilePath) {
-                await this.plugin.saveSettings();
-                Logger.log('Onboarding: User selected existing file', this.plugin.settings.beancountFilePath);
-                new Notice('Configuration saved!');
-                this.close();
-            } else {
-                new Notice('Please enter a file path.');
-            }
-        };
-
-        // Option 2: Demo Ledger
+        // Option A: Demo Data
         const demoSection = contentEl.createDiv({ cls: 'onboarding-section' });
-        demoSection.style.borderTop = '1px solid var(--background-modifier-border)';
-        demoSection.style.paddingTop = '20px';
-        demoSection.createEl('h3', { text: 'Option 2: Create a Demo Ledger' });
-        demoSection.createEl('p', { text: 'New to Beancount? We can create a sample ledger file for you to explore the features.' });
+        demoSection.style.marginBottom = '20px';
+        demoSection.style.padding = '15px';
+        demoSection.style.border = '1px solid var(--background-modifier-border)';
+        demoSection.style.borderRadius = '5px';
+        
+        const demoHeader = demoSection.createDiv({ cls: 'onboarding-option-header' });
+        demoHeader.style.display = 'flex';
+        demoHeader.style.alignItems = 'center';
+        demoHeader.style.marginBottom = '10px';
+        
+        const demoRadio = demoHeader.createEl('input', { 
+            type: 'radio',
+            attr: { name: 'data-choice', value: 'demo' }
+        });
+        demoRadio.style.marginRight = '10px';
+        demoRadio.checked = this.dataChoice === 'demo';
+        demoRadio.onchange = () => {
+            this.dataChoice = 'demo';
+            this.render();
+        };
+        
+        demoHeader.createEl('h3', { text: 'Start with Demo Data', cls: 'onboarding-option-title' });
+        demoSection.createEl('p', { 
+            text: 'Perfect for testing! We\'ll create sample accounts and transactions so you can explore the plugin features immediately.',
+            cls: 'setting-item-description'
+        });
 
-        const createBtn = demoSection.createEl('button', { text: 'Create Demo Ledger', cls: 'mod-cta' });
-        createBtn.onclick = async () => {
-            await this.createDemoLedger();
+        // Option B: Existing File
+        const existingSection = contentEl.createDiv({ cls: 'onboarding-section' });
+        existingSection.style.padding = '15px';
+        existingSection.style.border = '1px solid var(--background-modifier-border)';
+        existingSection.style.borderRadius = '5px';
+        existingSection.style.marginBottom = '20px';
+        
+        const existingHeader = existingSection.createDiv({ cls: 'onboarding-option-header' });
+        existingHeader.style.display = 'flex';
+        existingHeader.style.alignItems = 'center';
+        existingHeader.style.marginBottom = '10px';
+        
+        const existingRadio = existingHeader.createEl('input', { 
+            type: 'radio',
+            attr: { name: 'data-choice', value: 'existing' }
+        });
+        existingRadio.style.marginRight = '10px';
+        existingRadio.checked = this.dataChoice === 'existing';
+        existingRadio.onchange = () => {
+            this.dataChoice = 'existing';
+            this.render();
+        };
+        
+        existingHeader.createEl('h3', { text: 'Use My Existing Ledger', cls: 'onboarding-option-title' });
+        existingSection.createEl('p', { 
+            text: 'Already have a Beancount file? Point us to it.',
+            cls: 'setting-item-description'
+        });
+
+        // Show file path input if existing is selected
+        if (this.dataChoice === 'existing') {
+            new Setting(existingSection)
+                .setName('Beancount file path')
+                .setDesc('Absolute path to your .beancount file')
+                .addText(text => text
+                    .setPlaceholder('/path/to/your/ledger.beancount')
+                    .setValue(this.existingFilePath)
+                    .onChange(value => {
+                        this.existingFilePath = value;
+                    }));
+        }
+
+        // Navigation buttons
+        const buttonContainer = contentEl.createDiv({ cls: 'onboarding-buttons' });
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.marginTop = '20px';
+        buttonContainer.style.gap = '10px';
+
+        const nextBtn = buttonContainer.createEl('button', { text: 'Next →', cls: 'mod-cta' });
+        nextBtn.onclick = () => {
+            if (!this.dataChoice) {
+                new Notice('Please select an option');
+                return;
+            }
+            
+            if (this.dataChoice === 'existing' && !this.existingFilePath.trim()) {
+                new Notice('Please enter the path to your existing file');
+                return;
+            }
+            
+            // Check for ledger.beancount conflict when using existing file
+            if (this.dataChoice === 'existing') {
+                const fileName = this.existingFilePath.split(/[/\\]/).pop() || '';
+                const isAtRoot = !this.existingFilePath.includes('/') && !this.existingFilePath.includes('\\');
+                
+                if (fileName === 'ledger.beancount' && isAtRoot) {
+                    new Notice('⚠️ Your file is named "ledger.beancount" at vault root. Please rename it (e.g., "main.beancount") to avoid conflicts, then try again.');
+                    return;
+                }
+            }
+            
+            this.currentStep = 2;
+            this.render();
         };
     }
 
-    async createDemoLedger() {
-        try {
-            const fileName = 'example.beancount';
-            const adapter = this.app.vault.adapter;
-            // @ts-ignore
-            const vaultRoot = adapter.getBasePath(); // This gives absolute path on Desktop
+    private renderStep2(contentEl: HTMLElement) {
+        contentEl.createEl('h2', { text: 'Welcome to Obsidian Finance' });
+        contentEl.createEl('p', { 
+            text: 'Step 2 of 2: Choose your file organization',
+            cls: 'setting-item-description'
+        });
 
-            // 1. Create file in Obsidian Vault
-            // Check if exists first
-            const existing = this.app.vault.getAbstractFileByPath(fileName);
-            if (existing) {
-                new Notice(`File ${fileName} already exists!`);
-                // Use it?
-                // Construct absolute path
-                 // @ts-ignore
-                const fullPath = adapter.getFullPath(fileName);
-                this.plugin.settings.beancountFilePath = fullPath;
-                await this.plugin.saveSettings();
-                this.close();
+        // Show what was chosen in step 1
+        const summaryEl = contentEl.createDiv({ cls: 'onboarding-summary' });
+        summaryEl.style.padding = '10px';
+        summaryEl.style.backgroundColor = 'var(--background-secondary)';
+        summaryEl.style.borderRadius = '5px';
+        summaryEl.style.marginBottom = '20px';
+        
+        const dataChoiceText = this.dataChoice === 'demo' ? '📊 Demo data' : `📄 ${this.existingFilePath}`;
+        summaryEl.createEl('div', { text: `Selected: ${dataChoiceText}` });
+
+        // Option A: Single File
+        const singleSection = contentEl.createDiv({ cls: 'onboarding-section' });
+        singleSection.style.marginBottom = '20px';
+        singleSection.style.padding = '15px';
+        singleSection.style.border = '1px solid var(--background-modifier-border)';
+        singleSection.style.borderRadius = '5px';
+        
+        const singleHeader = singleSection.createDiv({ cls: 'onboarding-option-header' });
+        singleHeader.style.display = 'flex';
+        singleHeader.style.alignItems = 'center';
+        singleHeader.style.marginBottom = '10px';
+        
+        const singleRadio = singleHeader.createEl('input', { 
+            type: 'radio',
+            attr: { name: 'layout-choice', value: 'single' }
+        });
+        singleRadio.style.marginRight = '10px';
+        singleRadio.checked = this.layoutChoice === 'single';
+        singleRadio.onchange = () => {
+            this.layoutChoice = 'single';
+            this.render();
+        };
+        
+        singleHeader.createEl('h3', { text: 'Single File', cls: 'onboarding-option-title' });
+        singleSection.createEl('p', { 
+            text: 'Traditional approach. Everything in one ledger.beancount file. Simple and straightforward.',
+            cls: 'setting-item-description'
+        });
+
+        // Option B: Structured Layout
+        const structuredSection = contentEl.createDiv({ cls: 'onboarding-section' });
+        structuredSection.style.padding = '15px';
+        structuredSection.style.border = '1px solid var(--background-modifier-border)';
+        structuredSection.style.borderRadius = '5px';
+        structuredSection.style.marginBottom = '20px';
+        
+        const structuredHeader = structuredSection.createDiv({ cls: 'onboarding-option-header' });
+        structuredHeader.style.display = 'flex';
+        structuredHeader.style.alignItems = 'center';
+        structuredHeader.style.marginBottom = '10px';
+        
+        const structuredRadio = structuredHeader.createEl('input', { 
+            type: 'radio',
+            attr: { name: 'layout-choice', value: 'structured' }
+        });
+        structuredRadio.style.marginRight = '10px';
+        structuredRadio.checked = this.layoutChoice === 'structured';
+        structuredRadio.onchange = () => {
+            this.layoutChoice = 'structured';
+            this.render();
+        };
+        
+        structuredHeader.createEl('h3', { text: 'Structured Layout (Recommended)', cls: 'onboarding-option-title' });
+        structuredSection.createEl('p', { 
+            text: 'Organized into separate files: accounts, commodities, prices, transactions by year, etc. Better for growing ledgers.',
+            cls: 'setting-item-description'
+        });
+
+        // Show folder name input if structured is selected
+        if (this.layoutChoice === 'structured') {
+            new Setting(structuredSection)
+                .setName('Folder name')
+                .setDesc('Name of the folder to create for your files')
+                .addText(text => text
+                    .setPlaceholder('Finances')
+                    .setValue(this.structuredFolderName)
+                    .onChange(value => {
+                        this.structuredFolderName = value || 'Finances';
+                    }));
+        }
+
+        // Navigation buttons
+        const buttonContainer = contentEl.createDiv({ cls: 'onboarding-buttons' });
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'space-between';
+        buttonContainer.style.marginTop = '20px';
+
+        const backBtn = buttonContainer.createEl('button', { text: '← Back' });
+        backBtn.onclick = () => {
+            this.currentStep = 1;
+            this.layoutChoice = null; // Reset step 2 choice
+            this.render();
+        };
+
+        const finishBtn = buttonContainer.createEl('button', { text: 'Finish Setup', cls: 'mod-cta' });
+        finishBtn.onclick = async () => {
+            if (!this.layoutChoice) {
+                new Notice('Please select an option');
                 return;
             }
+            
+            await this.handleFinish(finishBtn);
+        };
+    }
 
-            // Create new
-            await this.app.vault.create(fileName, DEMO_LEDGER_CONTENT);
-            new Notice(`Created ${fileName}`);
-            Logger.log('Onboarding: Created demo ledger');
+    private async handleFinish(buttonEl: HTMLButtonElement) {
+        const originalText = buttonEl.textContent;
+        buttonEl.textContent = 'Setting up...';
+        buttonEl.disabled = true;
 
-            // 2. Set absolute path in settings
-            // We need absolute path for the backend
+        try {
+            // Determine which handler to call based on choices
+            if (this.dataChoice === 'demo' && this.layoutChoice === 'single') {
+                await this.handleDemoSingle();
+            } else if (this.dataChoice === 'demo' && this.layoutChoice === 'structured') {
+                await this.handleDemoStructured();
+            } else if (this.dataChoice === 'existing' && this.layoutChoice === 'single') {
+                await this.handleExistingSingle();
+            } else if (this.dataChoice === 'existing' && this.layoutChoice === 'structured') {
+                await this.handleExistingStructured();
+            }
+        } catch (error) {
+            Logger.error('Onboarding: Setup failed', error);
+            new Notice('Setup failed. Check console for details.');
+            buttonEl.textContent = originalText;
+            buttonEl.disabled = false;
+        }
+    }
+
+    private async handleDemoSingle() {
+        Logger.log('Onboarding: Demo + Single File');
+        
+        const fileName = 'ledger.beancount';
+        const existing = this.app.vault.getAbstractFileByPath(fileName);
+        
+        if (existing) {
+            new Notice(`⚠️ File ${fileName} already exists! Using existing file.`);
             // @ts-ignore
-            if (adapter.getFullPath) {
-                 // @ts-ignore
-                const fullPath = adapter.getFullPath(fileName);
-                this.plugin.settings.beancountFilePath = fullPath;
-                await this.plugin.saveSettings();
+            const fullPath = this.app.vault.adapter.getFullPath(fileName);
+            this.plugin.settings.beancountFilePath = fullPath;
+            this.plugin.settings.useStructuredLayout = false;
+            await this.plugin.saveSettings();
+            this.close();
+            return;
+        }
 
-                Logger.log('Onboarding: Set settings path to', fullPath);
-                new Notice('Demo ledger configured successfully!');
+        // Create demo file
+        await this.app.vault.create(fileName, DEMO_LEDGER_CONTENT);
+        // @ts-ignore
+        const fullPath = this.app.vault.adapter.getFullPath(fileName);
+        
+        this.plugin.settings.beancountFilePath = fullPath;
+        this.plugin.settings.useStructuredLayout = false;
+        await this.plugin.saveSettings();
+        
+        new Notice(`✓ Created ${fileName} with demo data`);
+        Logger.log('Onboarding: Created demo single file');
+        this.close();
+    }
+
+    private async handleDemoStructured() {
+        Logger.log('Onboarding: Demo + Structured');
+        
+        try {
+            // Create structured folder with demo data
+            await createStructuredFolder(this.plugin, this.structuredFolderName, true);
+            
+            // Add demo transactions to current year
+            const currentYear = new Date().getFullYear();
+            const yearFilePath = `${this.structuredFolderName}/transactions/${currentYear}.beancount`;
+            const yearFile = this.app.vault.getAbstractFileByPath(yearFilePath);
+            
+            if (yearFile && yearFile instanceof TFile) {
+                const demoContent = getDemoTransactionsForYear(currentYear);
+                await this.app.vault.modify(yearFile, demoContent);
+            }
+            
+            // Update settings
+            const mainLedgerPath = getMainLedgerPath(this.plugin);
+            this.plugin.settings.useStructuredLayout = true;
+            this.plugin.settings.structuredFolderName = this.structuredFolderName;
+            this.plugin.settings.structuredFolderPath = mainLedgerPath;
+            this.plugin.settings.beancountFilePath = mainLedgerPath;
+            await this.plugin.saveSettings();
+            
+            new Notice(`✓ Created structured layout in ${this.structuredFolderName}/ with demo data`);
+            Logger.log('Onboarding: Created demo structured layout');
+            this.close();
+        } catch (error: any) {
+            // If folder/files already exist, configure settings to use them
+            if (error.message && error.message.includes('already exists')) {
+                Logger.log('Onboarding: Structured folder already exists, configuring to use it');
+                const mainLedgerPath = getMainLedgerPath(this.plugin);
+                this.plugin.settings.useStructuredLayout = true;
+                this.plugin.settings.structuredFolderName = this.structuredFolderName;
+                this.plugin.settings.structuredFolderPath = mainLedgerPath;
+                this.plugin.settings.beancountFilePath = mainLedgerPath;
+                await this.plugin.saveSettings();
+                
+                new Notice(`✓ Using existing structured layout in ${this.structuredFolderName}/`);
+                Logger.log('Onboarding: Configured to use existing structured layout');
                 this.close();
             } else {
-                new Notice('Could not determine absolute path. Please configure settings manually.');
-                Logger.error('Onboarding: adapter.getFullPath missing');
+                // Re-throw other errors
+                throw error;
             }
+        }
+    }
 
-        } catch (error) {
-            Logger.error('Onboarding: Failed to create demo ledger', error);
-            new Notice('Failed to create demo ledger.');
+    private async handleExistingSingle() {
+        Logger.log('Onboarding: Existing + Single File');
+        
+        // Just configure settings to point to existing file
+        this.plugin.settings.beancountFilePath = this.existingFilePath;
+        this.plugin.settings.useStructuredLayout = false;
+        await this.plugin.saveSettings();
+        
+        new Notice('✓ Configuration saved! Using single file mode.');
+        Logger.log('Onboarding: Configured existing single file');
+        this.close();
+    }
+
+    private async handleExistingStructured() {
+        Logger.log('Onboarding: Existing + Structured - migrating');
+        
+        // Temporarily set the file path for migration
+        this.plugin.settings.beancountFilePath = this.existingFilePath;
+        await this.plugin.saveSettings();
+        
+        // Perform migration
+        const result = await migrateToStructuredLayout(this.plugin, this.structuredFolderName);
+        
+        if (result.success) {
+            new Notice(`✓ Migrated to structured layout in ${this.structuredFolderName}/`);
+            Logger.log('Onboarding: Migrated existing file to structured');
+            this.close();
+        } else {
+            new Notice(`Migration failed: ${result.error}`);
+            Logger.error('Onboarding: Migration failed', result.error);
         }
     }
 

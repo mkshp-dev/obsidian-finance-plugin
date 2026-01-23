@@ -33,6 +33,13 @@ export interface BeancountPluginSettings {
     createBackups: boolean;
     /** Maximum number of backup files to keep (0 = unlimited). */
     maxBackupFiles: number;
+    // Structured Layout Settings
+    /** Whether to use structured folder layout instead of single file. */
+    useStructuredLayout: boolean;
+    /** Name of the folder for structured layout (e.g., "Finances"). */
+    structuredFolderName: string;
+    /** Computed absolute path to the structured folder (set automatically). */
+    structuredFolderPath: string;
 }
 
 /**
@@ -52,7 +59,11 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     debugMode: false,
     // Backup Settings
     createBackups: true,
-    maxBackupFiles: 10
+    maxBackupFiles: 10,
+    // Structured Layout Settings
+    useStructuredLayout: false,
+    structuredFolderName: 'Finances',
+    structuredFolderPath: ''
 }
 
 /**
@@ -84,6 +95,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         const tabs = [
             {id: 'general', label: '⚙️ General'},
             {id: 'connection', label: '🔌 Connection'},
+            {id: 'files', label: '📁 File Organization'},
             {id: 'bql', label: '📊 BQL'},
             {id: 'performance', label: '⚡ Performance'},
             {id: 'backup', label: '💾 Backup'}
@@ -109,6 +121,9 @@ export class BeancountSettingTab extends PluginSettingTab {
                 break;
             case 'connection':
                 this.renderConnectionTab(tabsContent);
+                break;
+            case 'files':
+                this.renderFilesTab(tabsContent);
                 break;
             case 'bql':
                 this.renderBQLTab(tabsContent);
@@ -313,6 +328,219 @@ export class BeancountSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }
                 }));
+    }
+
+    private renderFilesTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'File Organization' });
+        
+        containerEl.createEl('p', { 
+            text: 'Choose between single-file mode (traditional) or structured layout (organized into multiple files).',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Use structured layout')
+            .setDesc('Organize your Beancount files into a structured folder with separate files for accounts, transactions, prices, etc.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.useStructuredLayout)
+                .onChange(async (value) => {
+                    const previousValue = this.plugin.settings.useStructuredLayout;
+                    
+                    // Detect migration direction
+                    if (value !== previousValue) {
+                        if (value === true && !previousValue) {
+                            // Switching from single-file to structured
+                            // Check if we have a source file to migrate
+                            if (this.plugin.settings.beancountFilePath) {
+                                // Import dynamically to avoid circular dependency
+                                const { MigrationConfirmModal } = await import('./ui/modals/MigrationConfirmModal');
+                                
+                                // DON'T save the setting yet - let the migration modal handle it
+                                // The modal will save on success or revert the toggle on cancel
+                                
+                                // Open migration modal
+                                new MigrationConfirmModal(this.app, this.plugin, 'to-structured').open();
+                                
+                                // Don't refresh display yet - modal will handle it
+                                return;
+                            } else {
+                                // No file to migrate - just enable the mode
+                                this.plugin.settings.useStructuredLayout = true;
+                                await this.plugin.saveSettings();
+                                this.display();
+                            }
+                        } else if (value === false && previousValue) {
+                            // Switching from structured to single-file
+                            // Check if we have structured data to consolidate
+                            if (this.plugin.settings.structuredFolderPath) {
+                                const { MigrationConfirmModal } = await import('./ui/modals/MigrationConfirmModal');
+                                
+                                // DON'T save the setting yet - let the migration modal handle it
+                                // The modal will save on success or revert the toggle on cancel
+                                
+                                // Open reverse migration modal
+                                new MigrationConfirmModal(this.app, this.plugin, 'to-single').open();
+                                
+                                // Don't refresh display yet - modal will handle it
+                                return;
+                            } else {
+                                // No structured data - just disable the mode
+                                this.plugin.settings.useStructuredLayout = false;
+                                await this.plugin.saveSettings();
+                                this.display();
+                            }
+                        }
+                    }
+                    
+                    // Normal toggle without migration
+                    this.plugin.settings.useStructuredLayout = value;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        if (this.plugin.settings.useStructuredLayout) {
+            // Structured layout settings
+            new Setting(containerEl)
+                .setName('Folder name')
+                .setDesc('Name of the folder containing your structured Beancount files.')
+                .addText(text => text
+                    .setPlaceholder('Finances')
+                    .setValue(this.plugin.settings.structuredFolderName)
+                    .onChange(async (value) => {
+                        this.plugin.settings.structuredFolderName = value || 'Finances';
+                        await this.plugin.saveSettings();
+                    }));
+
+            // Display file structure info
+            const infoDiv = containerEl.createDiv({ cls: 'structured-layout-info' });
+            infoDiv.style.padding = '10px';
+            infoDiv.style.marginTop = '10px';
+            infoDiv.style.backgroundColor = 'var(--background-secondary)';
+            infoDiv.style.borderRadius = '5px';
+            
+            infoDiv.createEl('strong', { text: 'Structured Layout File Organization:' });
+            const fileList = infoDiv.createEl('ul');
+            fileList.style.marginTop = '8px';
+            fileList.style.marginBottom = '0';
+            
+            const files = [
+                '📄 ledger.beancount - Main file with include statements',
+                '📄 accounts.beancount - Account open/close directives',
+                '📄 commodities.beancount - Commodity definitions',
+                '📄 prices.beancount - Price directives',
+                '📄 pads.beancount - Pad directives',
+                '📄 balances.beancount - Balance assertions',
+                '📄 notes.beancount - Note directives',
+                '📄 events.beancount - Event directives',
+                '📁 transactions/ - Folder with year-based transaction files (e.g., 2024.beancount, 2025.beancount)'
+            ];
+            
+            files.forEach(file => {
+                const li = fileList.createEl('li');
+                li.style.marginBottom = '4px';
+                li.textContent = file;
+            });
+
+            // Show current path
+            if (this.plugin.settings.beancountFilePath) {
+                const pathDiv = containerEl.createDiv({ cls: 'current-path-display' });
+                pathDiv.style.marginTop = '15px';
+                pathDiv.style.padding = '10px';
+                pathDiv.style.backgroundColor = 'var(--background-modifier-border)';
+                pathDiv.style.borderRadius = '5px';
+                
+                pathDiv.createEl('div', { 
+                    text: 'Main ledger file path:',
+                    cls: 'setting-item-name'
+                });
+                pathDiv.createEl('div', { 
+                    text: this.plugin.settings.beancountFilePath,
+                    cls: 'setting-item-description'
+                }).style.fontFamily = 'monospace';
+            }
+
+            // Button to create/recreate structured layout
+            const createSection = containerEl.createDiv();
+            createSection.style.marginTop = '20px';
+            
+            new Setting(createSection)
+                .setName('Create structured layout')
+                .setDesc('Create or recreate the structured folder layout. Warning: This will overwrite existing files.')
+                .addButton(button => button
+                    .setButtonText('Create Folder Structure')
+                    .onClick(async () => {
+                        try {
+                            const { createStructuredFolder, getMainLedgerPath } = await import('./utils/structuredLayout');
+                            await createStructuredFolder(this.plugin, this.plugin.settings.structuredFolderName, false);
+                            
+                            const mainPath = getMainLedgerPath(this.plugin);
+                            this.plugin.settings.beancountFilePath = mainPath;
+                            this.plugin.settings.structuredFolderPath = mainPath;
+                            await this.plugin.saveSettings();
+                            
+                            this.display(); // Refresh display
+                            new Notice('Structured layout created successfully!');
+                        } catch (error) {
+                            new Notice('Failed to create structured layout. Check console for details.');
+                            console.error('Failed to create structured layout:', error);
+                        }
+                    }));
+        } else {
+            // Single file mode - show current file path
+            if (this.plugin.settings.beancountFilePath) {
+                const pathDiv = containerEl.createDiv({ cls: 'current-path-display' });
+                pathDiv.style.marginTop = '15px';
+                pathDiv.style.padding = '10px';
+                pathDiv.style.backgroundColor = 'var(--background-modifier-border)';
+                pathDiv.style.borderRadius = '5px';
+                
+                pathDiv.createEl('div', { 
+                    text: 'Current ledger file:',
+                    cls: 'setting-item-name'
+                });
+                pathDiv.createEl('div', { 
+                    text: this.plugin.settings.beancountFilePath,
+                    cls: 'setting-item-description'
+                }).style.fontFamily = 'monospace';
+            }
+            
+            containerEl.createEl('p', { 
+                text: 'In single-file mode, all Beancount directives are stored in one file. You can configure the file path in the Connection tab.',
+                cls: 'setting-item-description'
+            }).style.marginTop = '15px';
+            
+            // Migration section
+            if (this.plugin.settings.beancountFilePath) {
+                const migrationSection = containerEl.createDiv();
+                migrationSection.style.marginTop = '30px';
+                migrationSection.style.paddingTop = '20px';
+                migrationSection.style.borderTop = '1px solid var(--background-modifier-border)';
+                
+                migrationSection.createEl('h4', { text: 'Switch to Structured Layout' });
+                migrationSection.createEl('p', { 
+                    text: 'Want to organize your ledger into separate files? Use the toggle above to switch modes. The migration will happen automatically with your confirmation.',
+                    cls: 'setting-item-description'
+                });
+                
+                const infoDiv = migrationSection.createDiv();
+                infoDiv.style.marginTop = '10px';
+                infoDiv.style.padding = '10px';
+                infoDiv.style.backgroundColor = 'var(--background-secondary)';
+                infoDiv.style.borderRadius = '5px';
+                infoDiv.innerHTML = `
+                    <strong>💡 How it works:</strong>
+                    <ol style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>Toggle "Use structured layout" above</li>
+                        <li>A migration dialog will appear</li>
+                        <li>Choose your folder name and confirm</li>
+                        <li>Your data will be organized into separate files</li>
+                    </ol>
+                    <p style="margin-top: 8px; font-size: 0.9em; opacity: 0.8;">
+                        Your original file remains untouched and you can switch back anytime.
+                    </p>
+                `;
+            }
+        }
     }
 
     private renderAdvancedTab(containerEl: HTMLElement): void {

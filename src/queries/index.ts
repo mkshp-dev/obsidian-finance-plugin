@@ -132,15 +132,14 @@ export function getTransactionsQuery(filters: TransactionFilters, limit: number 
 }
 
 /**
- * Query for bean-check (Note: runQuery expects CSV, bean-check might not output CSV)
+ * Query for file validation using bean-query (replaces bean-check)
+ * Uses 'SELECT TRUE LIMIT 0' which validates file syntax without returning data
  * @param {string} filePath - Path to beancount file.
  * @param {string} commandBase - Base command (bean-query).
- * @returns {string} The command string.
+ * @returns {string} The validation command string.
  */
-// This might need a separate function if bean-check output needs different handling
 export function getBeanCheckCommand(filePath: string, commandBase: string): string {
-	const checkCommandBase = commandBase.replace(/bean-query(.exe)?$/, 'bean-check$1');
-	return `${checkCommandBase} "${filePath}"`;
+	return `${commandBase} "${filePath}" "SELECT TRUE LIMIT 0"`;
 }
 
 /**

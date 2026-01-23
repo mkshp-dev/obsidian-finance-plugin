@@ -558,22 +558,12 @@ export class SystemDetector {
         command: string | null;
         version: string | null;
         isValid: boolean;
-        packages: {
-            beancount: string | null;
-            flask: string | null;
-            flask_cors: string | null;
-        };
         errors: string[];
     }> {
         const result = {
             command: null as string | null,
             version: null as string | null,
             isValid: false,
-            packages: {
-                beancount: null as string | null,
-                flask: null as string | null,
-                flask_cors: null as string | null
-            },
             errors: [] as string[]
         };
 
@@ -610,34 +600,10 @@ export class SystemDetector {
                     continue;
                 }
 
-                // Test 3: Check beancount package
-                const beancountResult = await this.testCommand(`${pythonCmd} -c "import beancount; print(beancount.__version__)"`);
-                if (!beancountResult.success) {
-                    result.errors.push(`${pythonCmd}: Cannot import beancount package`);
-                    continue;
-                }
-
-                // Test 4: Check flask package
-                const flaskResult = await this.testCommand(`${pythonCmd} -c "import flask; print(flask.__version__)"`);
-                if (!flaskResult.success) {
-                    result.errors.push(`${pythonCmd}: Cannot import flask package`);
-                    continue;
-                }
-
-                // Test 5: Check flask_cors package
-                const flaskCorsResult = await this.testCommand(`${pythonCmd} -c "import flask_cors; print(flask_cors.__version__)"`);
-                if (!flaskCorsResult.success) {
-                    result.errors.push(`${pythonCmd}: Cannot import flask_cors package`);
-                    continue;
-                }
-
                 // All tests passed!
                 result.command = pythonCmd;
                 result.version = version;
                 result.isValid = true;
-                result.packages.beancount = beancountResult.output?.trim() || 'unknown';
-                result.packages.flask = flaskResult.output?.trim() || 'unknown';
-                result.packages.flask_cors = flaskCorsResult.output?.trim() || 'unknown';
                 
                 break;
 
@@ -742,97 +708,6 @@ export class SystemDetector {
     }
 
     /**
-     * Comprehensive bean-check command detection with version validation
-     * @param {boolean} [useWSL=false] - Whether to check in WSL.
-     * @param {string} [beancountFilePath] - Optional path to a beancount file to test validation.
-     * @returns {Promise<object>} Report of bean-check detection.
-     */
-    async detectBeanCheckCommand(useWSL: boolean = false, beancountFilePath?: string): Promise<{
-        command: string | null;
-        version: string | null;
-        isValid: boolean;
-        errors: string[];
-    }> {
-        const result = {
-            command: null as string | null,
-            version: null as string | null,
-            isValid: false,
-            errors: [] as string[]
-        };
-
-        const systemInfo = await this.getSystemInfo();
-        
-        // Define bean-check commands to test in order of preference
-        let beanCheckCommands = [
-            'bean-check'
-            // 'python3 -m beancount.loader',
-            // 'python -m beancount.loader',
-            // 'py -m beancount.loader'
-        ];
-        
-        // Add WSL prefix if needed
-        if (useWSL && systemInfo.platform === 'win32') {
-            beanCheckCommands = beanCheckCommands.map(cmd => `wsl ${cmd}`);
-        }
-
-        for (const beanCheckCmd of beanCheckCommands) {
-            try {
-                // Test 1: Check if bean-check command exists and get version
-                const versionResult = await this.testCommand(`${beanCheckCmd} --version`);
-                if (!versionResult.success) {
-                    // Try help command as fallback for version detection
-                    const helpResult = await this.testCommand(`${beanCheckCmd} --help`);
-                    if (!helpResult.success) {
-                        result.errors.push(`${beanCheckCmd}: Command not found or not accessible`);
-                        continue;
-                    }
-                    // If help works but version doesn't, we can still use the command
-                    result.command = beanCheckCmd;
-                    result.version = 'unknown (help available)';
-                    result.isValid = true;
-                    break;
-                }
-
-                // Parse version from output
-                let version = 'unknown';
-                if (versionResult.output) {
-                    // Try to extract version number from various formats
-                    const versionMatch = versionResult.output.match(/(\d+\.\d+\.\d+)/);
-                    if (versionMatch) {
-                        version = versionMatch[1];
-                    } else {
-                        // Sometimes bean-check just shows "beancount X.Y.Z"
-                        const beancountMatch = versionResult.output.match(/beancount\s+(\d+\.\d+\.\d+)/i);
-                        if (beancountMatch) {
-                            version = beancountMatch[1];
-                        }
-                    }
-                }
-
-                // Test 2: Verify bean-check can validate beancount file (if file is provided)
-                if (beancountFilePath) {
-                    const checkResult = await this.testCommand(`${beanCheckCmd} "${beancountFilePath}"`);
-                    if (!checkResult.success) {
-                        result.errors.push(`${beanCheckCmd}: Cannot validate beancount file`);
-                        continue;
-                    }
-                }
-
-                // All tests passed!
-                result.command = beanCheckCmd;
-                result.version = version;
-                result.isValid = true;
-                break;
-
-            } catch (error) {
-                result.errors.push(`${beanCheckCmd}: Unexpected error - ${error.message}`);
-            }
-        }
-
-        return result;
-    }
-
-    /**
      * Comprehensive bean-price command detection with version validation
      * @param {boolean} [useWSL=false] - Whether to check in WSL.
      * @returns {Promise<object>} Report of bean-price detection.
@@ -927,17 +802,10 @@ export class SystemDetector {
     async detectOptimalBeancountSetup(beancountFilePath?: string, preferWSL: boolean = false): Promise<{
         python: string | null;
         pythonVersion: string | null;
-        pythonPackages: {
-            beancount: string | null;
-            flask: string | null;
-            flask_cors: string | null;
-        };
         beanQuery: string | null;
         beanQueryVersion: string | null;
         beanPrice: string | null;
         beanPriceVersion: string | null;
-        beanCheck: string | null;
-        beanCheckVersion: string | null;
         filePath: string | null;
         useWSL: boolean;
         testResults: { [key: string]: boolean };
@@ -946,17 +814,10 @@ export class SystemDetector {
         const results = {
             python: null as string | null,
             pythonVersion: null as string | null,
-            pythonPackages: {
-                beancount: null as string | null,
-                flask: null as string | null,
-                flask_cors: null as string | null
-            },
             beanQuery: null as string | null,
             beanQueryVersion: null as string | null,
             beanPrice: null as string | null,
             beanPriceVersion: null as string | null,
-            beanCheck: null as string | null,
-            beanCheckVersion: null as string | null,
             filePath: beancountFilePath || null,
             useWSL: false,
             testResults: {} as { [key: string]: boolean },
@@ -994,17 +855,6 @@ export class SystemDetector {
                     'wsl python3 -m beancount.scripts.price',
                     'wsl python -m beancount.scripts.price'
                 ] : [])
-            ],
-            beanCheck: [
-                'bean-check',
-                'python3 -m beancount.loader',
-                'python -m beancount.loader',
-                'py -m beancount.loader',
-                ...(systemInfo.platform === 'win32' ? [
-                    'wsl bean-check',
-                    'wsl python3 -m beancount.loader',
-                    'wsl python -m beancount.loader'
-                ] : [])
             ]
         };
 
@@ -1032,7 +882,6 @@ export class SystemDetector {
         if (pythonEnv.isValid && pythonEnv.command) {
             results.python = pythonEnv.command;
             results.pythonVersion = pythonEnv.version;
-            results.pythonPackages = pythonEnv.packages;
             
             // Set WSL flag if the command includes 'wsl'
             if (pythonEnv.command.startsWith('wsl')) {
@@ -1135,44 +984,6 @@ export class SystemDetector {
         } else {
             // Record all errors from bean-price detection
             results.errors.push(...beanPriceEnv.errors);
-        }
-
-        // Test bean-check commands comprehensively  
-        let beanCheckEnv;
-        
-        if (preferWSL && systemInfo.platform === 'win32') {
-            // User prefers WSL - try WSL bean-check first
-            beanCheckEnv = await this.detectBeanCheckCommand(true, beancountFilePath);
-            
-            // If WSL bean-check fails, fallback to native bean-check
-            if (!beanCheckEnv.isValid) {
-                beanCheckEnv = await this.detectBeanCheckCommand(false, beancountFilePath);
-            }
-        } else {
-            // Try native bean-check first
-            beanCheckEnv = await this.detectBeanCheckCommand(false, beancountFilePath);
-            
-            // If native bean-check is not valid and we're on Windows, try WSL bean-check
-            if (!beanCheckEnv.isValid && systemInfo.platform === 'win32') {
-                beanCheckEnv = await this.detectBeanCheckCommand(true, beancountFilePath);
-            }
-        }
-        
-        if (beanCheckEnv.isValid && beanCheckEnv.command) {
-            results.beanCheck = beanCheckEnv.command;
-            results.beanCheckVersion = beanCheckEnv.version;
-            
-            // Set WSL flag if the command includes 'wsl'
-            if (beanCheckEnv.command.startsWith('wsl')) {
-                results.useWSL = true;
-            }
-            
-            // Record test results
-            results.testResults[`${beanCheckEnv.command}_version`] = true;
-            results.testResults[`${beanCheckEnv.command}_help`] = true;
-        } else {
-            // Record all errors from bean-check detection
-            results.errors.push(...beanCheckEnv.errors);
         }
 
         // Format file path for the detected environment

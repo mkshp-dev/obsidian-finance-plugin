@@ -13,15 +13,11 @@
     let isWSLAvailable = false;
     let useWSL = false;
     let detectedBeancountCommand = '';
-    let selectedFile: string = '';
-    let fullFilePath = '';
     let isValidating = false;
     let validationResult = { isValid: false, message: '' };
-    let availableFiles: string[] = [];
     
     // Individual command test results
     let commandTests = {
-        beanCheck: { isRunning: false, isValid: null, command: '', output: '', error: '' },
         beanQuery: { isRunning: false, isValid: null, command: '', output: '', error: '' },
         beanQueryCsv: { isRunning: false, isValid: null, command: '', output: '', error: '' }
     };
@@ -33,13 +29,10 @@
     let optimalCommands = {
         python: null,
         pythonVersion: null,
-        pythonPackages: null,
         beanQuery: null,
         beanQueryVersion: null,
         beanPrice: null,
         beanPriceVersion: null,
-        beanCheck: null,
-        beanCheckVersion: null,
         filePath: null,
         useWSL: false
     };
@@ -47,10 +40,6 @@
     onMount(async () => {
         await detectSystemAndFiles();
         loadCurrentSettings();
-        // Force an additional file load after mount
-        setTimeout(() => {
-            loadVaultFiles();
-        }, 100);
     });
 
 
@@ -80,17 +69,10 @@
         // Auto-set WSL usage if running in WSL environment
         if (systemInfo?.isWSL) {
             useWSL = true;
-
         }
-
-        // Get beancount files from vault
-
-        loadVaultFiles();
         
         // Suggest beancount command based on system
         await suggestBeancountCommand();
-        
-
     }
 
     function loadCurrentSettings() {
@@ -99,36 +81,6 @@
         // Detect if current command uses WSL
         if (settings.beancountCommand && settings.beancountCommand.includes('wsl')) {
             useWSL = true;
-        }
-        
-        // Load selected file
-        selectedFile = settings.beancountFilePath || '';
-        updateFullPath();
-    }
-
-    function loadVaultFiles() {
-        try {
-            // Get all files from vault
-            const allFiles = plugin.app.vault.getFiles();
-            // Filter for beancount files
-            const beancountFiles = allFiles.filter(file => {
-                return file.extension === 'beancount' || file.extension === 'bean';
-            });
-            
-            // Also check for files with .beancount in the name (fallback)
-            const additionalFiles = allFiles.filter(file => {
-                const hasBeancountInName = file.name.includes('.beancount') || file.name.includes('.bean');
-                const notAlreadyIncluded = !beancountFiles.some(bf => bf.path === file.path);
-                return hasBeancountInName && notAlreadyIncluded;
-            });
-            
-            // Combine both results
-            const allBeancountFiles = [...beancountFiles, ...additionalFiles];
-            availableFiles = allBeancountFiles.map(file => file.path).sort();
-            
-        } catch (error) {
-            console.error('Error loading vault files:', error);
-            availableFiles = [];
         }
     }
 
@@ -152,51 +104,9 @@
         }
     }
 
-    function updateFullPath() {
-        if (!selectedFile) {
-            fullFilePath = '';
-            return;
-        }
-
-        // Get vault path using correct API
-        const vaultPath = plugin.app.vault.adapter.getBasePath();
-        // Join paths manually since path.join isn't available
-        const separator = platform === 'win32' ? '\\' : '/';
-        const fullPath = vaultPath + separator + selectedFile.replace(/\//g, separator);
-        
-        if (useWSL && isWSLAvailable && platform === 'win32') {
-            // Convert Windows path to WSL path
-            fullFilePath = convertToWSLPath(fullPath);
-        } else {
-            fullFilePath = fullPath;
-        }
-    }
-
-    function convertToWSLPath(windowsPath: string): string {
-        // Convert C:\path\to\file to /mnt/c/path/to/file
-        const match = windowsPath.match(/^([A-Za-z]):(.*)/);
-        if (match) {
-            const drive = match[1].toLowerCase();
-            const path = match[2].replace(/\\/g, '/');
-            return `/mnt/${drive}${path}`;
-        }
-        return windowsPath.replace(/\\/g, '/');
-    }
-
     async function handleWSLToggle() {
         await suggestBeancountCommand();
-        updateFullPath();
         await saveSettings();
-    }
-
-    async function handleFileSelection() {
-        updateFullPath();
-        await saveSettings();
-        
-        // Validate the file
-        if (selectedFile) {
-            await validateConfiguration();
-        }
     }
 
     async function runAutoDetection() {
@@ -209,7 +119,7 @@
             const systemDetector = SystemDetector.getInstance();
             
             // Run optimal command detection with current file path and WSL preference
-            const results = await systemDetector.detectOptimalBeancountSetup(fullFilePath || undefined, useWSL);
+            const results = await systemDetector.detectOptimalBeancountSetup(plugin.settings.beancountFilePath || undefined, useWSL);
             autoDetectionResults = results;
             optimalCommands = results;
             
@@ -228,8 +138,7 @@
             detectionStatus = `Detection completed - Found: ${[
                 results.python && `Python (${results.useWSL ? 'WSL' : 'Native'})`,
                 results.beanQuery && `bean-query (${results.useWSL ? 'WSL' : 'Native'})`, 
-                results.beanPrice && 'bean-price',
-                results.beanCheck && 'bean-check'
+                results.beanPrice && 'bean-price'
             ].filter(Boolean).join(', ')}`;
             
             // Update validation
@@ -246,51 +155,24 @@
 
     async function saveSettings() {
         plugin.settings.beancountCommand = detectedBeancountCommand;
-        plugin.settings.beancountFilePath = fullFilePath;
         await plugin.saveSettings();
         
         dispatch('settingsChanged', {
-            beancountCommand: detectedBeancountCommand,
-            beancountFilePath: fullFilePath
+            beancountCommand: detectedBeancountCommand
         });
     }
 
     // Test individual commands
-    async function testBeanCheck() {
-        if (!optimalCommands.beanCheck || !fullFilePath) {
-            commandTests.beanCheck.error = 'Bean-check command or file path not available';
-            return;
-        }
-
-        commandTests.beanCheck.isRunning = true;
-        commandTests.beanCheck.isValid = null;
-        commandTests.beanCheck.command = `${optimalCommands.beanCheck} "${fullFilePath}"`;
-        
-        try {
-            const systemDetector = SystemDetector.getInstance();
-            const testResult = await systemDetector.testCommand(commandTests.beanCheck.command, 15000);
-            
-            commandTests.beanCheck.isValid = testResult.success;
-            commandTests.beanCheck.output = testResult.output || '';
-            commandTests.beanCheck.error = testResult.error || '';
-            
-        } catch (error) {
-            commandTests.beanCheck.isValid = false;
-            commandTests.beanCheck.error = `Error: ${error.message}`;
-        } finally {
-            commandTests.beanCheck.isRunning = false;
-        }
-    }
-
     async function testBeanQuery() {
-        if (!optimalCommands.beanQuery || !fullFilePath) {
+        const filePath = plugin.settings.beancountFilePath;
+        if (!optimalCommands.beanQuery || !filePath) {
             commandTests.beanQuery.error = 'Bean-query command or file path not available';
             return;
         }
 
         commandTests.beanQuery.isRunning = true;
         commandTests.beanQuery.isValid = null;
-        commandTests.beanQuery.command = `${optimalCommands.beanQuery} "${fullFilePath}" "SELECT TRUE LIMIT 1"`;
+        commandTests.beanQuery.command = `${optimalCommands.beanQuery} "${filePath}" "SELECT TRUE LIMIT 1"`;
         
         try {
             const systemDetector = SystemDetector.getInstance();
@@ -309,14 +191,15 @@
     }
 
     async function testBeanQueryCsv() {
-        if (!optimalCommands.beanQuery || !fullFilePath) {
+        const filePath = plugin.settings.beancountFilePath;
+        if (!optimalCommands.beanQuery || !filePath) {
             commandTests.beanQueryCsv.error = 'Bean-query command or file path not available';
             return;
         }
 
         commandTests.beanQueryCsv.isRunning = true;
         commandTests.beanQueryCsv.isValid = null;
-        commandTests.beanQueryCsv.command = `${optimalCommands.beanQuery} -f csv "${fullFilePath}" "SELECT TRUE LIMIT 1"`;
+        commandTests.beanQueryCsv.command = `${optimalCommands.beanQuery} -f csv "${filePath}" "SELECT TRUE LIMIT 1"`;
         
         try {
             const systemDetector = SystemDetector.getInstance();
@@ -335,8 +218,8 @@
     }
 
     async function runAllTests() {
-        if (!selectedFile) {
-            validationResult = { isValid: false, message: 'Please select a beancount file first' };
+        if (!plugin.settings.beancountFilePath) {
+            validationResult = { isValid: false, message: 'No beancount file configured. Please run onboarding first.' };
             return;
         }
 
@@ -344,21 +227,19 @@
         
         try {
             // Run all tests in sequence
-            await testBeanCheck();
             await testBeanQuery();
             await testBeanQueryCsv();
 
             // Update overall validation result
-            const allValid = commandTests.beanCheck.isValid && 
-                           commandTests.beanQuery.isValid && 
+            const allValid = commandTests.beanQuery.isValid && 
                            commandTests.beanQueryCsv.isValid;
             
             if (allValid) {
                 validationResult = { 
                     isValid: true, 
-                    message: '✅ All commands tested successfully!' 
+                    message: '✅ All bean-query commands tested successfully!' 
                 };
-                new Notice('✅ All Beancount commands validated successfully');
+                new Notice('✅ Bean-query commands validated successfully');
             } else {
                 validationResult = { 
                     isValid: false, 
@@ -381,16 +262,10 @@
         await runAllTests();
     }
 
-    function refreshFiles() {
-        loadVaultFiles();
-        const fileCount = availableFiles.length;
-        new Notice(`File list refreshed - found ${fileCount} beancount file${fileCount !== 1 ? 's' : ''}`);
-    }
     $: {
         // Auto-update when WSL or platform changes
         if (platform && typeof useWSL !== 'undefined') {
             suggestBeancountCommand();
-            updateFullPath();
         }
     }
 </script>
@@ -520,111 +395,46 @@
     {/if}
 
     <div class="file-section">
-        <h4>📁 Beancount File Selection</h4>
+        <h4>📁 Current Configuration</h4>
         
-        <div class="file-selector">
-            <div class="selector-header">
-                <span class="selector-label">Select your .beancount file from the vault:</span>
-            </div>
-            
-            {#if availableFiles.length > 0}
-                <div class="files-found">
-                    <p class="files-count">Found {availableFiles.length} beancount file{availableFiles.length !== 1 ? 's' : ''}</p>
-                    <div class="file-actions">
-                        <button on:click={refreshFiles} class="refresh-btn" title="Refresh file list">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="dropdown-container">
-                    <label for="file-selector" class="dropdown-label">Choose file: <span class="selected-file-inline">{selectedFile ? selectedFile : 'None selected'}</span></label>
-                    <select 
-                        id="file-selector"
-                        bind:value={selectedFile} 
-                        on:change={handleFileSelection} 
-                        class="file-dropdown"
-                    >
-                        <option value="">Select a beancount file...</option>
-                        {#each availableFiles as file}
-                            <option value={file}>{file}</option>
-                        {/each}
-                    </select>
-                </div>
-            {:else}
-                <div class="no-files">
-                    <p>No .beancount or .bean files found in vault</p>
-                    <p class="help-text">
-                        Beancount files should have .beancount or .bean extension.<br>
-                        Click refresh if you just added a file.
-                    </p>
-                    <div class="no-files-actions">
-                        <button on:click={refreshFiles} class="refresh-files-btn">
-                            🔄 Refresh Files
-                        </button>
-                        
-                    </div>
-                </div>
-            {/if}
-        </div>
-
-        {#if selectedFile}
-            <div class="file-path-display">
-                <h5>📍 File Path Information</h5>
-                <div class="path-grid">
-                    <div class="path-card">
-                        <div class="path-header">
-                            <span class="path-icon">📂</span>
-                            <span class="path-title">Vault Location</span>
-                        </div>
-                        <code class="path-code">{plugin.app.vault.adapter.getBasePath()}</code>
-                    </div>
-                    
-                    <div class="path-card">
-                        <div class="path-header">
-                            <span class="path-icon">📄</span>
-                            <span class="path-title">Relative Path</span>
-                        </div>
-                        <code class="path-code">{selectedFile}</code>
-                    </div>
-                    
-                    <div class="path-card full-path-card">
-                        <div class="path-header">
-                            <span class="path-icon">🎯</span>
-                            <span class="path-title">
-                                Full System Path
-                                {#if useWSL && isWSLAvailable && platform === 'win32'}
-                                    <span class="path-badge wsl">WSL Format</span>
-                                {:else if platform === 'win32'}
-                                    <span class="path-badge windows">Windows Format</span>
-                                {:else}
-                                    <span class="path-badge unix">Unix Format</span>
-                                {/if}
-                            </span>
-                        </div>
-                        <code class="path-code full-path">{fullFilePath}</code>
-                        {#if useWSL && isWSLAvailable && platform === 'win32'}
-                            <div class="path-note">
-                                <span class="note-icon">ℹ️</span>
-                                <span class="note-text">Path converted for WSL environment</span>
-                            </div>
-                        {/if}
-                    </div>
-                </div>
-                
-                <div class="path-summary">
-                    <span class="summary-icon">✅</span>
-                    <span class="summary-text">
-                        File selected: <strong>{selectedFile}</strong> 
-                        {#if useWSL && isWSLAvailable && platform === 'win32'}
-                            (will be accessed via WSL)
-                        {:else if platform === 'win32'}
-                            (will be accessed natively on Windows)
+        {#if plugin.settings.beancountFilePath}
+            <div class="config-display">
+                <div class="config-item">
+                    <span class="config-label">Mode:</span>
+                    <span class="config-value">
+                        {#if plugin.settings.useStructuredLayout}
+                            📂 Structured Layout ({plugin.settings.structuredFolderName}/)
                         {:else}
-                            (will be accessed natively on {systemInfo?.platformDisplay || 'Unix'})
+                            📄 Single File
                         {/if}
                     </span>
                 </div>
+                
+                <div class="config-item">
+                    <span class="config-label">Main Ledger:</span>
+                    <code class="config-path">{plugin.settings.beancountFilePath}</code>
+                </div>
+                
+                <div class="config-note">
+                    <span class="note-icon">ℹ️</span>
+                    <span class="note-text">
+                        {#if useWSL && platform === 'win32'}
+                            Paths are automatically converted to WSL format when running commands
+                        {:else}
+                            Paths are used as-is when running commands
+                        {/if}
+                    </span>
+                </div>
+            </div>
+        {:else}
+            <div class="no-config">
+                <p class="help-text">
+                    No file configuration found. Your file setup is managed through:
+                </p>
+                <ul class="help-list">
+                    <li><strong>First-time setup:</strong> Run onboarding (Command Palette → "Run Setup/Onboarding")</li>
+                    <li><strong>Switch modes:</strong> Use the toggle in "File Organization" tab</li>
+                </ul>
             </div>
         {/if}
     </div>
@@ -650,7 +460,7 @@
             <span class="status-text">{detectionStatus}</span>
         </div>
 
-        {#if autoDetectionResults || selectedFile}
+        {#if autoDetectionResults}
             <div class="detection-results">
                 <h5>🎯 Detected Commands:</h5>
                 <div class="commands-grid">
@@ -666,25 +476,6 @@
                                     <span class="detail-label">Version:</span>
                                     <span class="detail-value">{optimalCommands.pythonVersion}</span>
                                 </div>
-                                {#if optimalCommands.pythonPackages}
-                                    <div class="python-packages">
-                                        <span class="detail-label">Packages:</span>
-                                        <div class="packages-list">
-                                            <div class="package-item">
-                                                <span class="package-name">beancount:</span>
-                                                <span class="package-version">{optimalCommands.pythonPackages.beancount}</span>
-                                            </div>
-                                            <div class="package-item">
-                                                <span class="package-name">flask:</span>
-                                                <span class="package-version">{optimalCommands.pythonPackages.flask}</span>
-                                            </div>
-                                            <div class="package-item">
-                                                <span class="package-name">flask_cors:</span>
-                                                <span class="package-version">{optimalCommands.pythonPackages.flask_cors}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                {/if}
                             </div>
                         {/if}
                     </div>
@@ -720,22 +511,6 @@
                             </div>
                         {/if}
                     </div>
-                    
-                    <div class="command-item bean-check-item" class:success={optimalCommands.beanCheck}>
-                        <div class="command-header">
-                            <span class="command-label">Bean Check:</span>
-                            <span class="status-icon">{optimalCommands.beanCheck ? '✅' : '❌'}</span>
-                        </div>
-                        <code class="command-code">{optimalCommands.beanCheck || 'Not found'}</code>
-                        {#if optimalCommands.beanCheckVersion}
-                            <div class="bean-check-details">
-                                <div class="bean-check-version">
-                                    <span class="detail-label">Version:</span>
-                                    <span class="detail-value">{optimalCommands.beanCheckVersion}</span>
-                                </div>
-                            </div>
-                        {/if}
-                    </div>
                 </div>
 
                 <div class="environment-info">
@@ -752,10 +527,10 @@
                         </span>
                     </div>
                     
-                    {#if fullFilePath}
+                    {#if plugin.settings.beancountFilePath}
                         <div class="env-item">
-                            <span class="env-label">File Path Format:</span>
-                            <code class="env-code">{optimalCommands.filePath || fullFilePath}</code>
+                            <span class="env-label">File Path:</span>
+                            <code class="env-code">{plugin.settings.beancountFilePath}</code>
                         </div>
                     {/if}
                 </div>
@@ -770,7 +545,7 @@
         {/if}
     </div>
 
-    {#if selectedFile && optimalCommands.beanCheck && optimalCommands.beanQuery && optimalCommands.python}
+    {#if plugin.settings.beancountFilePath && optimalCommands.beanCheck && optimalCommands.beanQuery && optimalCommands.python}
         <div class="validation-section">
             <h4>✅ Connection Validation</h4>
             
@@ -792,54 +567,10 @@
             </div>
 
             <div class="command-tests">
-                <!-- Bean Check Test -->
-                <div class="command-test-item">
-                    <div class="test-header">
-                        <h5>1. Bean Check</h5>
-                        <button 
-                            on:click={testBeanCheck} 
-                            disabled={commandTests.beanCheck.isRunning || !optimalCommands.beanCheck}
-                            class="test-individual-btn"
-                            class:running={commandTests.beanCheck.isRunning}
-                        >
-                            {#if commandTests.beanCheck.isRunning}
-                                🔄 Testing...
-                            {:else}
-                                🧪 Test
-                            {/if}
-                        </button>
-                        <span class="test-status">
-                            {#if commandTests.beanCheck.isRunning}
-                                🔄
-                            {:else if commandTests.beanCheck.isValid === true}
-                                ✅
-                            {:else if commandTests.beanCheck.isValid === false}
-                                ❌
-                            {:else}
-                                ⭕
-                            {/if}
-                        </span>
-                    </div>
-                    <div class="test-command">
-                        <strong>Command:</strong> 
-                        <code>{commandTests.beanCheck.command || `${optimalCommands.beanCheck || 'bean-check'} "${fullFilePath}"`}</code>
-                    </div>
-                    {#if commandTests.beanCheck.error}
-                        <div class="test-error">
-                            <strong>Error:</strong> {commandTests.beanCheck.error}
-                        </div>
-                    {/if}
-                    {#if commandTests.beanCheck.output}
-                        <div class="test-output">
-                            <strong>Output:</strong> <pre>{commandTests.beanCheck.output.slice(0, 200)}{commandTests.beanCheck.output.length > 200 ? '...' : ''}</pre>
-                        </div>
-                    {/if}
-                </div>
-
                 <!-- Bean Query Test -->
                 <div class="command-test-item">
                     <div class="test-header">
-                        <h5>2. Bean Query</h5>
+                        <h5>1. Bean Query</h5>
                         <button 
                             on:click={testBeanQuery} 
                             disabled={commandTests.beanQuery.isRunning || !optimalCommands.beanQuery}
@@ -866,7 +597,7 @@
                     </div>
                     <div class="test-command">
                         <strong>Command:</strong> 
-                        <code>{commandTests.beanQuery.command || `${optimalCommands.beanQuery || 'bean-query'} "${fullFilePath}" "SELECT TRUE LIMIT 1"`}</code>
+                        <code>{commandTests.beanQuery.command || 'Not run yet'}</code>
                     </div>
                     {#if commandTests.beanQuery.error}
                         <div class="test-error">
@@ -883,7 +614,7 @@
                 <!-- Bean Query CSV Test -->
                 <div class="command-test-item">
                     <div class="test-header">
-                        <h5>3. Bean Query (CSV Output)</h5>
+                        <h5>2. Bean Query (CSV Output)</h5>
                         <button 
                             on:click={testBeanQueryCsv} 
                             disabled={commandTests.beanQueryCsv.isRunning || !optimalCommands.beanQuery}
@@ -910,7 +641,7 @@
                     </div>
                     <div class="test-command">
                         <strong>Command:</strong> 
-                        <code>{commandTests.beanQueryCsv.command || `${optimalCommands.beanQuery || 'bean-query'} -f csv "${fullFilePath}" "SELECT TRUE LIMIT 1"`}</code>
+                        <code>{commandTests.beanQueryCsv.command || 'Not run yet'}</code>
                     </div>
                     {#if commandTests.beanQueryCsv.error}
                         <div class="test-error">
@@ -1452,288 +1183,6 @@
         margin: 0;
     }
 
-    .file-selector {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .selector-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .selector-label {
-        font-weight: 500;
-        color: var(--text-normal);
-        font-size: 13px;
-    }
-
-    .files-found {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 12px;
-        background: var(--background-primary-alt);
-        border-radius: 4px;
-        border: 1px solid var(--text-success);
-        margin-bottom: 8px;
-    }
-
-    .files-count {
-        margin: 0;
-        font-size: 12px;
-        color: var(--text-success);
-        font-weight: 500;
-    }
-
-    .file-actions {
-        display: flex;
-        gap: 6px;
-    }
-
-    .refresh-btn {
-        padding: 4px 8px;
-        font-size: 11px;
-        background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        color: var(--text-normal);
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .refresh-btn:hover {
-        background: var(--background-modifier-hover);
-    }
-
-    .dropdown-container {
-        margin-top: 12px;
-        padding: 12px;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        background: var(--background-primary-alt);
-    }
-
-    .dropdown-label {
-        display: block;
-        font-weight: 500;
-        color: var(--text-normal);
-        margin-bottom: 6px;
-        font-size: 13px;
-    }
-
-    .dropdown-label .selected-file-inline {
-        margin-left: 8px;
-        font-size: 12px;
-        font-weight: 400;
-        color: var(--text-muted);
-        font-family: var(--font-monospace);
-        max-width: 70%;
-        display: inline-block;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        vertical-align: middle;
-    }
-
-    .file-dropdown {
-        width: 100%;
-        padding: 8px 12px;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
-        font-size: 13px;
-        min-height: 32px;
-    }
-
-    .file-dropdown:focus {
-        outline: none;
-        border-color: var(--interactive-accent);
-        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
-    }
-
-    .no-files {
-        text-align: center;
-        padding: 20px;
-        color: var(--text-muted);
-    }
-
-    .no-files p {
-        margin: 0 0 12px 0;
-        font-style: italic;
-    }
-
-    .no-files .help-text {
-        font-size: 12px;
-        line-height: 1.4;
-        margin-bottom: 16px;
-        color: var(--text-muted);
-    }
-
-    .no-files-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .refresh-files-btn {
-        padding: 8px 16px;
-        background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        color: var(--text-normal);
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-    }
-
-    .refresh-files-btn:hover {
-        background: var(--background-modifier-hover);
-    }
-    /* Enhanced File Path Display */
-    .file-path-display {
-        margin-top: 16px;
-        padding: 16px;
-        background: var(--background-primary-alt);
-        border-radius: 6px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .file-path-display h5 {
-        margin: 0 0 16px 0;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-normal);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .path-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
-        margin-bottom: 16px;
-    }
-
-    .path-card {
-        background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        padding: 12px;
-        position: relative;
-    }
-
-    .path-card.full-path-card {
-        border-color: var(--interactive-accent);
-        background: rgba(100, 108, 255, 0.05);
-    }
-
-    .path-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-
-    .path-icon {
-        font-size: 14px;
-    }
-
-    .path-title {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--text-muted);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .path-badge {
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 10px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .path-badge.wsl {
-        background: var(--text-success);
-        color: white;
-    }
-
-    .path-badge.windows {
-        background: var(--interactive-accent);
-        color: white;
-    }
-
-    .path-badge.unix {
-        background: var(--text-muted);
-        color: white;
-    }
-
-    .path-code {
-        font-family: var(--font-monospace);
-        background: var(--background-modifier-hover);
-        padding: 6px 8px;
-        border-radius: 3px;
-        font-size: 11px;
-        color: var(--text-accent);
-        word-break: break-all;
-        display: block;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .full-path-card .path-code {
-        background: rgba(100, 108, 255, 0.1);
-        border-color: var(--interactive-accent);
-        font-weight: 500;
-    }
-
-    .path-note {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 8px;
-        font-size: 11px;
-        color: var(--text-success);
-    }
-
-    .note-icon {
-        font-size: 12px;
-    }
-
-    .note-text {
-        font-style: italic;
-    }
-
-    .path-summary {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        background: rgba(46, 160, 67, 0.1);
-        border: 1px solid var(--text-success);
-        border-radius: 4px;
-        font-size: 12px;
-        color: var(--text-success);
-    }
-
-    .summary-icon {
-        font-size: 14px;
-    }
-
-    .summary-text strong {
-        color: var(--text-normal);
-    }
-
     .validation-controls {
         display: flex;
         flex-direction: column;
@@ -1901,6 +1350,78 @@
         border-radius: 2px;
         font-size: 10px;
         color: var(--text-accent);
+    }
+
+    /* Configuration Display */
+    .config-display {
+        background: var(--background-primary-alt);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        padding: 16px;
+    }
+
+    .config-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    .config-item:last-of-type {
+        border-bottom: none;
+    }
+
+    .config-label {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+
+    .config-value {
+        font-size: 13px;
+        color: var(--text-normal);
+    }
+
+    .config-path {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+        font-size: 12px;
+        background: var(--background-modifier-border);
+        padding: 6px 10px;
+        border-radius: 4px;
+        color: var(--text-normal);
+        word-break: break-all;
+        flex: 1;
+        margin-left: 12px;
+    }
+
+    .config-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 12px;
+        margin-top: 12px;
+        background: var(--background-secondary);
+        border-radius: 4px;
+        border-left: 3px solid var(--interactive-accent);
+    }
+
+    .no-config {
+        background: var(--background-secondary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        padding: 20px;
+    }
+
+    .help-list {
+        margin: 12px 0 0 20px;
+        padding: 0;
+        color: var(--text-normal);
+    }
+
+    .help-list li {
+        margin: 8px 0;
+        font-size: 13px;
     }
 
     @media (max-width: 768px) {
