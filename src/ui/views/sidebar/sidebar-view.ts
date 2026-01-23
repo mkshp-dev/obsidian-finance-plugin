@@ -152,8 +152,19 @@ export class BeancountView extends ItemView {
 		if (!filePath) return { status: "error", message: "File path not set.", errorCount: 0, errorList: [] };
 		if (!commandBase) return { status: "error", message: "Command not set.", errorCount: 0, errorList: [] };
 
+		// Convert Windows path to WSL path if using WSL
+		let checkFilePath = filePath;
+		if (commandBase.includes('wsl')) {
+			// Convert Windows path to WSL format
+			const match = filePath.match(/^([a-zA-Z]):\\/);
+			if (match) {
+				const driveLetter = match[1].toLowerCase();
+				checkFilePath = filePath.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
+			}
+		}
+
 		// --- Use imported query function ---
-		const command = queries.getBeanCheckCommand(filePath, commandBase);
+		const command = queries.getBeanCheckCommand(checkFilePath, commandBase);
 
 		return new Promise((resolve) => {
 			// --- Need exec import from child_process ---

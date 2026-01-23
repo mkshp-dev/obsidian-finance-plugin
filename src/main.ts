@@ -95,6 +95,11 @@ export default class BeancountPlugin extends Plugin {
 			name: 'Open Beancount Snapshot',
 			callback: () => { this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); }
 		});
+		this.addCommand({
+			id: 'run-beancount-onboarding',
+			name: 'Run Setup/Onboarding',
+			callback: () => { new OnboardingModal(this.app, this).open(); }
+		});
 
 
 		this.addSettingTab(new BeancountSettingTab(this.app, this));

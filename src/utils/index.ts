@@ -6,6 +6,44 @@ import type BeancountPlugin from '../main'; // Needed for settings type
 import { readFile, writeFile, copyFile } from 'fs/promises';
 import { existsSync, unlinkSync, renameSync } from 'fs';
 import { join, dirname, basename } from 'path';
+import { getTargetFile, getMainLedgerPath, ensureYearFile, type OperationType } from './structuredLayout';
+
+// --- FILE PATH RESOLVER ---
+
+/**
+ * Get the appropriate file path based on plugin mode (single file vs structured layout).
+ * 
+ * @param plugin - The plugin instance
+ * @param operationType - The type of operation (transaction, account, etc.)
+ * @param date - Optional date for transaction routing
+ * @returns The absolute path to the target file
+ */
+function resolveFilePath(
+	plugin: BeancountPlugin,
+	operationType: OperationType,
+	date?: string
+): string {
+	if (plugin.settings.useStructuredLayout) {
+		return getTargetFile(plugin, operationType, date);
+	} else {
+		// Single file mode - use configured path
+		return plugin.settings.beancountFilePath;
+	}
+}
+
+/**
+ * Get the file path for BQL queries (main ledger file in structured mode).
+ * 
+ * @param plugin - The plugin instance
+ * @returns The absolute path to the query entry point
+ */
+function resolveQueryFilePath(plugin: BeancountPlugin): string {
+	if (plugin.settings.useStructuredLayout) {
+		return getMainLedgerPath(plugin);
+	} else {
+		return plugin.settings.beancountFilePath;
+	}
+}
 
 // --- QUERY RUNNER ---
 
@@ -19,11 +57,18 @@ import { join, dirname, basename } from 'path';
  */
 export function runQuery(plugin: BeancountPlugin, query: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveQueryFilePath(plugin);
 		const commandName = plugin.settings.beancountCommand;
 		if (!filePath) return reject(new Error('File path not set.'));
 		if (!commandName) return reject(new Error('Command not set.'));
-		const command = `${commandName} -q -f csv "${filePath}" "${query}"`;
+		
+		// Convert Windows path to WSL path if using WSL
+		let queryFilePath = filePath;
+		if (commandName.includes('wsl')) {
+			queryFilePath = convertWindowsPathToWsl(filePath);
+		}
+		
+		const command = `${commandName} -q -f csv "${queryFilePath}" "${query}"`;
 		
 		// Increase maxBuffer to handle large query results (50MB limit)
 		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
@@ -258,6 +303,21 @@ export function parseSingleValue(csv: string): string {
 }
 
 // --- PATH CONVERTER ---
+
+/**
+ * Converts a Windows path (C:\...) to a WSL path (/mnt/c/...).
+ *
+ * @param {string} windowsPath - The Windows path.
+ * @returns {string} The corresponding WSL path.
+ */
+export function convertWindowsPathToWsl(windowsPath: string): string {
+	const match = windowsPath.match(/^([a-zA-Z]):\\/);
+	if (match) {
+		const driveLetter = match[1].toLowerCase();
+		return windowsPath.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
+	}
+	return windowsPath;
+}
 
 /**
  * Converts a WSL path (/mnt/c/...) to a Windows path (C:\...).
@@ -909,7 +969,7 @@ export async function saveOpenDirective(
 	createBackup: boolean = true
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveFilePath(plugin, 'account', date);
 		if (!filePath) {
 			return { success: false, error: 'Beancount file path not set' };
 		}
@@ -970,7 +1030,7 @@ export async function createBalanceAssertion(
 	createBackup: boolean = true
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveFilePath(plugin, 'balance', date);
 		if (!filePath) {
 			return { success: false, error: 'Beancount file path not set' };
 		}
@@ -1028,7 +1088,7 @@ export async function createNote(
 	createBackup: boolean = true
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveFilePath(plugin, 'note', date);
 		if (!filePath) {
 			return { success: false, error: 'Beancount file path not set' };
 		}
@@ -1846,7 +1906,18 @@ export async function createTransaction(
 	transactionData: any
 ): Promise<{success: boolean, error?: string}> {
 	try {
-		const beancountFilePath = plugin.settings.beancountFilePath;
+		// Extract date from transaction data
+		const transactionDate = transactionData.date || new Date().toISOString().split('T')[0];
+		
+		// If structured layout, ensure year file exists
+		if (plugin.settings.useStructuredLayout) {
+			const year = new Date(transactionDate).getFullYear();
+			const folderName = plugin.settings.structuredFolderName || 'Finances';
+			await ensureYearFile(plugin, folderName, year);
+		}
+		
+		// Get target file path
+		const beancountFilePath = resolveFilePath(plugin, 'transaction', transactionDate);
 		if (!beancountFilePath) {
 			return { success: false, error: 'Beancount file path not configured' };
 		}
@@ -2203,7 +2274,7 @@ export async function saveCloseDirective(
 	createBackup: boolean = true
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveFilePath(plugin, 'account', date);
 		if (!filePath) {
 			return { success: false, error: 'Beancount file path not set' };
 		}
