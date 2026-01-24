@@ -108,15 +108,68 @@ export class OnboardingModal extends Modal {
 
         // Show file path input if existing is selected
         if (this.dataChoice === 'existing') {
-            new Setting(existingSection)
-                .setName('Beancount file path')
-                .setDesc('Absolute path to your .beancount file')
-                .addText(text => text
-                    .setPlaceholder('/path/to/your/ledger.beancount')
-                    .setValue(this.existingFilePath)
-                    .onChange(value => {
-                        this.existingFilePath = value;
-                    }));
+            // Get all .beancount files in the vault
+            Logger.log('[Onboarding] Searching for .beancount files in vault...');
+            const allFiles = this.app.vault.getFiles();
+            Logger.log(`[Onboarding] Total files in vault: ${allFiles.length}`);
+            
+            const beancountFiles = allFiles
+                .filter(file => {
+                    const isBeancount = file.extension === 'beancount';
+                    if (isBeancount) {
+                        Logger.log(`[Onboarding] Found .beancount file: ${file.path} (extension: ${file.extension})`);
+                    }
+                    return isBeancount;
+                })
+                .map(file => file.path);
+            
+            Logger.log(`[Onboarding] Total .beancount files found: ${beancountFiles.length}`);
+            Logger.log(`[Onboarding] Files: ${JSON.stringify(beancountFiles)}`);
+            
+            if (beancountFiles.length > 0) {
+                // Show dropdown if there are .beancount files
+                new Setting(existingSection)
+                    .setName('Select Beancount file')
+                    .setDesc('Choose from existing .beancount files in your vault')
+                    .addDropdown(dropdown => {
+                        dropdown.addOption('', '-- Select a file --');
+                        beancountFiles.forEach(filePath => {
+                            dropdown.addOption(filePath, filePath);
+                        });
+                        dropdown.setValue(this.existingFilePath);
+                        dropdown.onChange(value => {
+                            this.existingFilePath = value;
+                        });
+                    });
+                
+                // Also show manual input as fallback
+                new Setting(existingSection)
+                    .setName('Or enter path manually')
+                    .setDesc('Absolute path to your .beancount file (if outside vault)')
+                    .addText(text => text
+                        .setPlaceholder('/path/to/your/ledger.beancount')
+                        .setValue(this.existingFilePath)
+                        .onChange(value => {
+                            this.existingFilePath = value;
+                        }));
+            } else {
+                // No .beancount files found, show only manual input
+                existingSection.createEl('p', { 
+                    text: 'No .beancount files found in vault.',
+                    cls: 'setting-item-description',
+                    attr: { style: 'color: var(--text-muted); font-style: italic; margin-bottom: 10px;' }
+                });
+                
+                new Setting(existingSection)
+                    .setName('Beancount file path')
+                    .setDesc('Absolute path to your .beancount file')
+                    .addText(text => text
+                        .setPlaceholder('/path/to/your/ledger.beancount')
+                        .setValue(this.existingFilePath)
+                        .onChange(value => {
+                            this.existingFilePath = value;
+                        }));
+            }
         }
 
         // Navigation buttons
@@ -386,9 +439,30 @@ export class OnboardingModal extends Modal {
     private async handleExistingStructured() {
         Logger.log('Onboarding: Existing + Structured - migrating');
         
-        // Temporarily set the file path for migration
-        this.plugin.settings.beancountFilePath = this.existingFilePath;
+        // Convert vault-relative path to absolute path if needed
+        let absolutePath = this.existingFilePath;
+        
+        // Check if path is vault-relative (doesn't start with / or C:\ etc)
+        if (!absolutePath.match(/^[a-zA-Z]:[\\\/]/) && !absolutePath.startsWith('/')) {
+            // It's a vault-relative path, convert to absolute
+            const file = this.app.vault.getAbstractFileByPath(absolutePath);
+            if (file && file instanceof TFile) {
+                // @ts-ignore
+                absolutePath = this.app.vault.adapter.getFullPath(file.path);
+                Logger.log(`[Onboarding] Converted vault path "${this.existingFilePath}" to absolute: "${absolutePath}"`);
+            } else {
+                Logger.error('[Onboarding] Could not find file in vault:', absolutePath);
+                new Notice(`Could not find file: ${absolutePath}`);
+                return;
+            }
+        }
+        
+        // Temporarily set the file path for migration (MUST set useStructuredLayout=false so queries read from source)
+        this.plugin.settings.beancountFilePath = absolutePath;
+        this.plugin.settings.useStructuredLayout = false;
         await this.plugin.saveSettings();
+        
+        Logger.log(`[Onboarding] Starting migration with file: ${absolutePath}`);
         
         // Perform migration
         const result = await migrateToStructuredLayout(this.plugin, this.structuredFolderName);
