@@ -4,21 +4,17 @@ import type BeancountPlugin from '../../main';
 import { DEMO_LEDGER_CONTENT } from '../../services/demo-ledger';
 import { Logger } from '../../utils/logger';
 import { createStructuredFolder, getMainLedgerPath, getDemoTransactionsForYear, migrateToStructuredLayout } from '../../utils/structuredLayout';
+import { runQuery } from '../../utils/index';
+import { ConfirmModal } from './ConfirmModal';
 
-type OnboardingStep = 1 | 2;
 type DataChoice = 'demo' | 'existing';
-type LayoutChoice = 'single' | 'structured';
 
 export class OnboardingModal extends Modal {
     plugin: BeancountPlugin;
-    private currentStep: OnboardingStep = 1;
     
-    // Step 1 choices
+    // Choices
     private dataChoice: DataChoice | null = null;
     private existingFilePath: string = '';
-    
-    // Step 2 choices
-    private layoutChoice: LayoutChoice | null = null;
     private structuredFolderName: string = 'Finances';
 
     constructor(app: App, plugin: BeancountPlugin) {
@@ -34,17 +30,9 @@ export class OnboardingModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
 
-        if (this.currentStep === 1) {
-            this.renderStep1(contentEl);
-        } else {
-            this.renderStep2(contentEl);
-        }
-    }
-
-    private renderStep1(contentEl: HTMLElement) {
         contentEl.createEl('h2', { text: 'Welcome to Obsidian Finance' });
         contentEl.createEl('p', { 
-            text: 'Step 1 of 2: Choose your starting point',
+            text: 'Choose your starting point. A structured folder layout will be created to organize your finances.',
             cls: 'setting-item-description'
         });
 
@@ -172,15 +160,32 @@ export class OnboardingModal extends Modal {
             }
         }
 
-        // Navigation buttons
+        // Structured folder name setting
+        const folderSection = contentEl.createDiv({ cls: 'onboarding-section' });
+        folderSection.style.marginTop = '20px';
+        folderSection.style.padding = '15px';
+        folderSection.style.border = '1px solid var(--background-modifier-border)';
+        folderSection.style.borderRadius = '5px';
+        
+        new Setting(folderSection)
+            .setName('Structured folder name')
+            .setDesc('Name of the folder where your organized finance files will be stored')
+            .addText(text => text
+                .setPlaceholder('Finances')
+                .setValue(this.structuredFolderName)
+                .onChange(value => {
+                    this.structuredFolderName = value || 'Finances';
+                }));
+
+        // Setup button
         const buttonContainer = contentEl.createDiv({ cls: 'onboarding-buttons' });
         buttonContainer.style.display = 'flex';
         buttonContainer.style.justifyContent = 'flex-end';
         buttonContainer.style.marginTop = '20px';
         buttonContainer.style.gap = '10px';
 
-        const nextBtn = buttonContainer.createEl('button', { text: 'Next →', cls: 'mod-cta' });
-        nextBtn.onclick = () => {
+        const setupBtn = buttonContainer.createEl('button', { text: 'Start Setup', cls: 'mod-cta' });
+        setupBtn.onclick = async () => {
             if (!this.dataChoice) {
                 new Notice('Please select an option');
                 return;
@@ -191,131 +196,7 @@ export class OnboardingModal extends Modal {
                 return;
             }
             
-            // Check for ledger.beancount conflict when using existing file
-            if (this.dataChoice === 'existing') {
-                const fileName = this.existingFilePath.split(/[/\\]/).pop() || '';
-                const isAtRoot = !this.existingFilePath.includes('/') && !this.existingFilePath.includes('\\');
-                
-                if (fileName === 'ledger.beancount' && isAtRoot) {
-                    new Notice('⚠️ Your file is named "ledger.beancount" at vault root. Please rename it (e.g., "main.beancount") to avoid conflicts, then try again.');
-                    return;
-                }
-            }
-            
-            this.currentStep = 2;
-            this.render();
-        };
-    }
-
-    private renderStep2(contentEl: HTMLElement) {
-        contentEl.createEl('h2', { text: 'Welcome to Obsidian Finance' });
-        contentEl.createEl('p', { 
-            text: 'Step 2 of 2: Choose your file organization',
-            cls: 'setting-item-description'
-        });
-
-        // Show what was chosen in step 1
-        const summaryEl = contentEl.createDiv({ cls: 'onboarding-summary' });
-        summaryEl.style.padding = '10px';
-        summaryEl.style.backgroundColor = 'var(--background-secondary)';
-        summaryEl.style.borderRadius = '5px';
-        summaryEl.style.marginBottom = '20px';
-        
-        const dataChoiceText = this.dataChoice === 'demo' ? '📊 Demo data' : `📄 ${this.existingFilePath}`;
-        summaryEl.createEl('div', { text: `Selected: ${dataChoiceText}` });
-
-        // Option A: Single File
-        const singleSection = contentEl.createDiv({ cls: 'onboarding-section' });
-        singleSection.style.marginBottom = '20px';
-        singleSection.style.padding = '15px';
-        singleSection.style.border = '1px solid var(--background-modifier-border)';
-        singleSection.style.borderRadius = '5px';
-        
-        const singleHeader = singleSection.createDiv({ cls: 'onboarding-option-header' });
-        singleHeader.style.display = 'flex';
-        singleHeader.style.alignItems = 'center';
-        singleHeader.style.marginBottom = '10px';
-        
-        const singleRadio = singleHeader.createEl('input', { 
-            type: 'radio',
-            attr: { name: 'layout-choice', value: 'single' }
-        });
-        singleRadio.style.marginRight = '10px';
-        singleRadio.checked = this.layoutChoice === 'single';
-        singleRadio.onchange = () => {
-            this.layoutChoice = 'single';
-            this.render();
-        };
-        
-        singleHeader.createEl('h3', { text: 'Single File', cls: 'onboarding-option-title' });
-        singleSection.createEl('p', { 
-            text: 'Traditional approach. Everything in one ledger.beancount file. Simple and straightforward.',
-            cls: 'setting-item-description'
-        });
-
-        // Option B: Structured Layout
-        const structuredSection = contentEl.createDiv({ cls: 'onboarding-section' });
-        structuredSection.style.padding = '15px';
-        structuredSection.style.border = '1px solid var(--background-modifier-border)';
-        structuredSection.style.borderRadius = '5px';
-        structuredSection.style.marginBottom = '20px';
-        
-        const structuredHeader = structuredSection.createDiv({ cls: 'onboarding-option-header' });
-        structuredHeader.style.display = 'flex';
-        structuredHeader.style.alignItems = 'center';
-        structuredHeader.style.marginBottom = '10px';
-        
-        const structuredRadio = structuredHeader.createEl('input', { 
-            type: 'radio',
-            attr: { name: 'layout-choice', value: 'structured' }
-        });
-        structuredRadio.style.marginRight = '10px';
-        structuredRadio.checked = this.layoutChoice === 'structured';
-        structuredRadio.onchange = () => {
-            this.layoutChoice = 'structured';
-            this.render();
-        };
-        
-        structuredHeader.createEl('h3', { text: 'Structured Layout (Recommended)', cls: 'onboarding-option-title' });
-        structuredSection.createEl('p', { 
-            text: 'Organized into separate files: accounts, commodities, prices, transactions by year, etc. Better for growing ledgers.',
-            cls: 'setting-item-description'
-        });
-
-        // Show folder name input if structured is selected
-        if (this.layoutChoice === 'structured') {
-            new Setting(structuredSection)
-                .setName('Folder name')
-                .setDesc('Name of the folder to create for your files')
-                .addText(text => text
-                    .setPlaceholder('Finances')
-                    .setValue(this.structuredFolderName)
-                    .onChange(value => {
-                        this.structuredFolderName = value || 'Finances';
-                    }));
-        }
-
-        // Navigation buttons
-        const buttonContainer = contentEl.createDiv({ cls: 'onboarding-buttons' });
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'space-between';
-        buttonContainer.style.marginTop = '20px';
-
-        const backBtn = buttonContainer.createEl('button', { text: '← Back' });
-        backBtn.onclick = () => {
-            this.currentStep = 1;
-            this.layoutChoice = null; // Reset step 2 choice
-            this.render();
-        };
-
-        const finishBtn = buttonContainer.createEl('button', { text: 'Finish Setup', cls: 'mod-cta' });
-        finishBtn.onclick = async () => {
-            if (!this.layoutChoice) {
-                new Notice('Please select an option');
-                return;
-            }
-            
-            await this.handleFinish(finishBtn);
+            await this.handleFinish(setupBtn);
         };
     }
 
@@ -325,14 +206,10 @@ export class OnboardingModal extends Modal {
         buttonEl.disabled = true;
 
         try {
-            // Determine which handler to call based on choices
-            if (this.dataChoice === 'demo' && this.layoutChoice === 'single') {
-                await this.handleDemoSingle();
-            } else if (this.dataChoice === 'demo' && this.layoutChoice === 'structured') {
+            // Always use structured layout
+            if (this.dataChoice === 'demo') {
                 await this.handleDemoStructured();
-            } else if (this.dataChoice === 'existing' && this.layoutChoice === 'single') {
-                await this.handleExistingSingle();
-            } else if (this.dataChoice === 'existing' && this.layoutChoice === 'structured') {
+            } else if (this.dataChoice === 'existing') {
                 await this.handleExistingStructured();
             }
         } catch (error) {
@@ -341,37 +218,6 @@ export class OnboardingModal extends Modal {
             buttonEl.textContent = originalText;
             buttonEl.disabled = false;
         }
-    }
-
-    private async handleDemoSingle() {
-        Logger.log('Onboarding: Demo + Single File');
-        
-        const fileName = 'ledger.beancount';
-        const existing = this.app.vault.getAbstractFileByPath(fileName);
-        
-        if (existing) {
-            new Notice(`⚠️ File ${fileName} already exists! Using existing file.`);
-            // @ts-ignore
-            const fullPath = this.app.vault.adapter.getFullPath(fileName);
-            this.plugin.settings.beancountFilePath = fullPath;
-            this.plugin.settings.useStructuredLayout = false;
-            await this.plugin.saveSettings();
-            this.close();
-            return;
-        }
-
-        // Create demo file
-        await this.app.vault.create(fileName, DEMO_LEDGER_CONTENT);
-        // @ts-ignore
-        const fullPath = this.app.vault.adapter.getFullPath(fileName);
-        
-        this.plugin.settings.beancountFilePath = fullPath;
-        this.plugin.settings.useStructuredLayout = false;
-        await this.plugin.saveSettings();
-        
-        new Notice(`✓ Created ${fileName} with demo data`);
-        Logger.log('Onboarding: Created demo single file');
-        this.close();
     }
 
     private async handleDemoStructured() {
@@ -421,19 +267,6 @@ export class OnboardingModal extends Modal {
                 throw error;
             }
         }
-    }
-
-    private async handleExistingSingle() {
-        Logger.log('Onboarding: Existing + Single File');
-        
-        // Just configure settings to point to existing file
-        this.plugin.settings.beancountFilePath = this.existingFilePath;
-        this.plugin.settings.useStructuredLayout = false;
-        await this.plugin.saveSettings();
-        
-        new Notice('✓ Configuration saved! Using single file mode.');
-        Logger.log('Onboarding: Configured existing single file');
-        this.close();
     }
 
     private async handleExistingStructured() {
