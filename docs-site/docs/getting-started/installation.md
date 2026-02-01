@@ -59,6 +59,27 @@ If this displays a version number, you are good to go.
 
 After installation, you must configure the plugin to point to your ledger.
 
+### First-Time Setup: Onboarding Modal
+
+When you first install and enable the plugin (or if no Beancount file is configured), an **Onboarding Modal** will automatically appear. This wizard helps you get started quickly:
+
+#### Option 1: Demo Data
+Perfect for trying out the plugin or learning Beancount:
+- Creates a structured folder layout in your vault (default: `Finances/`)
+- Populates it with sample transactions, accounts, and commodities
+- Includes realistic examples of income, expenses, investments, and more
+- Great for exploring features before using real data
+
+#### Option 2: Existing Beancount File
+If you already have a Beancount ledger:
+- Point to your existing `.beancount` file
+- Can be inside or outside your vault
+- Option to migrate to structured layout (organizes entries into separate files)
+
+### Manual Configuration
+
+If you skip onboarding or want to change settings later:
+
 1.  **Open Settings**: Settings → Community Plugins → Finance Plugin.
 2.  **Connection Panel**: The plugin attempts to **auto-detect** your Python environment and Beancount tools.
     - **Status Indicators**: Look for green checkmarks next to Bean-Query, Bean-Check, etc.

@@ -88,13 +88,4 @@ All entry creation, updates, and deletions are handled by functions in `src/util
 3.  **Updating Documentation**:
     - Edit files in `docs-site/docs/`.
     - Follow the structure defined in `sidebars.ts`.
-    - Update README.md for user-facing feature changes
-    - Fetch data via `BeanQueryService`.
-
-2.  **Extending the API**:
-    - Add endpoint in `src/backend/journal_api.py`.
-    - Add typed method in `src/api/client.ts`.
-
-3.  **Updating Documentation**:
-    - Edit files in `docs-site/docs/`.
-    - Follow the structure defined in `sidebars.ts`.
+    - Update README.md for user-facing feature changes.
