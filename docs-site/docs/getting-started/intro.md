@@ -21,18 +21,21 @@ This plugin transforms your Obsidian vault into a powerful financial analysis to
 *   **📊 Unified Dashboard**: A centralized hub featuring Overview, Transactions, Journal, Balance Sheet, and Commodities tabs.
 *   **💸 Transaction Management**: Unified entry modal for Transactions, Balance Assertions, and Notes with smart validation.
 *   **🏦 Account Hierarchy**: Interactive tree view with real-time balances and drill-down capability.
-*   **📋 Journal View**: Full Beancount ledger interface with server-side filtering and Fava-style cards.
+*   **📋 Journal View**: Full Beancount ledger interface with direct file operations and Fava-style cards.
 *   **🔍 BQL Integration**: Execute live queries in your notes using Code Blocks or Inline Queries.
 *   **🪙 Commodities & Pricing**: Yahoo Finance integration for easy symbol search and automated price updates.
 *   **⚙️ Smart Connection**: Automatic detection of Python/Beancount environment (including WSL support).
+*   **🎯 First-Time Onboarding**: Friendly setup wizard with demo data option for quick start.
+*   **📁 Structured Layout**: Organize large ledgers across multiple files for better maintainability.
 
 ## 📚 Documentation Guide
 
 This documentation is structured to help you get the most out of the plugin:
 
-*   **[Getting Started](./installation.md)**: Setup instructions and initial configuration.
+*   **[Getting Started](./installation.md)**: Installation, setup instructions, and first-time onboarding wizard.
+*   **[First-Time Setup](./first-time-setup.md)**: Complete guide to the onboarding process, demo data, and structured layout.
 *   **[Core Features](../core-features/unified-dashboard/overview.md)**: Deep dive into the Dashboard, Adding Directives, and Snapshot views.
-*   **[Configuration](../configuration/settings.md)**: Detailed explanation of all plugin settings.
+*   **[Configuration](../configuration/settings.md)**: Detailed explanation of all plugin settings including structured layout.
 *   **[Queries](../queries/bql.md)**: Master the Beancount Query Language (BQL) within Obsidian.
 
 ## 🔧 Requirements

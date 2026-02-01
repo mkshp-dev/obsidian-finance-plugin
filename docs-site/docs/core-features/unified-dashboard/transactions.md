@@ -4,28 +4,37 @@ sidebar_position: 2
 
 # Transactions Tab
 
-The **Transactions Tab** allows you to explore your financial history with powerful filtering.
+The **Transactions Tab** allows you to explore your financial history with powerful filtering capabilities.
 
 ## 🔍 Features
 
-### Filtering
+### Dynamic Filtering
 Filter your history by any combination of:
-- **Date Range**: Start and End dates.
-- **Account**: Substring match (e.g., "Food" matches "Expenses:Food").
-- **Payee**: Who you paid.
-- **Tags**: Filter by specific tags (e.g., `#vacation`).
+- **Date Range**: Start and End dates (inclusive).
+- **Account**: Substring match (e.g., "Food" matches "Expenses:Food:Groceries").
+- **Payee**: Who you paid (searches transaction payee field).
+- **Tags**: Filter by specific tags (e.g., `#vacation`, `#business`).
+- **Search**: Full-text search across all transaction fields.
 
 ### Results Table
-- **Columns**: Date, Payee, Narration, Amount (Position), Balance.
-- **Sorting**: Automatically sorted by date (newest first).
-- **Pagination**: Supports infinite scrolling or large pages (configurable limit).
+Displays your filtered transactions with:
+- **Columns**: Date, Payee, Narration, Amount, Account
+- **Sorting**: Automatically sorted by date (newest first)
+- **Pagination**: Respects the "Max Transaction Results" setting (default: 2000)
+- **Interactive**: Click on transactions to view or edit details
 
 ## 🛠 Under the Hood
 
-1.  **Controller**: `TransactionController.ts` manages state.
-2.  **Filter Loading**: On mount, it queries `getAllAccounts` and `getAllTags` to populate the filter dropdowns.
-3.  **Query Generation**:
-    - When filters change, `getTransactionsQuery()` constructs a dynamic SQL-like BQL query.
-    - Example: `SELECT date, payee... WHERE account ~ 'Food' AND date >= 2023-01-01`.
-4.  **Execution**: The query is sent to `bean-query` via the backend process.
-5.  **Parsing**: The resulting CSV is parsed into rows and displayed in the virtualized table component.
+### Data Flow
+1.  **Controller**: `TransactionController.ts` manages the tab's state (filters, results, loading status)
+2.  **Filter Options**: On tab load, the controller queries available accounts and tags via BQL
+3.  **Dynamic Query Building**: When filters change, a BQL query is constructed dynamically:
+    - Example: `SELECT date, payee, narration, position WHERE account ~ 'Food' AND date >= 2023-01-01`
+4.  **Query Execution**: The query runs via `bean-query` (direct CLI, no backend API)
+5.  **CSV Parsing**: Results are parsed from CSV format using the `csv-parse` library
+6.  **Rendering**: The Svelte component displays results in a responsive table
+
+### Performance Notes
+- Large result sets are limited by the `maxTransactionResults` setting
+- Filtering happens on the client-side after results are fetched
+- For very large ledgers, consider lowering date ranges to reduce data transfer
