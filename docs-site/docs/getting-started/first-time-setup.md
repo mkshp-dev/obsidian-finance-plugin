@@ -4,13 +4,97 @@ sidebar_position: 3
 
 # First-Time Setup
 
-This guide walks you through your first experience with the Obsidian Finance Plugin.
+This guide walks you through your first experience with the Obsidian Finance Plugin using the **3-step onboarding process**.
 
 ## 🚀 Automatic Onboarding
 
-When you first enable the plugin, the **Onboarding Modal** automatically appears if no Beancount file is configured. This friendly wizard helps you get started in minutes.
+When you first enable the plugin, the **Onboarding Modal** automatically appears if no Beancount file is configured. You can also launch it anytime via Command Palette: **"Obsidian Finance: Run Setup/Onboarding"**.
 
-### Onboarding Options
+The onboarding uses a **step-by-step wizard** with progress indicator to ensure your system is properly configured.
+
+---
+
+## Step 1: Prerequisites Check 🔍
+
+Before setting up your ledger files, the plugin verifies your system has the required software installed.
+
+### Required Software
+
+- **Python 3.8 or higher**: The runtime environment for Beancount
+- **Beancount v3+**: The accounting engine with `bean-query` command
+
+Optional:
+- **bean-price**: For automated price fetching (can be added later)
+
+### Running the Check
+
+1. Click **"🔍 Check Prerequisites"** button
+2. The plugin automatically detects:
+   - Python executable and version
+   - bean-query command and version  
+   - System environment (Windows, macOS, Linux, WSL)
+
+### Results
+
+#### ✅ All Prerequisites Met
+If all requirements are satisfied, you'll see:
+- Python command path and version
+- bean-query command path and version
+- **"Next: File Setup →"** button to proceed
+
+The detected commands are automatically saved to your settings.
+
+#### ❌ Prerequisites Not Met
+If requirements are missing, you'll see:
+- Specific items that failed (Python or bean-query)
+- Platform-specific installation instructions
+- Link to official Beancount documentation
+- Option to **"Skip (Manual Config)"** for later setup
+
+### Installation Instructions
+
+The modal displays platform-specific instructions based on your OS:
+
+**Windows:**
+```powershell
+# Install Python from python.org
+# Then in PowerShell:
+pip install beancount
+bean-query --version
+```
+
+**macOS:**
+```bash
+brew install python@3.11
+pip3 install beancount
+bean-query --version
+```
+
+**Linux:**
+```bash
+sudo apt install python3 python3-pip  # Debian/Ubuntu
+pip3 install beancount
+bean-query --version
+```
+
+See the [official Beancount installation guide](https://beancount.github.io/docs/installing_beancount.html) for detailed instructions.
+
+### Skipping Prerequisites Check
+
+You can click **"Skip (Manual Config)"** to bypass the check and configure commands manually later in **Settings → Connection** tab. This is useful if:
+- You have Beancount installed in a non-standard location
+- You're using WSL or a custom Python environment
+- You want to configure later
+
+---
+
+## Step 2: File Setup 📁
+
+## Step 2: File Setup 📁
+
+After prerequisites are verified, choose your starting point.
+
+### Two Paths Available
 
 You have two paths to choose from:
 
@@ -46,17 +130,50 @@ The demo data is completely safe to explore and modify. You can delete it anytim
 - Those wanting to continue with their current setup
 
 **Setup Steps:**
-1. **Choose File Location**: Select whether your file is inside or outside your vault
-2. **Browse or Enter Path**: Use the file picker or enter the absolute path
-3. **Optional Migration**: Choose to keep single-file or migrate to structured layout
-4. **Validation**: Plugin tests the file and verifies Beancount can read it
+1. **Select File**: Choose from existing `.beancount` files in your vault via dropdown
+2. **Or Enter Path Manually**: Provide absolute path to file outside vault
+3. **Configure Folder**: Set the folder name for structured layout (default: "Finances")
+4. **Migration**: Plugin automatically migrates single file to structured layout
 
 **Path Examples:**
-- Inside vault: `My Vault/Finances/ledger.beancount`
+- Inside vault: Select from dropdown
 - Outside vault: `C:\Users\You\Documents\finances.beancount`
 - WSL: `/mnt/c/Users/You/Documents/finances.beancount`
 
-### Structured Layout
+### Navigation
+
+- **← Back to Prerequisites**: Return to Step 1
+- **Start Setup**: Proceed with chosen configuration
+
+---
+
+## Step 3: Verification ✅
+
+After setup completes, you'll see a success screen with:
+
+### Configuration Summary
+
+- Python command and version
+- Bean-query command
+- File mode (Structured Layout)
+- Data source (Demo or Existing)
+- Folder location
+
+### Next Steps Provided
+
+1. Open the Finance Dashboard
+2. Explore the 5 tabs (Overview, Transactions, Journal, Balance Sheet, Commodities)
+3. Try BQL queries in markdown notes
+4. Customize settings
+
+### Actions
+
+- **Open Dashboard & Close**: Opens the unified dashboard view and closes the modal
+- **Close**: Just close the modal (can open dashboard later via Command Palette)
+
+---
+
+## Structured Layout
 
 Both options create a **structured folder layout** by default. This modern organization approach keeps your ledger maintainable as it grows.
 
