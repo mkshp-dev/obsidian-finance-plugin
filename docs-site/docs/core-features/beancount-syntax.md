@@ -657,17 +657,17 @@ When you save a transaction through the modal, the plugin:
 3. **Positions** the transaction in date order within the file
 4. **Writes atomically** with optional backup creation
 
-### Backend Processing
+### File Operations
 
-The plugin uses a Python Flask backend ([journal_api.py](../../../src/backend/journal_api.py)) that:
-- Parses the existing `.beancount` file preserving comments and formatting
-- Generates proper Beancount syntax for costs/prices/tags
-- Handles edge cases (payee-only, amount interpolation, lot matching)
-- Creates backups before writing (if enabled in settings)
+The plugin's file operations in [`src/utils/index.ts`](https://github.com/mkshp-dev/obsidian-finance-plugin/blob/master/src/utils/index.ts):
+- Parse the existing `.beancount` file preserving comments and formatting
+- Generate proper Beancount syntax for costs/prices/tags
+- Handle edge cases (payee-only, amount interpolation, lot matching)
+- Create backups before writing (if enabled in settings)
 
 ### Cost/Price Format Examples
 
-The backend generates these formats based on your inputs:
+The plugin generates these formats based on your inputs:
 
 | Your Input | Generated Syntax |
 |------------|------------------|
