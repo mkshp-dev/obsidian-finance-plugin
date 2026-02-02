@@ -25,13 +25,36 @@ This plugin integrates with your existing Beancount setup:
 2. Extract files to `<vault>/.obsidian/plugins/obsidian-finance-plugin/`
 3. Enable the plugin in Obsidian Settings → Community Plugins
 
+### BRAT Beta Installation
+
+For beta testers who want to try the latest development version:
+
+1. **Install BRAT Plugin**: 
+   - Install [BRAT (Beta Reviewers Auto-update Tester)](https://github.com/TfTHacker/obsidian42-brat) from Obsidian Community Plugins
+   - Enable BRAT in your Community Plugins settings
+
+2. **Add Beta Plugin**:
+   - Open Command Palette (`Ctrl/Cmd + P`)
+   - Run: "BRAT: Add a beta plugin for testing"
+   - Enter repository: `mkshp-dev/obsidian-finance-plugin`
+   - Select branch: `agent` (or `master` for stable)
+
+3. **Enable Plugin**:
+   - Go to Settings → Community Plugins
+   - Find "Beancount Finance Plugin" and enable it
+
+BRAT will automatically check for updates and notify you of new versions. This is the recommended way to test beta features before official releases.
+
+**Note**: Beta versions may have bugs. Always keep backups of your Beancount files and vault data.
+
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our `CONTRIBUTING.md` for details.
 
 ### Development Setup
+
 ```bash
 # Clone the repository
 git clone https://github.com/mkshp-dev/obsidian-finance-plugin.git
@@ -63,4 +86,3 @@ If this project helps your workflow, consider supporting its development ☕
     height="45"
   />
 </a>
-

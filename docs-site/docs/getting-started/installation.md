@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Installation
 
-This guide covers how to install the Obsidian Finance Plugin and set up the necessary backend environment.
+This guide covers how to install the Obsidian Finance Plugin and set up Beancount integration.
 
 ## 📦 Plugin Installation
 
@@ -24,9 +24,9 @@ This guide covers how to install the Obsidian Finance Plugin and set up the nece
 
 ---
 
-## 🐍 Backend Requirements
+## 🐍 Beancount Requirements
 
-The plugin relies on a local Python backend to parse Beancount files and run queries efficiently.
+The plugin integrates with Beancount command-line tools for querying and validating your ledger.
 
 ### 1. Python Environment
 You need **Python 3.8 or newer** installed on your system.
@@ -38,20 +38,20 @@ You need **Python 3.8 or newer** installed on your system.
 Install the Beancount package via pip:
 
 ```bash
-pip install beancount flask flask-cors
+pip install beancount
 ```
 
-**Note**: The plugin requires `flask` and `flask-cors` to run the local API server.
+This provides the following command-line tools:
+- `bean-query`: For running BQL queries
+- `bean-check`: For validating Beancount file syntax
+- `bean-price`: For fetching commodity prices (optional)
 
 *Verify installation:*
 Open your terminal and run:
 ```bash
-python3 -c "import beancount; import flask; print('Ready')"
+bean-query --version
 ```
-If this prints "Ready", you are good to go.
-
-### 3. Optional Dependencies
-- **bean-price**: For fetching online prices. Usually included with Beancount, or install via `pip install bean-price`.
+If this displays a version number, you are good to go.
 
 ---
 
@@ -59,25 +59,47 @@ If this prints "Ready", you are good to go.
 
 After installation, you must configure the plugin to point to your ledger.
 
+### First-Time Setup: Onboarding Modal
+
+When you first install and enable the plugin (or if no Beancount file is configured), an **Onboarding Modal** will automatically appear. This wizard helps you get started quickly:
+
+#### Option 1: Demo Data
+Perfect for trying out the plugin or learning Beancount:
+- Creates a structured folder layout in your vault (default: `Finances/`)
+- Populates it with sample transactions, accounts, and commodities
+- Includes realistic examples of income, expenses, investments, and more
+- Great for exploring features before using real data
+
+#### Option 2: Existing Beancount File
+If you already have a Beancount ledger:
+- Point to your existing `.beancount` file
+- Can be inside or outside your vault
+- Option to migrate to structured layout (organizes entries into separate files)
+
+### Manual Configuration
+
+If you skip onboarding or want to change settings later:
+
 1.  **Open Settings**: Settings → Community Plugins → Finance Plugin.
 2.  **Connection Panel**: The plugin attempts to **auto-detect** your Python environment and Beancount tools.
-    - **Status Indicators**: Look for green checkmarks next to Python, Bean-Query, etc.
+    - **Status Indicators**: Look for green checkmarks next to Bean-Query, Bean-Check, etc.
     - **Manual Override**: If detection fails, toggle "Manual Configuration" to specify paths.
 3.  **Beancount File**: Enter the absolute path to your main ledger file (e.g., `C:\Users\You\Documents\ledger.beancount` or `/home/you/finance/main.bean`).
+4.  **Test Commands**: Use the "Test All Commands" button to verify everything works.
 
 ### WSL Support (Windows)
 The plugin has native support for **Windows Subsystem for Linux (WSL)**.
 1.  Ensure Python and Beancount are installed *inside* your WSL distribution.
 2.  In Settings, the plugin should detect "WSL (Default)" if available.
-3.  You can use Windows-style paths (e.g., `C:\...`) and the plugin will automatically convert them to `/mnt/c/...` for the backend.
+3.  You can use Windows-style paths (e.g., `C:\...`) and the plugin will automatically convert them to `/mnt/c/...` for command execution.
 
 ---
 
 ## 🛠 Under the Hood
 
-When you enable the plugin, the following process occurs:
+The plugin uses a **pure TypeScript/Svelte architecture**:
 
 1.  **System Detection**: `SystemDetector.ts` scans your environment (PATH, Registry, WSL) to find a valid Python executable and `bean-query` binary.
-2.  **Backend Launch**: `BackendProcess.ts` spawns a child process running `src/backend/journal_api.py`. This is a lightweight Flask server running on `localhost:5013`.
-3.  **API Connection**: The frontend (`ApiClient.ts`) polls the health endpoint (`/health`) until the server is ready.
-4.  **Data Flow**: All heavy lifting (parsing files, running BQL queries) is offloaded to this Python process, ensuring the Obsidian UI remains responsive.
+2.  **Direct CLI Execution**: All queries run via direct `bean-query` command execution with proper shell escaping.
+3.  **Atomic File Operations**: Transaction creation/updates use atomic writes (temp file + rename) with optional backups.
+4.  **No Server Needed**: Unlike v1.x, there is no backend server process - everything runs directly via CLI tools.

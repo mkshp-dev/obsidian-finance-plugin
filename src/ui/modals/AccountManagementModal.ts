@@ -2,6 +2,7 @@
 
 import { App, Modal, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from '../../main';
+import { getOpenAccounts, saveOpenDirective, saveCloseDirective } from '../../utils';
 
 /**
  * Modal for opening or closing accounts.
@@ -20,24 +21,15 @@ export class AccountManagementModal extends Modal {
         this.plugin = plugin;
         this.mode = mode;
         this.onSuccess = onSuccess;
+        // Initialize date with today's date
+        this.date = new Date().toISOString().split('T')[0];
     }
 
     async onOpen() {
         // Fetch open accounts for close mode
         if (this.mode === 'close') {
             try {
-                const allAccounts = await this.plugin.journalService.getAccounts();
-                // Filter for open accounts by checking their status
-                const statusPromises = allAccounts.map(async (account) => {
-                    try {
-                        const status = await this.plugin.journalService.getAccountStatus(account);
-                        return status.is_open ? account : null;
-                    } catch {
-                        return null;
-                    }
-                });
-                const results = await Promise.all(statusPromises);
-                this.openAccounts = results.filter((acc): acc is string => acc !== null);
+                this.openAccounts = await getOpenAccounts(this.plugin);
             } catch (error) {
                 console.error('Failed to fetch accounts:', error);
                 new Notice('Failed to fetch accounts list');
@@ -89,7 +81,7 @@ export class AccountManagementModal extends Modal {
             .setDesc('Enter the date in YYYY-MM-DD format')
             .addText(text => text
                 .setPlaceholder(new Date().toISOString().split('T')[0])
-                .setValue(this.date || new Date().toISOString().split('T')[0])
+                .setValue(this.date)
                 .onChange(value => {
                     this.date = value;
                 }));
@@ -150,17 +142,29 @@ export class AccountManagementModal extends Modal {
                     ? this.currencies.split(',').map(c => c.trim()).filter(c => c)
                     : undefined;
 
-                await this.plugin.journalService.openAccount(
-                    this.accountName,
+                const result = await saveOpenDirective(
+                    this.plugin,
                     this.date,
+                    this.accountName,
                     currenciesArray
                 );
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Unknown error');
+                }
+                
                 new Notice(`Account ${this.accountName} opened successfully`);
             } else {
-                await this.plugin.journalService.closeAccount(
-                    this.accountName,
-                    this.date
+                const result = await saveCloseDirective(
+                    this.plugin,
+                    this.date,
+                    this.accountName
                 );
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Unknown error');
+                }
+                
                 new Notice(`Account ${this.accountName} closed successfully`);
             }
 

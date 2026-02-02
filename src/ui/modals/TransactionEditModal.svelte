@@ -13,6 +13,29 @@
     
     const dispatch = createEventDispatcher();
     
+    // Beancount internal metadata fields that should not be shown to users
+    const INTERNAL_METADATA_KEYS = [
+        'filename',
+        'lineno',
+        '__tolerances__',
+        '__residual__',
+        '__automatic__',
+        '__treeified__',
+        '__accuracy__'
+    ];
+    
+    // Helper function to filter out internal metadata
+    function filterInternalMetadata(metadata: Record<string, string> | undefined): Record<string, string> {
+        if (!metadata) return {};
+        const filtered: Record<string, string> = {};
+        for (const [key, value] of Object.entries(metadata)) {
+            if (!INTERNAL_METADATA_KEYS.includes(key)) {
+                filtered[key] = value;
+            }
+        }
+        return filtered;
+    }
+    
     // Entry type tabs
     let activeTab: 'transaction' | 'balance' | 'note' = 'transaction';
     
@@ -34,13 +57,58 @@
     let date = (transaction?.date || entry?.date) || new Date().toISOString().split('T')[0];
     
     // Transaction-specific fields
+    let flag = transaction?.flag || '*';
     let payee = transaction?.payee || '';
     let narration = transaction?.narration || '';
-    let postings: JournalPosting[] = transaction ? [...transaction.postings] : [
-        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null },
-        { account: '', amount: null, currency: operatingCurrency, price: null, cost: null }
+    let postings: JournalPosting[] = transaction ? transaction.postings.map(p => ({
+        ...p,
+        // Ensure cost and price have complete structures with all required fields
+        cost: p.cost ? {
+            number: p.cost.number || '',
+            currency: p.cost.currency || operatingCurrency,
+            date: p.cost.date || '',
+            label: p.cost.label || '',
+            isTotal: p.cost.isTotal || false
+        } : { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false },
+        price: p.price ? {
+            amount: p.price.amount || '',
+            currency: p.price.currency || operatingCurrency,
+            isTotal: p.price.isTotal || false
+        } : { amount: '', currency: operatingCurrency, isTotal: false },
+        flag: p.flag || null,
+        comment: p.comment || null,
+        metadata: filterInternalMetadata(p.metadata)
+    })) : [
+        { account: '', amount: null, currency: operatingCurrency, 
+          price: { amount: '', currency: operatingCurrency, isTotal: false },
+          cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false },
+          flag: null, comment: null, metadata: {} },
+        { account: '', amount: null, currency: operatingCurrency,
+          price: { amount: '', currency: operatingCurrency, isTotal: false },
+          cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false },
+          flag: null, comment: null, metadata: {} }
     ];
     let selectedTags: string[] = transaction ? [...transaction.tags] : [];
+    let selectedLinks: string[] = transaction ? [...transaction.links] : [];
+    let transactionMetadata: Record<string, string> = filterInternalMetadata(transaction?.metadata);
+    
+    // Track which posting sections are expanded (separate toggles for each feature)
+    let showCost: boolean[] = postings.map(p => {
+        const hasCost = p.cost && (p.cost.number || p.cost.date || p.cost.label);
+        return !!hasCost;
+    });
+    let showPrice: boolean[] = postings.map(p => {
+        const hasPrice = p.price && p.price.amount;
+        return !!hasPrice;
+    });
+    let showPostingFlag: boolean[] = postings.map(p => !!p.flag);
+    let showPostingComment: boolean[] = postings.map(p => !!p.comment);
+    let showPostingMetadata: boolean[] = postings.map(p => {
+        return p.metadata && Object.keys(p.metadata).length > 0;
+    });
+    
+    // Track transaction-level metadata toggle
+    let showTransactionMetadata: boolean = transactionMetadata && Object.keys(transactionMetadata).length > 0;
     
     // Balance-specific fields
     let balanceAccount = (entry?.type === 'balance') ? (entry as JournalBalance).account : '';
@@ -63,16 +131,110 @@
             account: '',
             amount: null,
             currency: operatingCurrency,
-            price: null,
-            cost: null
+            price: { amount: '', currency: operatingCurrency, isTotal: false },
+            cost: { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false },
+            flag: null,
+            comment: null,
+            metadata: {}
         }];
+        showCost = [...showCost, false];
+        showPrice = [...showPrice, false];
+        showPostingFlag = [...showPostingFlag, false];
+        showPostingComment = [...showPostingComment, false];
+        showPostingMetadata = [...showPostingMetadata, false];
     }
     
     // Remove a posting
     function removePosting(index: number) {
         if (postings.length > 2) {
             postings = postings.filter((_, i) => i !== index);
+            showCost = showCost.filter((_, i) => i !== index);
+            showPrice = showPrice.filter((_, i) => i !== index);
+            showPostingFlag = showPostingFlag.filter((_, i) => i !== index);
+            showPostingComment = showPostingComment.filter((_, i) => i !== index);
+            showPostingMetadata = showPostingMetadata.filter((_, i) => i !== index);
         }
+    }
+    
+    // Toggle functions for each posting feature
+    function toggleCost(index: number) {
+        showCost[index] = !showCost[index];
+        if (!postings[index].cost || typeof postings[index].cost !== 'object') {
+            postings[index].cost = { number: '', currency: operatingCurrency, date: '', label: '', isTotal: false };
+        }
+    }
+    
+    function togglePrice(index: number) {
+        showPrice[index] = !showPrice[index];
+        if (!postings[index].price || typeof postings[index].price !== 'object') {
+            postings[index].price = { amount: '', currency: operatingCurrency, isTotal: false };
+        }
+    }
+    
+    function togglePostingFlag(index: number) {
+        showPostingFlag[index] = !showPostingFlag[index];
+        if (!postings[index].flag) {
+            postings[index].flag = '!';
+        }
+    }
+    
+    function togglePostingComment(index: number) {
+        showPostingComment[index] = !showPostingComment[index];
+        if (!postings[index].comment) {
+            postings[index].comment = '';
+        }
+    }
+    
+    function togglePostingMetadata(index: number) {
+        showPostingMetadata[index] = !showPostingMetadata[index];
+        if (!postings[index].metadata) {
+            postings[index].metadata = {};
+        }
+    }
+    
+    function toggleTransactionMetadata() {
+        showTransactionMetadata = !showTransactionMetadata;
+    }
+    
+    function addPostingMetadata(index: number) {
+        if (!postings[index].metadata) {
+            postings[index].metadata = {};
+        }
+        const key = `key${Object.keys(postings[index].metadata).length + 1}`;
+        postings[index].metadata[key] = '';
+        postings = [...postings]; // Trigger reactivity
+    }
+    
+    function removePostingMetadata(index: number, key: string) {
+        delete postings[index].metadata[key];
+        postings = [...postings];
+    }
+    
+    function addTransactionMetadata() {
+        const key = `key${Object.keys(transactionMetadata).length + 1}`;
+        transactionMetadata[key] = '';
+        transactionMetadata = {...transactionMetadata};
+    }
+    
+    function removeTransactionMetadata(key: string) {
+        delete transactionMetadata[key];
+        transactionMetadata = {...transactionMetadata};
+    }
+    
+    function updateTransactionMetadataKey(oldKey: string, newKey: string) {
+        if (oldKey === newKey) return;
+        const value = transactionMetadata[oldKey];
+        delete transactionMetadata[oldKey];
+        transactionMetadata[newKey] = value;
+        transactionMetadata = {...transactionMetadata};
+    }
+    
+    function updatePostingMetadataKey(index: number, oldKey: string, newKey: string) {
+        if (oldKey === newKey) return;
+        const value = postings[index].metadata[oldKey];
+        delete postings[index].metadata[oldKey];
+        postings[index].metadata[newKey] = value;
+        postings = [...postings];
     }
     
     // Validate form
@@ -89,24 +251,102 @@
                 if (!postings[i].account) {
                     errors.push(`Posting ${i + 1}: Account is required`);
                 }
+                
+                const posting = postings[i];
+                
+                // Validate cost if present
+                if (posting.cost && (posting.cost.number || posting.cost.date || posting.cost.label)) {
+                    // Cost requires amount and currency on posting
+                    if (!posting.amount || !posting.currency) {
+                        errors.push(`Posting ${i + 1}: Cost requires an amount and currency`);
+                    }
+                    
+                    // Cost number must be positive if specified
+                    if (posting.cost.number) {
+                        const costNum = parseFloat(posting.cost.number);
+                        if (isNaN(costNum) || costNum <= 0) {
+                            errors.push(`Posting ${i + 1}: Cost amount must be a positive number`);
+                        }
+                    }
+                    
+                    // Cost date must be <= transaction date if specified
+                    if (posting.cost.date) {
+                        if (posting.cost.date > date) {
+                            errors.push(`Posting ${i + 1}: Cost date cannot be after transaction date`);
+                        }
+                    }
+                    
+                    // Cost currency is required if cost number is specified
+                    if (posting.cost.number && !posting.cost.currency) {
+                        errors.push(`Posting ${i + 1}: Cost currency is required`);
+                    }
+                }
+                
+                // Validate price if present
+                if (posting.price && posting.price.amount) {
+                    // Price requires amount and currency on posting
+                    if (!posting.amount || !posting.currency) {
+                        errors.push(`Posting ${i + 1}: Price requires an amount and currency`);
+                    }
+                    
+                    // Price amount must be positive
+                    const priceNum = parseFloat(posting.price.amount);
+                    if (isNaN(priceNum) || priceNum <= 0) {
+                        errors.push(`Posting ${i + 1}: Price amount must be a positive number`);
+                    }
+                    
+                    // Price currency is required
+                    if (!posting.price.currency) {
+                        errors.push(`Posting ${i + 1}: Price currency is required`);
+                    }
+                }
+                
+                // Validate posting flag if present
+                if (posting.flag && posting.flag !== '*' && posting.flag !== '!') {
+                    errors.push(`Posting ${i + 1}: Flag must be either * or !`);
+                }
+                
+                // Validate posting metadata keys
+                if (posting.metadata) {
+                    for (const key of Object.keys(posting.metadata)) {
+                        if (!/^[a-z0-9_-]+$/.test(key)) {
+                            errors.push(`Posting ${i + 1}: Metadata key "${key}" must be lowercase with only letters, numbers, hyphens, or underscores`);
+                        }
+                    }
+                }
+            }
+            
+            // Validate transaction metadata keys
+            for (const key of Object.keys(transactionMetadata)) {
+                if (!/^[a-z0-9_-]+$/.test(key)) {
+                    errors.push(`Transaction metadata key "${key}" must be lowercase with only letters, numbers, hyphens, or underscores`);
+                }
+            }
+            
+            // Validate tags (no spaces, valid characters)
+            for (const tag of selectedTags) {
+                if (/\s/.test(tag)) {
+                    errors.push(`Tag "${tag}" contains spaces (not allowed in Beancount)`);
+                }
+                if (!/^[a-zA-Z0-9_-]+$/.test(tag)) {
+                    errors.push(`Tag "${tag}" contains invalid characters (use only letters, numbers, hyphens, underscores)`);
+                }
+            }
+            
+            // Validate links (no spaces, valid characters)
+            for (const link of selectedLinks) {
+                if (/\s/.test(link)) {
+                    errors.push(`Link "${link}" contains spaces (not allowed in Beancount)`);
+                }
+                if (!/^[a-zA-Z0-9_-]+$/.test(link)) {
+                    errors.push(`Link "${link}" contains invalid characters (use only letters, numbers, hyphens, underscores)`);
+                }
             }
             
             // Validate that max one posting has an empty amount
             const emptyAmountPostings = postings.filter(p => p.amount === null || p.amount === '');
             if (emptyAmountPostings.length > 1) {
                 errors.push('Only one posting can have an empty amount (to be auto-calculated)');
-            }
-
-            // Check if amounts balance (if all postings have amounts)
-            const postingsWithAmounts = postings.filter(p => p.amount !== null && p.amount !== '');
-            if (postingsWithAmounts.length === postings.length) {
-                const total = postingsWithAmounts.reduce((sum, p) => {
-                    return sum + parseFloat(p.amount || '0');
-                }, 0);
-                
-                if (Math.abs(total) > 0.01) {
-                    errors.push('Transaction postings must balance (sum to zero)');
-                }
             }
         } else if (activeTab === 'balance') {
             if (!balanceAccount) errors.push('Account is required for balance assertion');
@@ -132,17 +372,61 @@
             entryData = {
                 type: 'transaction',
                 date,
+                flag: flag || '*',
                 payee: payee || null,
                 narration,
-                postings: postings.map(p => ({
-                    account: p.account,
-                    amount: p.amount,
-                    currency: p.currency,
-                    price: p.price,
-                    cost: p.cost
-                })),
-                tags: selectedTags
+                postings: postings.map(p => {
+                    const posting: any = {
+                        account: p.account,
+                        amount: p.amount,
+                        currency: p.currency
+                    };
+                    
+                    // Only include cost if at least one field is filled
+                    if (p.cost && (p.cost.number || p.cost.date || p.cost.label)) {
+                        posting.cost = {
+                            number: p.cost.number || null,
+                            currency: p.cost.currency || null,
+                            date: p.cost.date || null,
+                            label: p.cost.label || null,
+                            isTotal: p.cost.isTotal || false
+                        };
+                    }
+                    
+                    // Only include price if amount is filled
+                    if (p.price && p.price.amount) {
+                        posting.price = {
+                            amount: p.price.amount,
+                            currency: p.price.currency,
+                            isTotal: p.price.isTotal || false
+                        };
+                    }
+                    
+                    // Include posting flag if set
+                    if (p.flag) {
+                        posting.flag = p.flag;
+                    }
+                    
+                    // Include comment if set
+                    if (p.comment) {
+                        posting.comment = p.comment;
+                    }
+                    
+                    // Include metadata if not empty
+                    if (p.metadata && Object.keys(p.metadata).length > 0) {
+                        posting.metadata = p.metadata;
+                    }
+                    
+                    return posting;
+                }),
+                tags: selectedTags,
+                links: selectedLinks
             };
+            
+            // Include transaction metadata if not empty
+            if (Object.keys(transactionMetadata).length > 0) {
+                entryData.metadata = transactionMetadata;
+            }
         } else if (activeTab === 'balance') {
             entryData = {
                 type: 'balance',
@@ -190,6 +474,26 @@
     // Remove tag
     function removeTag(tag: string) {
         selectedTags = selectedTags.filter(t => t !== tag);
+    }
+    
+    // Link handling
+    function handleLinkInput(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const value = target.value;
+        if (event instanceof KeyboardEvent && event.key === 'Enter' && value.trim()) {
+            event.preventDefault();
+            // Strip ^ prefix if user includes it
+            const linkValue = value.trim().replace(/^\^/, '');
+            if (linkValue && !selectedLinks.includes(linkValue)) {
+                selectedLinks = [...selectedLinks, linkValue];
+            }
+            target.value = '';
+        }
+    }
+    
+    // Remove link
+    function removeLink(link: string) {
+        selectedLinks = selectedLinks.filter(l => l !== link);
     }
     
     // Delete transaction (only available in edit mode)
@@ -247,24 +551,31 @@
             </div>
         {/if}
         
-        <!-- Common Date Field -->
-        <div class="form-group">
-            <label for="date">Date *</label>
-            <input type="date" id="date" bind:value={date} required />
-        </div>
-        
         <!-- Transaction Form -->
         {#if activeTab === 'transaction'}
-            <div class="form-grid">
-                <!-- Payee and Narration -->
-                <div class="form-group full-width">
+            <!-- Transaction Header: Date | Flag | Payee | Narration | Metadata -->
+            <div class="transaction-header-row">
+                <div class="form-group header-date">
+                    <label for="date">Date *</label>
+                    <input type="date" id="date" bind:value={date} required />
+                </div>
+                
+                <div class="form-group header-flag">
+                    <label for="flag">Flag</label>
+                    <select id="flag" bind:value={flag}>
+                        <option value="*">* Complete</option>
+                        <option value="!">! Incomplete</option>
+                    </select>
+                </div>
+                
+                <div class="form-group header-payee">
                     <label for="payee">Payee</label>
                     <input 
                         type="text" 
                         id="payee" 
                         bind:value={payee}
                         list="payees-list"
-                        placeholder="Optional payee name"
+                        placeholder="Store name"
                     />
                     <datalist id="payees-list">
                         {#each payees as payeeOption}
@@ -273,61 +584,331 @@
                     </datalist>
                 </div>
                 
-                <div class="form-group full-width">
+                <div class="form-group header-narration">
                     <label for="narration">Narration</label>
                     <input 
                         type="text" 
                         id="narration" 
                         bind:value={narration}
-                        placeholder="Transaction description"
+                        placeholder="Description"
                     />
                 </div>
+                
+                <div class="header-metadata-btn">
+                    <button 
+                        type="button" 
+                        class="metadata-toggle-btn"
+                        class:active={showTransactionMetadata}
+                        on:click={toggleTransactionMetadata}
+                        title="Transaction Metadata"
+                    >
+                        📋
+                    </button>
+                </div>
             </div>
+            
+            <!-- Transaction Metadata Section (expandable) -->
+            {#if showTransactionMetadata}
+                <div class="transaction-metadata-section">
+                    <h5>Transaction Metadata</h5>
+                    <div class="metadata-list">
+                            {#each Object.keys(transactionMetadata) as key}
+                                <div class="metadata-item">
+                                    <input 
+                                        type="text" 
+                                        value={key}
+                                        placeholder="key"
+                                        class="metadata-key"
+                                        on:change={(e) => updateTransactionMetadataKey(key, e.currentTarget.value)}
+                                    />
+                                    <input 
+                                        type="text" 
+                                        bind:value={transactionMetadata[key]}
+                                        placeholder="value"
+                                        class="metadata-value"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        class="remove-metadata"
+                                        on:click={() => removeTransactionMetadata(key)}
+                                    >
+                                        🗑️
+                                    </button>
+                                </div>
+                            {/each}
+                            <button 
+                                type="button" 
+                                class="add-metadata-btn"
+                                on:click={addTransactionMetadata}
+                            >
+                                + Add Metadata
+                            </button>
+                        </div>
+                    </div>
+                {/if}
             
             <!-- Postings -->
             <div class="postings-section">
                 <h4>Postings</h4>
                 {#each postings as posting, index}
-                    <div class="posting-row">
-                        <div class="posting-account">
-                            <label>Account *</label>
-                            <input 
-                                type="text" 
-                                bind:value={posting.account}
-                                list="accounts-list"
-                                placeholder="Account name"
-                                required
-                            />
-                        </div>
-                        
-                        <div class="posting-amount">
-                            <label>Amount</label>
-                            <input 
-                                type="number" 
-                                step="0.01"
-                                bind:value={posting.amount}
-                                placeholder="Optional amount"
-                            />
-                        </div>
-                        
-                        <div class="posting-currency">
-                            <label>Currency</label>
-                            <input 
-                                type="text" 
-                                bind:value={posting.currency}
-                                list="currencies-list"
-                                placeholder="INR"
-                                maxlength="3"
-                            />
-                        </div>
-                        
-                        <div class="posting-actions">
-                            {#if postings.length > 2}
-                                <button type="button" class="remove-posting" on:click={() => removePosting(index)}>
-                                    🗑️
+                    <div class="posting-container">
+                        <div class="posting-row">
+                            <div class="posting-account">
+                                <label>Account *</label>
+                                <input 
+                                    type="text" 
+                                    bind:value={posting.account}
+                                    list="accounts-list"
+                                    placeholder="Account name"
+                                    required
+                                />
+                            </div>
+                            
+                            <div class="posting-amount">
+                                <label>Amount</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    bind:value={posting.amount}
+                                    placeholder="Optional amount"
+                                />
+                            </div>
+                            
+                            <div class="posting-currency">
+                                <label>Currency</label>
+                                <input 
+                                    type="text" 
+                                    bind:value={posting.currency}
+                                    list="currencies-list"
+                                    placeholder="INR"
+                                    maxlength="3"
+                                />
+                            </div>
+                            
+                            <div class="posting-toggle-buttons">
+                                <button 
+                                    type="button" 
+                                    class="posting-toggle-btn cost-btn"
+                                    class:active={showCost[index]}
+                                    on:click={() => toggleCost(index)}
+                                    title="Cost"
+                                >
+                                    $
                                 </button>
-                            {/if}
+                                <button 
+                                    type="button" 
+                                    class="posting-toggle-btn price-btn"
+                                    class:active={showPrice[index]}
+                                    on:click={() => togglePrice(index)}
+                                    title="Price"
+                                >
+                                    @
+                                </button>
+                                <button 
+                                    type="button" 
+                                    class="posting-toggle-btn flag-btn"
+                                    class:active={showPostingFlag[index]}
+                                    on:click={() => togglePostingFlag(index)}
+                                    title="Flag"
+                                >
+                                    !
+                                </button>
+                                <button 
+                                    type="button" 
+                                    class="posting-toggle-btn comment-btn"
+                                    class:active={showPostingComment[index]}
+                                    on:click={() => togglePostingComment(index)}
+                                    title="Comment"
+                                >
+                                    💬
+                                </button>
+                                <button 
+                                    type="button" 
+                                    class="posting-toggle-btn metadata-btn"
+                                    class:active={showPostingMetadata[index]}
+                                    on:click={() => togglePostingMetadata(index)}
+                                    title="Metadata"
+                                >
+                                    📋
+                                </button>
+                                {#if postings.length > 2}
+                                    <button type="button" class="remove-posting" on:click={() => removePosting(index)}
+                                        title="Remove posting">
+                                        🗑️
+                                    </button>
+                                {/if}
+                            </div>
                         </div>
+                        
+                        <!-- Cost Section -->
+                        {#if showCost[index]}
+                            <div class="posting-advanced cost-section">
+                                <div class="advanced-grid">
+                                    <div class="advanced-field">
+                                        <label>Amount</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            bind:value={posting.cost.number}
+                                            placeholder="150.00"
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field">
+                                        <label>Currency</label>
+                                        <input 
+                                            type="text" 
+                                            bind:value={posting.cost.currency}
+                                            list="currencies-list"
+                                            placeholder="USD"
+                                            maxlength="3"
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field">
+                                        <label>Date</label>
+                                        <input 
+                                            type="date" 
+                                            bind:value={posting.cost.date}
+                                            max={date}
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field">
+                                        <label>Label</label>
+                                        <input 
+                                            type="text" 
+                                            bind:value={posting.cost.label}
+                                            placeholder="lot-001"
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field checkbox-field">
+                                        <label>
+                                            <input 
+                                                type="checkbox" 
+                                                bind:checked={posting.cost.isTotal}
+                                            />
+                                            Total Cost {{}}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
+                        
+                        <!-- Price Section -->
+                        {#if showPrice[index]}
+                            <div class="posting-advanced price-section">
+                                <div class="advanced-grid">
+                                    <div class="advanced-field">
+                                        <label>Amount</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            bind:value={posting.price.amount}
+                                            placeholder="1.09"
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field">
+                                        <label>Currency</label>
+                                        <input 
+                                            type="text" 
+                                            bind:value={posting.price.currency}
+                                            list="currencies-list"
+                                            placeholder="CAD"
+                                            maxlength="3"
+                                        />
+                                    </div>
+                                    
+                                    <div class="advanced-field checkbox-field">
+                                        <label>
+                                            <input 
+                                                type="checkbox" 
+                                                bind:checked={posting.price.isTotal}
+                                            />
+                                            Total Price @@
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
+                        
+                        <!-- Posting Flag Section -->
+                        {#if showPostingFlag[index]}
+                            <div class="posting-advanced flag-section">
+                                <div class="flag-field">
+                                    <label>
+                                        <input 
+                                            type="radio" 
+                                            bind:group={posting.flag}
+                                            value="!"
+                                        />
+                                        ! Incomplete
+                                    </label>
+                                    <label>
+                                        <input 
+                                            type="radio" 
+                                            bind:group={posting.flag}
+                                            value="*"
+                                        />
+                                        * Complete
+                                    </label>
+                                </div>
+                            </div>
+                        {/if}
+                        
+                        <!-- Comment Section -->
+                        {#if showPostingComment[index]}
+                            <div class="posting-advanced comment-section">
+                                <label>Comment</label>
+                                <input 
+                                    type="text" 
+                                    bind:value={posting.comment}
+                                    placeholder="Inline comment"
+                                    class="comment-input"
+                                />
+                            </div>
+                        {/if}
+                        
+                        <!-- Posting Metadata Section -->
+                        {#if showPostingMetadata[index]}
+                            <div class="posting-advanced metadata-section">
+                                <div class="metadata-list">
+                                    {#each Object.keys(posting.metadata || {}) as key}
+                                        <div class="metadata-item">
+                                            <input 
+                                                type="text" 
+                                                value={key}
+                                                placeholder="key"
+                                                class="metadata-key"
+                                                on:change={(e) => updatePostingMetadataKey(index, key, e.currentTarget.value)}
+                                            />
+                                            <input 
+                                                type="text" 
+                                                bind:value={posting.metadata[key]}
+                                                placeholder="Value"
+                                                class="metadata-value"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                class="remove-metadata"
+                                                on:click={() => removePostingMetadata(index, key)}
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    {/each}
+                                    <button 
+                                        type="button" 
+                                        class="add-metadata-btn"
+                                        on:click={() => addPostingMetadata(index)}
+                                    >
+                                        + Add Metadata
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
                     </div>
                 {/each}
                 
@@ -336,33 +917,57 @@
                 </button>
             </div>
             
-            <!-- Tags -->
-            <div class="form-grid">
-                <div class="form-group full-width">
-                    <label for="tags">Tags</label>
-                    <input 
-                        type="text" 
-                        id="tags"
-                        on:keydown={handleTagInput}
-                        list="tags-list"
-                        placeholder="Type tag and press Enter"
-                    />
-                    <datalist id="tags-list">
-                        {#each tags as tag}
-                            <option value={tag} />
-                        {/each}
-                    </datalist>
-                    
-                    {#if selectedTags.length > 0}
-                        <div class="selected-tags">
-                            {#each selectedTags as tag}
-                                <span class="tag">
-                                    #{tag}
-                                    <button type="button" on:click={() => removeTag(tag)}>&times;</button>
-                                </span>
+            <!-- Tags & Links -->
+            <div class="tags-links-section">
+                <h4>Tags & Links</h4>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="tags">Tags</label>
+                        <input 
+                            type="text" 
+                            id="tags"
+                            on:keydown={handleTagInput}
+                            list="tags-list"
+                            placeholder="Type tag and press Enter"
+                        />
+                        <datalist id="tags-list">
+                            {#each tags as tag}
+                                <option value={tag} />
                             {/each}
-                        </div>
-                    {/if}
+                        </datalist>
+                        
+                        {#if selectedTags.length > 0}
+                            <div class="selected-tags">
+                                {#each selectedTags as tag}
+                                    <span class="tag">
+                                        #{tag}
+                                        <button type="button" on:click={() => removeTag(tag)}>&times;</button>
+                                    </span>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label for="links">Links</label>
+                        <input 
+                            type="text" 
+                            id="links"
+                            on:keydown={handleLinkInput}
+                            placeholder="Type link and press Enter"
+                        />
+                        
+                        {#if selectedLinks.length > 0}
+                            <div class="selected-links">
+                                {#each selectedLinks as link}
+                                    <span class="link">
+                                        ^{link}
+                                        <button type="button" on:click={() => removeLink(link)}>&times;</button>
+                                    </span>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
                 </div>
             </div>
         {/if}
@@ -571,15 +1176,143 @@
         color: var(--text-normal);
     }
     
-    .posting-row {
-        display: grid;
-        grid-template-columns: 3fr 1.2fr 1fr auto; /* Give more space to account field and amount */
-        gap: 1rem; /* Increased gap from 0.75rem to 1rem */
-        align-items: end;
+    .posting-container {
         margin-bottom: 1rem;
-        padding: 1.25rem; /* Increased padding from 1rem to 1.25rem */
+        padding: 1.25rem;
         background: var(--background-secondary);
         border-radius: 6px;
+    }
+    
+    .posting-row {
+        display: grid;
+        grid-template-columns: 3fr 1.2fr 1fr auto;
+        gap: 1rem;
+        align-items: end;
+    }
+    
+    .posting-advanced-toggle {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--background-modifier-border);
+    }
+    
+    .toggle-advanced {
+        background: none;
+        border: none;
+        color: var(--text-accent);
+        cursor: pointer;
+        padding: 0.5rem 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .toggle-advanced:hover {
+        color: var(--text-accent-hover);
+    }
+    
+    .posting-advanced {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: var(--background-primary);
+        border-radius: 4px;
+        border: 1px solid var(--background-modifier-border);
+    }
+    
+    .advanced-section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .advanced-section:last-of-type {
+        margin-bottom: 1rem;
+    }
+    
+    .advanced-section h5 {
+        margin: 0 0 0.75rem 0;
+        color: var(--text-normal);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    
+    .advanced-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .advanced-field {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .advanced-field label {
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: var(--text-muted);
+    }
+    
+    .advanced-field input[type="number"],
+    .advanced-field input[type="text"],
+    .advanced-field input[type="date"] {
+        padding: 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-modifier-form-field);
+        color: var(--text-normal);
+        font-size: 0.875rem;
+    }
+    
+    .advanced-field.checkbox-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .advanced-field.checkbox-field label {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+    
+    .advanced-field.checkbox-field input[type="checkbox"] {
+        cursor: pointer;
+    }
+    
+    .field-hint {
+        font-size: 0.75rem;
+        color: var(--text-faint);
+        margin-top: 0.25rem;
+        font-style: italic;
+    }
+    
+    .advanced-help {
+        padding: 1rem;
+        background: var(--background-secondary);
+        border-radius: 4px;
+        border-left: 3px solid var(--interactive-accent);
+        font-size: 0.85rem;
+    }
+    
+    .advanced-help strong {
+        color: var(--text-normal);
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .advanced-help ul {
+        margin: 0;
+        padding-left: 1.5rem;
+        color: var(--text-muted);
+    }
+    
+    .advanced-help li {
+        margin: 0.25rem 0;
+        line-height: 1.4;
     }
     
     .posting-account,
@@ -834,7 +1567,287 @@
         box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
     }
     
+    /* Transaction Header Row */
+    .transaction-header-row {
+        display: grid;
+        grid-template-columns: 150px 120px 1fr 2fr auto;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        align-items: end;
+    }
+    
+    .header-date,
+    .header-flag,
+    .header-payee,
+    .header-narration {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .header-flag select {
+        padding: 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+        font-size: 0.9rem;
+    }
+    
+    .header-metadata-btn {
+        display: flex;
+        align-items: flex-end;
+        padding-bottom: 2px;
+    }
+    
+    /* Transaction Metadata Section */
+    .transaction-metadata-section {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        border: 2px solid #4a9eff;
+        border-radius: 4px;
+        background: var(--background-secondary);
+    }
+    
+    .transaction-metadata-section h5 {
+        margin: 0 0 0.75rem 0;
+        color: var(--text-normal);
+    }
+    
+    .metadata-toggle-btn {
+        background: var(--background-modifier-form-field);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        font-size: 1.2rem;
+        transition: all 0.2s;
+    }
+    
+    .metadata-toggle-btn:hover {
+        background: var(--background-modifier-hover);
+    }
+    
+    .metadata-toggle-btn.active {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+    }
+    
+    /* Posting Toggle Buttons */
+    .posting-toggle-buttons {
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
+    }
+    
+    .posting-toggle-btn {
+        background: var(--background-modifier-form-field);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: bold;
+        min-width: 2.5rem;
+        transition: all 0.2s;
+    }
+    
+    .posting-toggle-btn:hover {
+        background: var(--background-modifier-hover);
+    }
+    
+    .posting-toggle-btn.active {
+        color: var(--text-on-accent);
+    }
+    
+    .posting-toggle-btn.cost-btn.active {
+        background: #28a745;
+        border-color: #28a745;
+    }
+    
+    .posting-toggle-btn.price-btn.active {
+        background: #9b59b6;
+        border-color: #9b59b6;
+    }
+    
+    .posting-toggle-btn.flag-btn.active {
+        background: #e74c3c;
+        border-color: #e74c3c;
+    }
+    
+    .posting-toggle-btn.comment-btn.active {
+        background: #f39c12;
+        border-color: #f39c12;
+    }
+    
+    .posting-toggle-btn.metadata-btn.active {
+        background: #4a9eff;
+        border-color: #4a9eff;
+    }
+    
+    .remove-posting {
+        background: var(--background-modifier-error);
+        border: 1px solid var(--text-error);
+        border-radius: 4px;
+        padding: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+    
+    .remove-posting:hover {
+        opacity: 0.8;
+    }
+    
+    /* Posting Advanced Sections */
+    .posting-advanced {
+        margin-top: 0.5rem;
+        padding: 0.75rem;
+        border-radius: 4px;
+        background: var(--background-secondary);
+    }
+    
+    .posting-advanced.cost-section {
+        border-left: 3px solid #28a745;
+    }
+    
+    .posting-advanced.price-section {
+        border-left: 3px solid #9b59b6;
+    }
+    
+    .posting-advanced.flag-section {
+        border-left: 3px solid #e74c3c;
+    }
+    
+    .posting-advanced.comment-section {
+        border-left: 3px solid #f39c12;
+    }
+    
+    .posting-advanced.metadata-section {
+        border-left: 3px solid #4a9eff;
+    }
+    
+    .flag-field {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .flag-field label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+    
+    .comment-input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+    }
+    
+    /* Metadata UI */
+    .metadata-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .metadata-item {
+        display: grid;
+        grid-template-columns: 1fr 2fr auto;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .metadata-key,
+    .metadata-value {
+        padding: 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+    }
+    
+    .remove-metadata {
+        background: var(--background-modifier-error);
+        border: 1px solid var(--text-error);
+        border-radius: 4px;
+        padding: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    
+    .add-metadata-btn {
+        background: var(--background-modifier-form-field);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        color: var(--text-normal);
+        transition: all 0.2s;
+        align-self: flex-start;
+    }
+    
+    .add-metadata-btn:hover {
+        background: var(--background-modifier-hover);
+    }
+    
+    /* Tags & Links Section */
+    .tags-links-section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .tags-links-section h4 {
+        margin: 0 0 1rem 0;
+        color: var(--text-normal);
+    }
+    
+    .selected-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .link {
+        background: var(--background-secondary);
+        border: 1px solid var(--interactive-accent);
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--interactive-accent);
+        font-size: 0.9rem;
+    }
+    
+    .link button {
+        background: none;
+        border: none;
+        color: var(--interactive-accent);
+        cursor: pointer;
+        font-size: 1.2rem;
+        line-height: 1;
+        padding: 0;
+    }
+    
+    .link button:hover {
+        color: var(--text-error);
+    }
+    
     @media (max-width: 768px) {
+        .transaction-header-row {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+        
+        .header-metadata-btn {
+            align-items: flex-start;
+            padding-bottom: 0;
+        }
+        
         .form-grid {
             grid-template-columns: 1fr;
         }
@@ -846,6 +1859,10 @@
         
         .posting-actions {
             justify-self: end;
+        }
+        
+        .advanced-grid {
+            grid-template-columns: 1fr;
         }
 
         .modal-footer {
@@ -867,5 +1884,14 @@
             padding: 0.5rem 0.75rem;
             font-size: 0.8rem;
         }
+        
+        .posting-toggle-buttons {
+            flex-wrap: wrap;
+        }
+        
+        .metadata-item {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
+```

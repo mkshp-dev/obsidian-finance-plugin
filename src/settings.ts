@@ -33,6 +33,13 @@ export interface BeancountPluginSettings {
     createBackups: boolean;
     /** Maximum number of backup files to keep (0 = unlimited). */
     maxBackupFiles: number;
+    // Structured Layout Settings
+    /** Whether to use structured folder layout instead of single file. */
+    useStructuredLayout: boolean;
+    /** Name of the folder for structured layout (e.g., "Finances"). */
+    structuredFolderName: string;
+    /** Computed absolute path to the structured folder (set automatically). */
+    structuredFolderPath: string;
 }
 
 /**
@@ -52,7 +59,11 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     debugMode: false,
     // Backup Settings
     createBackups: true,
-    maxBackupFiles: 10
+    maxBackupFiles: 10,
+    // Structured Layout Settings
+    useStructuredLayout: false,
+    structuredFolderName: 'Finances',
+    structuredFolderPath: ''
 }
 
 /**
@@ -84,6 +95,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         const tabs = [
             {id: 'general', label: '⚙️ General'},
             {id: 'connection', label: '🔌 Connection'},
+            {id: 'files', label: '📁 File Organization'},
             {id: 'bql', label: '📊 BQL'},
             {id: 'performance', label: '⚡ Performance'},
             {id: 'backup', label: '💾 Backup'}
@@ -109,6 +121,9 @@ export class BeancountSettingTab extends PluginSettingTab {
                 break;
             case 'connection':
                 this.renderConnectionTab(tabsContent);
+                break;
+            case 'files':
+                this.renderFilesTab(tabsContent);
                 break;
             case 'bql':
                 this.renderBQLTab(tabsContent);
@@ -313,6 +328,75 @@ export class BeancountSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }
                 }));
+    }
+
+    private renderFilesTab(containerEl: HTMLElement): void {
+        containerEl.createEl('h3', { text: 'File Organization' });
+        
+        containerEl.createEl('p', { 
+            text: 'Your finances are organized using a structured folder layout with separate files for accounts, transactions, prices, and more.',
+            cls: 'setting-item-description'
+        });
+
+        // Folder name setting
+        new Setting(containerEl)
+            .setName('Folder name')
+            .setDesc('Name of the folder containing your structured Beancount files.')
+            .addText(text => text
+                .setPlaceholder('Finances')
+                .setValue(this.plugin.settings.structuredFolderName)
+                .onChange(async (value) => {
+                    this.plugin.settings.structuredFolderName = value || 'Finances';
+                    await this.plugin.saveSettings();
+                }));
+
+        // Display file structure info
+        const infoDiv = containerEl.createDiv({ cls: 'structured-layout-info' });
+        infoDiv.style.padding = '10px';
+        infoDiv.style.marginTop = '10px';
+        infoDiv.style.backgroundColor = 'var(--background-secondary)';
+        infoDiv.style.borderRadius = '5px';
+        
+        infoDiv.createEl('strong', { text: 'Structured Layout File Organization:' });
+        const fileList = infoDiv.createEl('ul');
+        fileList.style.marginTop = '8px';
+        fileList.style.marginBottom = '0';
+        
+        const files = [
+            '📄 ledger.beancount - Main file with include statements',
+            '📄 accounts.beancount - Account open/close directives',
+            '📄 commodities.beancount - Commodity definitions',
+            '📄 prices.beancount - Price directives',
+            '📄 pads.beancount - Pad directives',
+            '📄 balances.beancount - Balance assertions',
+            '📄 notes.beancount - Note directives',
+            '📄 events.beancount - Event directives',
+            '📁 transactions/ - Folder with year-based transaction files (e.g., 2024.beancount, 2025.beancount)'
+        ];
+        
+        files.forEach(file => {
+            const li = fileList.createEl('li');
+            li.style.marginBottom = '4px';
+            li.textContent = file;
+        });
+
+        // Show current path
+        if (this.plugin.settings.beancountFilePath) {
+            const pathDiv = containerEl.createDiv({ cls: 'current-path-display' });
+            pathDiv.style.marginTop = '15px';
+            pathDiv.style.padding = '10px';
+            pathDiv.style.backgroundColor = 'var(--background-modifier-border)';
+            pathDiv.style.borderRadius = '5px';
+            
+            pathDiv.createEl('div', { 
+                text: 'Main ledger file path:',
+                cls: 'setting-item-name'
+            });
+            pathDiv.createEl('div', { 
+                text: this.plugin.settings.beancountFilePath,
+                cls: 'setting-item-description'
+            }).style.fontFamily = 'monospace';
+        }
     }
 
     private renderAdvancedTab(containerEl: HTMLElement): void {

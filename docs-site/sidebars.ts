@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/intro',
         'getting-started/installation',
+        'getting-started/first-time-setup',
         'agent-context', // Keep technical context handy
       ],
     },
@@ -29,6 +30,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'core-features/adding-directives',
+        'core-features/beancount-syntax',
         'core-features/snapshot-view',
         {
           type: 'category',

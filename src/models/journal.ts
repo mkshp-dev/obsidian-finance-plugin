@@ -12,6 +12,8 @@ export interface JournalPosting {
     price?: {
         amount: string;
         currency: string;
+        /** If true, use @@ (total price) instead of @ (per-unit price). */
+        isTotal?: boolean;
     };
     /** Optional cost basis information. */
     cost?: {
@@ -19,7 +21,15 @@ export interface JournalPosting {
         currency: string;
         date: string | null;
         label: string | null;
+        /** If true, use {{}} (total cost) instead of {} (per-unit cost). */
+        isTotal?: boolean;
     };
+    /** Optional posting flag ("!" for incomplete, "*" for complete). */
+    flag?: string | null;
+    /** Optional inline comment for this posting. */
+    comment?: string | null;
+    /** Optional posting-level metadata. */
+    metadata?: Record<string, string>;
 }
 
 /**

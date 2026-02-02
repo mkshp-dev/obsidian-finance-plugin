@@ -4,7 +4,46 @@ import type { ExecException } from 'child_process';
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main'; // Needed for settings type
 import { readFile, writeFile, copyFile } from 'fs/promises';
+import { existsSync, unlinkSync, renameSync } from 'fs';
 import { join, dirname, basename } from 'path';
+import { getTargetFile, getMainLedgerPath, ensureYearFile, type OperationType } from './structuredLayout';
+
+// --- FILE PATH RESOLVER ---
+
+/**
+ * Get the appropriate file path based on plugin mode (single file vs structured layout).
+ * 
+ * @param plugin - The plugin instance
+ * @param operationType - The type of operation (transaction, account, etc.)
+ * @param date - Optional date for transaction routing
+ * @returns The absolute path to the target file
+ */
+function resolveFilePath(
+	plugin: BeancountPlugin,
+	operationType: OperationType,
+	date?: string
+): string {
+	if (plugin.settings.useStructuredLayout) {
+		return getTargetFile(plugin, operationType, date);
+	} else {
+		// Single file mode - use configured path
+		return plugin.settings.beancountFilePath;
+	}
+}
+
+/**
+ * Get the file path for BQL queries (main ledger file in structured mode).
+ * 
+ * @param plugin - The plugin instance
+ * @returns The absolute path to the query entry point
+ */
+function resolveQueryFilePath(plugin: BeancountPlugin): string {
+	if (plugin.settings.useStructuredLayout) {
+		return getMainLedgerPath(plugin);
+	} else {
+		return plugin.settings.beancountFilePath;
+	}
+}
 
 // --- QUERY RUNNER ---
 
@@ -18,11 +57,18 @@ import { join, dirname, basename } from 'path';
  */
 export function runQuery(plugin: BeancountPlugin, query: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const filePath = plugin.settings.beancountFilePath;
+		const filePath = resolveQueryFilePath(plugin);
 		const commandName = plugin.settings.beancountCommand;
 		if (!filePath) return reject(new Error('File path not set.'));
 		if (!commandName) return reject(new Error('Command not set.'));
-		const command = `${commandName} -q -f csv "${filePath}" "${query}"`;
+		
+		// Convert Windows path to WSL path if using WSL
+		let queryFilePath = filePath;
+		if (commandName.includes('wsl')) {
+			queryFilePath = convertWindowsPathToWsl(filePath);
+		}
+		
+		const command = `${commandName} -q -f csv "${queryFilePath}" "${query}"`;
 		
 		// Increase maxBuffer to handle large query results (50MB limit)
 		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
@@ -259,6 +305,21 @@ export function parseSingleValue(csv: string): string {
 // --- PATH CONVERTER ---
 
 /**
+ * Converts a Windows path (C:\...) to a WSL path (/mnt/c/...).
+ *
+ * @param {string} windowsPath - The Windows path.
+ * @returns {string} The corresponding WSL path.
+ */
+export function convertWindowsPathToWsl(windowsPath: string): string {
+	const match = windowsPath.match(/^([a-zA-Z]):\\/);
+	if (match) {
+		const driveLetter = match[1].toLowerCase();
+		return windowsPath.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
+	}
+	return windowsPath;
+}
+
+/**
  * Converts a WSL path (/mnt/c/...) to a Windows path (C:\...).
  *
  * @param {string} wslPath - The WSL path.
@@ -271,6 +332,54 @@ export function convertWslPathToWindows(wslPath: string): string {
 		return wslPath.replace(/^\/mnt\/[a-zA-Z]\//, `${driveLetter}:\\`).replace(/\//g, '\\');
 	}
 	return wslPath;
+}
+/**
+ * Performs an atomic file write operation using temp file + rename strategy.
+ * On Windows, handles the requirement to delete target file before rename.
+ * 
+ * @param {string} filePath - The target file path to write to.
+ * @param {string} content - The content to write.
+ * @returns {Promise<void>}
+ */
+async function atomicFileWrite(filePath: string, content: string): Promise<void> {
+	const tempPath = `${filePath}.tmp`;
+	await writeFile(tempPath, content, 'utf-8');
+	
+	try {
+		// On Windows, we need to delete the target file first before renaming
+		if (existsSync(filePath)) {
+			unlinkSync(filePath);
+		}
+		renameSync(tempPath, filePath);
+	} catch (renameError) {
+		// Fallback: just overwrite directly
+		await writeFile(filePath, content, 'utf-8');
+		// Clean up temp file if it still exists
+		if (existsSync(tempPath)) {
+			unlinkSync(tempPath);
+		}
+	}
+}
+
+/**
+ * Creates a backup of a file if requested.
+ * 
+ * @param {string} filePath - The file path to back up.
+ * @param {boolean} createBackup - Whether to create the backup.
+ * @param {string} functionName - The calling function name for logging.
+ * @returns {Promise<void>}
+ */
+async function createBackupFile(filePath: string, createBackup: boolean, functionName: string): Promise<void> {
+	if (!createBackup) return;
+	
+	const backupPath = `${filePath}.bak`;
+	try {
+		await copyFile(filePath, backupPath);
+		console.debug(`[${functionName}] Created backup: ${backupPath}`);
+	} catch (backupError) {
+		console.warn(`[${functionName}] Failed to create backup:`, backupError);
+		// Continue anyway - backup failure shouldn't block save
+	}
 }
 
 // --- ACCOUNT TREE BUILDER ---
@@ -605,9 +714,10 @@ export function parseCommodityDetailsCSV(csv: string): {
 		const linenoStr = row[5]?.trim() || null;
 		
 		const metadata = parseMetadataString(metaStr);
-		const lineno = linenoStr ? parseInt(linenoStr, 10) : null;
+		const parsedLineno = linenoStr ? parseInt(linenoStr, 10) : Number.NaN;
+		const lineno = Number.isNaN(parsedLineno) ? null : parsedLineno;
 		
-		return { symbol, metadata, logo, priceMetadata, filename, lineno: isNaN(lineno!) ? null : lineno };
+		return { symbol, metadata, logo, priceMetadata, filename, lineno };
 	} catch (e) {
 		console.error('Error parsing commodity details CSV:', e, 'CSV:', csv);
 		return defaultResult;
@@ -692,38 +802,10 @@ export async function saveCommodityMetadata(
 		const newContent = newLines.join('\n');
 
 		// Step 6: Create backup if requested
-		if (createBackup) {
-			const backupPath = `${normalizedPath}.bak`;
-			try {
-				await copyFile(normalizedPath, backupPath);
-				console.debug(`[saveCommodityMetadata] Created backup: ${backupPath}`);
-			} catch (backupError) {
-				console.warn(`[saveCommodityMetadata] Failed to create backup:`, backupError);
-				// Continue anyway - backup failure shouldn't block save
-			}
-		}
+		await createBackupFile(normalizedPath, createBackup, 'saveCommodityMetadata');
 
 		// Step 7: Atomic write (write to temp file, then rename)
-		const tempPath = `${normalizedPath}.tmp`;
-		await writeFile(tempPath, newContent, 'utf-8');
-		
-		// On Windows, we need to delete the target file first before renaming
-		try {
-			const fs = await import('fs');
-			if (fs.existsSync(normalizedPath)) {
-				fs.unlinkSync(normalizedPath);
-			}
-			fs.renameSync(tempPath, normalizedPath);
-		} catch (renameError) {
-			// Fallback: just overwrite directly
-			await writeFile(normalizedPath, newContent, 'utf-8');
-			try {
-				const fs = await import('fs');
-				if (fs.existsSync(tempPath)) {
-					fs.unlinkSync(tempPath);
-				}
-			} catch {}
-		}
+		await atomicFileWrite(normalizedPath, newContent);
 
 		console.debug(`[saveCommodityMetadata] Successfully saved metadata for ${symbol}`);
 		return { success: true };
@@ -734,5 +816,1697 @@ export async function saveCommodityMetadata(
 			success: false, 
 			error: error instanceof Error ? error.message : String(error) 
 		};
+	}
+}
+
+// --- ACCOUNT MANAGEMENT ---
+
+/**
+ * Gets all open accounts using BQL query.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @returns {Promise<string[]>} Array of open account names.
+ */
+export async function getOpenAccounts(plugin: BeancountPlugin): Promise<string[]> {
+	try {
+		const query = `SELECT account FROM #accounts WHERE NOT bool(close)`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract account names
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		return records.map((row: any) => row.account).filter((acc: string) => acc);
+	} catch (error) {
+		console.error('[getOpenAccounts] Error:', error);
+		throw new Error(`Failed to fetch open accounts: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
+/**
+ * Fetches all distinct payees from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<string[]>} Array of distinct payee names.
+ */
+export async function getPayees(plugin: BeancountPlugin): Promise<string[]> {
+	try {
+		const query = `SELECT DISTINCT payee`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract payee names
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		return records
+			.map((row: any) => row.payee)
+			.filter((payee: string) => payee && payee.trim() !== '')
+			.sort();
+	} catch (error) {
+		console.error('[getPayees] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
+ * Fetches all distinct tags from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<string[]>} Array of distinct tag names.
+ */
+export async function getTags(plugin: BeancountPlugin): Promise<string[]> {
+	try {
+		const query = `SELECT DISTINCT joinstr(tags) FROM entries WHERE tags IS NOT NULL`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract tags
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		// The query returns unique sets of tags as comma-separated strings
+		// e.g., "trip,food", "groceries", "trip,flight"
+		// We need to split each set and flatten to get individual distinct tags
+		const allTags = new Set<string>();
+		
+		records.forEach((row: any) => {
+			// The column name from BQL is 'joinstr(tags)' or might be the first property
+			const tagSet = row['joinstr(tags)'] || row.tags || Object.values(row)[0];
+			
+			if (tagSet && typeof tagSet === 'string') {
+				// Split the comma-separated tags and clean each one
+				const tags = tagSet.split(',').map((t: string) => t.trim().replace(/^#/, ''));
+				tags.forEach((tag: string) => {
+					if (tag) allTags.add(tag);
+				});
+			}
+		});
+		
+		return Array.from(allTags).sort();
+	} catch (error) {
+		console.error('[getTags] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
+ * Fetches all distinct commodities from the Beancount ledger using BQL.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @returns {Promise<Array<{name: string}>>} Array of commodity objects with name property.
+ */
+export async function getCommodities(plugin: BeancountPlugin): Promise<Array<{name: string}>> {
+	try {
+		const query = `SELECT name AS name_ FROM #commodities GROUP BY name`;
+		const csv = await runQuery(plugin, query);
+		
+		// Parse CSV to extract commodity names
+		const records = parseCsv(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+		
+		// Map to the expected format: array of objects with 'name' property
+		return records
+			.map((row: any) => ({ name: row.name_ || row.name || Object.values(row)[0] as string }))
+			.filter((commodity: {name: string}) => commodity.name && commodity.name.trim() !== '')
+			.sort((a: {name: string}, b: {name: string}) => a.name.localeCompare(b.name));
+	} catch (error) {
+		console.error('[getCommodities] Error:', error);
+		// Return empty array on error to maintain compatibility
+		return [];
+	}
+}
+
+/**
+ * Appends an Open directive to the end of the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} date - The date in YYYY-MM-DD format.
+ * @param {string} account - The account name (e.g., Assets:Bank:Checking).
+ * @param {string[]} [currencies] - Optional array of currencies.
+ * @param {string} [booking] - Optional booking method.
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+ */
+export async function saveOpenDirective(
+	plugin: BeancountPlugin,
+	date: string,
+	account: string,
+	currencies?: string[],
+	booking?: string,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const filePath = resolveFilePath(plugin, 'account', date);
+		if (!filePath) {
+			return { success: false, error: 'Beancount file path not set' };
+		}
+
+		// Step 1: Normalize path (handle WSL)
+		const normalizedPath = convertWslPathToWindows(filePath);
+
+		// Step 2: Generate directive text
+		const parts = [date, 'open', account];
+		if (currencies && currencies.length > 0) {
+			parts.push(currencies.join(','));
+		}
+		if (booking) {
+			parts.push(`"${booking}"`);
+		}
+		const directiveText = parts.join(' ');
+
+		// Step 3: Create backup if requested
+		await createBackupFile(normalizedPath, createBackup, 'saveOpenDirective');
+
+		// Step 4: Read file and append directive
+		const content = await readFile(normalizedPath, 'utf-8');
+		const newContent = content.endsWith('\n') 
+			? `${content}${directiveText}\n`
+			: `${content}\n${directiveText}\n`;
+
+		// Step 5: Atomic write (write to temp file, then rename)
+		await atomicFileWrite(normalizedPath, newContent);
+
+		console.debug(`[saveOpenDirective] Successfully saved open directive for ${account}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error(`[saveOpenDirective] Error:`, error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Appends a Balance assertion to the end of the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} date - The date in YYYY-MM-DD format.
+ * @param {string} account - The account name (e.g., Assets:Bank:Checking).
+ * @param {string} amount - The amount (e.g., "1000.00").
+ * @param {string} currency - The currency (e.g., "USD").
+ * @param {string} [tolerance] - Optional tolerance (e.g., "0.01").
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+ */
+export async function createBalanceAssertion(
+	plugin: BeancountPlugin,
+	date: string,
+	account: string,
+	amount: string,
+	currency: string,
+	tolerance?: string,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const filePath = resolveFilePath(plugin, 'balance', date);
+		if (!filePath) {
+			return { success: false, error: 'Beancount file path not set' };
+		}
+
+		// Step 1: Normalize path (handle WSL)
+		const normalizedPath = convertWslPathToWindows(filePath);
+
+		// Step 2: Generate directive text
+		// Format: YYYY-MM-DD balance Account Amount Currency ~ Tolerance
+		let directiveText = `${date} balance ${account}  ${amount} ${currency}`;
+		if (tolerance) {
+			directiveText += ` ~ ${tolerance}`;
+		}
+
+		// Step 3: Create backup if requested
+		await createBackupFile(normalizedPath, createBackup, 'createBalanceAssertion');
+
+		// Step 4: Read file and append directive
+		const content = await readFile(normalizedPath, 'utf-8');
+		const newContent = content.endsWith('\n') 
+			? `${content}${directiveText}\n`
+			: `${content}\n${directiveText}\n`;
+
+		// Step 5: Atomic write (write to temp file, then rename)
+		await atomicFileWrite(normalizedPath, newContent);
+
+		console.debug(`[createBalanceAssertion] Successfully saved balance assertion for ${account}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error(`[createBalanceAssertion] Error:`, error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Appends a Note directive to the end of the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} date - The date in YYYY-MM-DD format.
+ * @param {string} account - The account name (e.g., Assets:Bank:Checking).
+ * @param {string} comment - The note comment text.
+ * @param {string[]} [tags] - Optional array of tags.
+ * @param {string[]} [links] - Optional array of links.
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+ */
+export async function createNote(
+	plugin: BeancountPlugin,
+	date: string,
+	account: string,
+	comment: string,
+	tags?: string[],
+	links?: string[],
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const filePath = resolveFilePath(plugin, 'note', date);
+		if (!filePath) {
+			return { success: false, error: 'Beancount file path not set' };
+		}
+
+		// Step 1: Normalize path (handle WSL)
+		const normalizedPath = convertWslPathToWindows(filePath);
+
+		// Step 2: Generate directive text
+		// Format: YYYY-MM-DD note Account "Comment text" #tag1 #tag2 ^link1 ^link2
+		const parts = [date, 'note', account, `"${comment}"`];
+		
+		// Add tags (with # prefix)
+		if (tags && tags.length > 0) {
+			for (const tag of tags) {
+				const cleanTag = tag.replace(/^#/, '');
+				if (cleanTag) {
+					parts.push(`#${cleanTag}`);
+				}
+			}
+		}
+		
+		// Add links (with ^ prefix)
+		if (links && links.length > 0) {
+			for (const link of links) {
+				parts.push(`^${link}`);
+			}
+		}
+		
+		const directiveText = parts.join(' ');
+
+		// Step 3: Create backup if requested
+		await createBackupFile(normalizedPath, createBackup, 'createNote');
+
+		// Step 4: Read file and append directive
+		const content = await readFile(normalizedPath, 'utf-8');
+		const newContent = content.endsWith('\n') 
+			? `${content}${directiveText}\n`
+			: `${content}\n${directiveText}\n`;
+
+		// Step 5: Atomic write (write to temp file, then rename)
+		await atomicFileWrite(normalizedPath, newContent);
+
+		console.debug(`[createNote] Successfully saved note for ${account}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error(`[createNote] Error:`, error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Updates a balance assertion in the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} balanceId - The balance ID (e.g., "balance_2026-01-21_Assets_Bank_Checking").
+ * @param {any} balanceData - The updated balance data (date, account, amount, currency, tolerance).
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function updateBalance(
+	plugin: BeancountPlugin,
+	balanceId: string,
+	balanceData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "balance_2026-01-21_Assets_Bank_Checking"
+		const parts = balanceId.split('_');
+		if (parts.length < 3 || parts[0] !== 'balance') {
+			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[updateBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the balance assertion using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Generate new balance assertion text
+		let newBalanceText = `${balanceData.date} balance ${balanceData.account}  ${balanceData.amount} ${balanceData.currency}`;
+		if (balanceData.tolerance) {
+			newBalanceText += ` ~ ${balanceData.tolerance}`;
+		}
+
+		// Replace the balance line
+		lines[lineIndex] = newBalanceText;
+		const newContent = lines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[updateBalance] Successfully updated balance ${balanceId} in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[updateBalance] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Deletes a balance assertion from the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} balanceId - The balance ID (e.g., "balance_2026-01-21_Assets_Bank_Checking").
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function deleteBalance(
+	plugin: BeancountPlugin,
+	balanceId: string
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "balance_2026-01-21_Assets_Bank_Checking"
+		const parts = balanceId.split('_');
+		if (parts.length < 3 || parts[0] !== 'balance') {
+			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[deleteBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the balance assertion using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		console.debug(`[deleteBalance] Found balance assertion at line ${lineno}`);
+
+		// Remove the balance line
+		const beforeBalance = lines.slice(0, lineIndex);
+		const afterBalance = lines.slice(lineIndex + 1);
+		const newLines = [
+			...beforeBalance,
+			...afterBalance
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[deleteBalance] Successfully deleted balance ${balanceId} from ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[deleteBalance] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Updates a note directive in the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} noteId - The note ID (e.g., "note_2026-01-21_Assets_Bank_Checking").
+ * @param {any} noteData - The updated note data (date, account, comment, tags, links).
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function updateNote(
+	plugin: BeancountPlugin,
+	noteId: string,
+	noteData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "note_2026-01-21_Assets_Bank_Checking"
+		const parts = noteId.split('_');
+		if (parts.length < 3 || parts[0] !== 'note') {
+			return { success: false, error: `Invalid note ID format: ${noteId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[updateNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the note using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Note not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Generate new note text
+		const noteParts = [noteData.date, 'note', noteData.account, `"${noteData.comment}"`];
+		
+		// Add tags (with # prefix)
+		if (noteData.tags && noteData.tags.length > 0) {
+			for (const tag of noteData.tags) {
+				const cleanTag = tag.replace(/^#/, '');
+				if (cleanTag) {
+					noteParts.push(`#${cleanTag}`);
+				}
+			}
+		}
+		
+		// Add links (with ^ prefix)
+		if (noteData.links && noteData.links.length > 0) {
+			for (const link of noteData.links) {
+				noteParts.push(`^${link}`);
+			}
+		}
+		
+		const newNoteText = noteParts.join(' ');
+
+		// Replace the note line
+		lines[lineIndex] = newNoteText;
+		const newContent = lines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[updateNote] Successfully updated note ${noteId} in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[updateNote] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Deletes a note directive from the Beancount file by finding it via its synthetic ID.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} noteId - The note ID (e.g., "note_2026-01-21_Assets_Bank_Checking").
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function deleteNote(
+	plugin: BeancountPlugin,
+	noteId: string
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Parse synthetic ID: "note_2026-01-21_Assets_Bank_Checking"
+		const parts = noteId.split('_');
+		if (parts.length < 3 || parts[0] !== 'note') {
+			return { success: false, error: `Invalid note ID format: ${noteId}` };
+		}
+
+		const date = parts[1]; // "2026-01-21"
+		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
+		const account = accountParts.join(':'); // "Assets:Bank:Checking"
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[deleteNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// Find the note using BQL query
+		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Note not found for ${account} on ${date}` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		console.debug(`[deleteNote] Found note at line ${lineno}`);
+
+		// Remove the note line
+		const beforeNote = lines.slice(0, lineIndex);
+		const afterNote = lines.slice(lineIndex + 1);
+		const newLines = [
+			...beforeNote,
+			...afterNote
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[deleteNote] Successfully deleted note ${noteId} from ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[deleteNote] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Fetches balance entries from Beancount using BQL query.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {any} filters - Filters object (startDate, endDate, account).
+ * @param {number} page - Page number (1-indexed).
+ * @param {number} pageSize - Number of entries per page.
+ * @returns {Promise<any>} JournalApiResponse with entries, total_count, etc.
+ */
+export async function getBalanceEntries(
+	plugin: BeancountPlugin,
+	filters: any = {},
+	page: number = 1,
+	pageSize: number = 200
+): Promise<any> {
+	try {
+		console.debug('[getBalanceEntries] Fetching with filters:', filters);
+
+		// Build BQL query with filters
+		let whereConditions: string[] = [];
+		
+		if (filters.startDate) {
+			whereConditions.push(`date >= ${filters.startDate}`);
+		}
+		if (filters.endDate) {
+			whereConditions.push(`date <= ${filters.endDate}`);
+		}
+		if (filters.account) {
+			whereConditions.push(`account ~ "${filters.account}"`);
+		}
+
+		const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+		
+		// Query to get all balance assertions
+		const query = `SELECT date, account, amount, tolerance, discrepancy FROM #balances ${whereClause} ORDER BY date DESC, account`;
+
+		console.debug('[getBalanceEntries] Running BQL query:', query);
+		const csv = await runQuery(plugin, query);
+
+		// Parse CSV
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		console.debug(`[getBalanceEntries] Parsed ${records.length} balance rows`);
+
+		// Convert to JournalBalance objects
+		let balances: any[] = [];
+
+		for (const row of records) {
+			// Parse amount - format is "100.00 USD"
+			const amountStr = row['amount'] || '';
+			let amount = '';
+			let currency = '';
+			
+			if (amountStr && amountStr.trim()) {
+				const amountParts = amountStr.trim().split(/\s+/);
+				if (amountParts.length >= 2) {
+					amount = amountParts[0];
+					currency = amountParts[1];
+				}
+			}
+
+			// Generate a simple ID from date + account
+			const id = `balance_${row['date']}_${row['account'].replace(/:/g, '_')}`;
+
+			const balance = {
+				id,
+				type: 'balance',
+				date: row['date'],
+				account: row['account'],
+				amount,
+				currency,
+				tolerance: row['tolerance'] || null,
+				diff_amount: row['discrepancy'] || null,
+				metadata: {}
+			};
+
+			balances.push(balance);
+		}
+
+		// Apply search term filter (in-memory)
+		if (filters.searchTerm) {
+			const searchLower = filters.searchTerm.toLowerCase();
+			balances = balances.filter((bal: any) => {
+				const accountMatch = bal.account?.toLowerCase().includes(searchLower);
+				return accountMatch;
+			});
+		}
+
+		// Sort by date descending
+		balances.sort((a: any, b: any) => {
+			const dateCompare = b.date.localeCompare(a.date);
+			if (dateCompare !== 0) return dateCompare;
+			return a.account.localeCompare(b.account);
+		});
+
+		// Calculate pagination
+		const totalCount = balances.length;
+		const offset = (page - 1) * pageSize;
+		const paginatedBalances = balances.slice(offset, offset + pageSize);
+		const hasMore = offset + paginatedBalances.length < totalCount;
+
+		console.debug(`[getBalanceEntries] Returning ${paginatedBalances.length} of ${totalCount} balances`);
+
+		return {
+			entries: paginatedBalances,
+			total_count: totalCount,
+			returned_count: paginatedBalances.length,
+			offset,
+			limit: pageSize,
+			has_more: hasMore
+		};
+
+	} catch (error) {
+		console.error('[getBalanceEntries] Error:', error);
+		throw error;
+	}
+}
+
+/**
+ * Fetches note entries from Beancount using BQL query.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {any} filters - Filters object (startDate, endDate, account).
+ * @param {number} page - Page number (1-indexed).
+ * @param {number} pageSize - Number of entries per page.
+ * @returns {Promise<any>} JournalApiResponse with entries, total_count, etc.
+ */
+export async function getNoteEntries(
+	plugin: BeancountPlugin,
+	filters: any = {},
+	page: number = 1,
+	pageSize: number = 200
+): Promise<any> {
+	try {
+		console.debug('[getNoteEntries] Fetching with filters:', filters);
+
+		// Build BQL query with filters
+		let whereConditions: string[] = [];
+		
+		if (filters.startDate) {
+			whereConditions.push(`date >= ${filters.startDate}`);
+		}
+		if (filters.endDate) {
+			whereConditions.push(`date <= ${filters.endDate}`);
+		}
+		if (filters.account) {
+			whereConditions.push(`account ~ "${filters.account}"`);
+		}
+
+		const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+		
+		// Query to get all notes
+		const query = `SELECT date, account, comment, tags, links, meta FROM #notes ${whereClause} ORDER BY date DESC, account`;
+
+		console.debug('[getNoteEntries] Running BQL query:', query);
+		const csv = await runQuery(plugin, query);
+
+		// Parse CSV
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		console.debug(`[getNoteEntries] Parsed ${records.length} note rows`);
+
+		// Convert to JournalNote objects
+		let notes: any[] = [];
+
+		for (const row of records) {
+			// Generate a simple ID from date + account
+			const id = `note_${row['date']}_${row['account'].replace(/:/g, '_')}`;
+
+			// Parse metadata
+			const metaStr = row['meta'] || '{}';
+			let metadata: Record<string, any> = {};
+			try {
+				metadata = JSON.parse(metaStr);
+			} catch {
+				metadata = { raw: metaStr };
+			}
+
+			const note = {
+				id,
+				type: 'note',
+				date: row['date'],
+				account: row['account'],
+				comment: row['comment'] || '',
+				metadata
+			};
+
+			notes.push(note);
+		}
+
+		// Apply search term filter (in-memory)
+		if (filters.searchTerm) {
+			const searchLower = filters.searchTerm.toLowerCase();
+			notes = notes.filter((note: any) => {
+				const accountMatch = note.account?.toLowerCase().includes(searchLower);
+				const commentMatch = note.comment?.toLowerCase().includes(searchLower);
+				return accountMatch || commentMatch;
+			});
+		}
+
+		// Sort by date descending
+		notes.sort((a: any, b: any) => {
+			const dateCompare = b.date.localeCompare(a.date);
+			if (dateCompare !== 0) return dateCompare;
+			return a.account.localeCompare(b.account);
+		});
+
+		// Calculate pagination
+		const totalCount = notes.length;
+		const offset = (page - 1) * pageSize;
+		const paginatedNotes = notes.slice(offset, offset + pageSize);
+		const hasMore = offset + paginatedNotes.length < totalCount;
+
+		console.debug(`[getNoteEntries] Returning ${paginatedNotes.length} of ${totalCount} notes`);
+
+		return {
+			entries: paginatedNotes,
+			total_count: totalCount,
+			returned_count: paginatedNotes.length,
+			offset,
+			limit: pageSize,
+			has_more: hasMore
+		};
+
+	} catch (error) {
+		console.error('[getNoteEntries] Error:', error);
+		throw error;
+	}
+}
+
+// --- Transaction Creation ---
+
+/**
+ * Generates properly formatted Beancount transaction text from a JournalTransaction object.
+ * 
+ * @param {any} transactionData - The transaction data object.
+ * @returns {string} Formatted Beancount transaction text.
+ */
+export function generateTransactionText(transactionData: any): string {
+	const date = transactionData.date;
+	const flag = transactionData.flag || '*';
+	const payee = transactionData.payee || '';
+	const narration = transactionData.narration || '';
+	const tags = transactionData.tags || [];
+	const links = transactionData.links || [];
+	
+	// Format payee and narration
+	let payeeNarration = '';
+	if (payee && narration) {
+		payeeNarration = `"${payee}" "${narration}"`;
+	} else if (payee) {
+		payeeNarration = `"${payee}" ""`;
+	} else if (narration) {
+		payeeNarration = `"${narration}"`;
+	} else {
+		payeeNarration = '""';
+	}
+	
+	// Build the transaction header with tags and links
+	const headerParts = [date, flag, payeeNarration];
+	
+	// Add tags (with # prefix, strip any existing # to avoid double prefixes)
+	if (tags && tags.length > 0) {
+		for (const tag of tags) {
+			const cleanTag = tag.replace(/^#/, '');
+			if (cleanTag) {
+				headerParts.push(`#${cleanTag}`);
+			}
+		}
+	}
+	
+	// Add links (with ^ prefix)
+	if (links && links.length > 0) {
+		for (const link of links) {
+			headerParts.push(`^${link}`);
+		}
+	}
+	
+	// Start with the transaction line
+	const lines = [headerParts.join(' ')];
+	
+	// Add transaction-level metadata if present
+	const txnMetadata = transactionData.metadata || {};
+	for (const [key, value] of Object.entries(txnMetadata)) {
+		if (key !== 'filename' && key !== 'lineno') { // Skip internal metadata
+			lines.push(`  ${key}: "${value}"`);
+		}
+	}
+	
+	// Add postings
+	const postings = transactionData.postings || [];
+	for (const posting of postings) {
+		const account = posting.account;
+		const amount = posting.amount;
+		const currency = posting.currency;
+		const cost = posting.cost;
+		const price = posting.price;
+		const postingFlag = posting.flag;
+		const postingComment = posting.comment;
+		const postingMetadata = posting.metadata || {};
+		
+		// Start posting line with optional flag
+		let postingLine = '  ';
+		if (postingFlag) {
+			postingLine += `${postingFlag} `;
+		}
+		postingLine += account;
+		
+		if (amount && currency) {
+			postingLine += `  ${amount} ${currency}`;
+			
+			// Add cost if present (e.g., {100.00 USD} or {{100.00 USD}} for total cost)
+			if (cost) {
+				const costNumber = cost.number;
+				const costCurrency = cost.currency;
+				const costDate = cost.date;
+				const costLabel = cost.label;
+				const isTotal = cost.isTotal || false;
+				
+				if (costNumber && costCurrency) {
+					const openBrace = isTotal ? '{{' : '{';
+					const closeBrace = isTotal ? '}}' : '}';
+					
+					postingLine += ` ${openBrace}${costNumber} ${costCurrency}`;
+					
+					if (costDate) {
+						postingLine += `, ${costDate}`;
+					}
+					
+					if (costLabel) {
+						postingLine += `, "${costLabel}"`;
+					}
+					
+					postingLine += closeBrace;
+				} else if (costDate) {
+					postingLine += ` {${costDate}}`;
+				} else if (costLabel) {
+					postingLine += ` {"${costLabel}"}`;
+				}
+			}
+			
+			// Add price if present (e.g., @ 100.00 USD or @@ 1000.00 USD for total price)
+			if (price && price.amount && price.currency) {
+				const priceSymbol = price.isTotal ? '@@' : '@';
+				postingLine += ` ${priceSymbol} ${price.amount} ${price.currency}`;
+			}
+		}
+		
+		// Add inline comment if present
+		if (postingComment) {
+			postingLine += `  ; ${postingComment}`;
+		}
+		
+		lines.push(postingLine);
+		
+		// Add posting-level metadata if present (indented 4 spaces total)
+		for (const [key, value] of Object.entries(postingMetadata)) {
+			lines.push(`    ${key}: "${value}"`);
+		}
+	}
+	
+	return lines.join('\n');
+}
+
+/**
+ * Creates a new transaction in the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {any} transactionData - The transaction data.
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function createTransaction(
+	plugin: BeancountPlugin,
+	transactionData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		// Extract date from transaction data
+		const transactionDate = transactionData.date || new Date().toISOString().split('T')[0];
+		
+		// If structured layout, ensure year file exists
+		if (plugin.settings.useStructuredLayout) {
+			const year = new Date(transactionDate).getFullYear();
+			const folderName = plugin.settings.structuredFolderName || 'Finances';
+			await ensureYearFile(plugin, folderName, year);
+		}
+		
+		// Get target file path
+		const beancountFilePath = resolveFilePath(plugin, 'transaction', transactionDate);
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[createTransaction] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'createTransaction');
+
+		// Generate transaction text
+		const transactionText = generateTransactionText(transactionData);
+		
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		
+		// Append transaction with proper newlines
+		const newContent = currentContent + '\n' + transactionText + '\n';
+		
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[createTransaction] Successfully created transaction in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[createTransaction] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Updates an existing transaction in the Beancount file by finding it via its ID (hash)
+ * and replacing it with updated content.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} transactionId - The transaction ID (hash from BQL).
+ * @param {any} transactionData - The updated transaction data.
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function updateTransaction(
+	plugin: BeancountPlugin,
+	transactionId: string,
+	transactionData: any
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[updateTransaction] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateTransaction');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// First, find the transaction using BQL query to get filename and lineno
+		// Use escaped quotes for shell command
+		const query = `SELECT filename, lineno FROM postings WHERE id = \\"${transactionId}\\" LIMIT 1`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Transaction with ID ${transactionId} not found` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for transaction` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Find the start and end of the transaction block
+		// Note: BQL returns a posting line, not the transaction header, so we need to scan backward first
+		let startIndex = lineIndex;
+		
+		// Scan backward to find the transaction header (first non-indented, non-empty line)
+		for (let i = lineIndex - 1; i >= 0; i--) {
+			const line = lines[i];
+			if (line.trim() === '') {
+				// Empty line means we've gone past the transaction start
+				break;
+			} else if (!line.startsWith(' ') && !line.startsWith('\t')) {
+				// Found non-indented line - this is the transaction header
+				startIndex = i;
+				break;
+			}
+			// Otherwise it's an indented line (metadata, other posting), keep scanning backward
+		}
+		
+		let endIndex = lineIndex;
+
+		// Scan forward to find the end of the transaction (next non-indented line or blank line followed by non-indented)
+		for (let i = lineIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			
+			// Empty line
+			if (line.trim() === '') {
+				// Check if next non-empty line is indented or not
+				let foundNonEmpty = false;
+				for (let j = i + 1; j < lines.length; j++) {
+					if (lines[j].trim() !== '') {
+						if (lines[j].startsWith(' ') || lines[j].startsWith('\t')) {
+							// Still part of transaction
+							endIndex = j;
+						} else {
+							// New entry starts
+							foundNonEmpty = true;
+						}
+						break;
+					}
+				}
+				if (foundNonEmpty) {
+					endIndex = i - 1;
+					break;
+				}
+				// If no non-empty line found after blank, include the blank
+				endIndex = i;
+			}
+			// Indented line (posting or metadata)
+			else if (line.startsWith(' ') || line.startsWith('\t')) {
+				endIndex = i;
+			}
+			// Non-indented non-empty line (new entry)
+			else {
+				endIndex = i - 1;
+				break;
+			}
+		}
+
+		// If we reached end of file
+		if (endIndex === lineIndex) {
+			// Scan forward to find last line of transaction
+			for (let i = lineIndex + 1; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.trim() === '' || (!line.startsWith(' ') && !line.startsWith('\t'))) {
+					endIndex = i - 1;
+					break;
+				}
+				endIndex = i;
+			}
+		}
+
+		console.debug(`[updateTransaction] Found transaction at lines ${startIndex + 1}-${endIndex + 1}`);
+
+		// Generate new transaction text
+		const newTransactionText = generateTransactionText(transactionData);
+
+		// Replace the transaction lines
+		const beforeTransaction = lines.slice(0, startIndex);
+		const afterTransaction = lines.slice(endIndex + 1);
+		const newLines = [
+			...beforeTransaction,
+			newTransactionText,
+			...afterTransaction
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[updateTransaction] Successfully updated transaction ${transactionId} in ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[updateTransaction] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Deletes a transaction from the Beancount file by finding it via its ID (hash).
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {string} transactionId - The transaction ID (hash from BQL).
+ * @returns {Promise<{success: boolean, error?: string}>} Result object.
+ */
+export async function deleteTransaction(
+	plugin: BeancountPlugin,
+	transactionId: string
+): Promise<{success: boolean, error?: string}> {
+	try {
+		const beancountFilePath = plugin.settings.beancountFilePath;
+		if (!beancountFilePath) {
+			return { success: false, error: 'Beancount file path not configured' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(beancountFilePath);
+		console.debug(`[deleteTransaction] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteTransaction');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
+		// First, find the transaction using BQL query to get filename and lineno
+		// Use escaped quotes for shell command
+		const query = `SELECT filename, lineno FROM postings WHERE id = \\"${transactionId}\\" LIMIT 1`;
+		const csv = await runQuery(plugin, query);
+		
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		if (records.length === 0) {
+			return { success: false, error: `Transaction with ID ${transactionId} not found` };
+		}
+
+		const lineno = parseInt(records[0]['lineno']);
+		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
+			return { success: false, error: `Invalid line number ${records[0]['lineno']} for transaction` };
+		}
+
+		// Convert to 0-based index
+		const lineIndex = lineno - 1;
+
+		// Find the start and end of the transaction block
+		let startIndex = lineIndex;
+		let endIndex = lineIndex;
+
+		// Scan forward to find the end of the transaction (next non-indented line or blank line followed by non-indented)
+		for (let i = lineIndex + 1; i < lines.length; i++) {
+			const line = lines[i];
+			
+			// Empty line
+			if (line.trim() === '') {
+				// Check if next non-empty line is indented or not
+				let foundNonEmpty = false;
+				for (let j = i + 1; j < lines.length; j++) {
+					if (lines[j].trim() !== '') {
+						if (lines[j].startsWith(' ') || lines[j].startsWith('\t')) {
+							// Still part of transaction
+							endIndex = j;
+						} else {
+							// New entry starts
+							foundNonEmpty = true;
+						}
+						break;
+					}
+				}
+				if (foundNonEmpty) {
+					endIndex = i - 1;
+					break;
+				}
+				// If no non-empty line found after blank, include the blank
+				endIndex = i;
+			}
+			// Indented line (posting or metadata)
+			else if (line.startsWith(' ') || line.startsWith('\t')) {
+				endIndex = i;
+			}
+			// Non-indented non-empty line (new entry)
+			else {
+				endIndex = i - 1;
+				break;
+			}
+		}
+
+		// If we reached end of file
+		if (endIndex === lineIndex) {
+			// Scan forward to find last line of transaction
+			for (let i = lineIndex + 1; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.trim() === '' || (!line.startsWith(' ') && !line.startsWith('\t'))) {
+					endIndex = i - 1;
+					break;
+				}
+				endIndex = i;
+			}
+		}
+
+		// Also remove trailing blank line if present
+		if (endIndex + 1 < lines.length && lines[endIndex + 1].trim() === '') {
+			endIndex++;
+		}
+
+		console.debug(`[deleteTransaction] Found transaction at lines ${startIndex + 1}-${endIndex + 1}`);
+
+		// Remove the transaction lines
+		const beforeTransaction = lines.slice(0, startIndex);
+		const afterTransaction = lines.slice(endIndex + 1);
+		const newLines = [
+			...beforeTransaction,
+			...afterTransaction
+		];
+
+		const newContent = newLines.join('\n');
+
+		// Write to temp file then rename (atomic operation)
+		const tempPath = normalizedPath + '.tmp';
+		await writeFile(tempPath, newContent, 'utf-8');
+		renameSync(tempPath, normalizedPath);
+		
+		console.debug(`[deleteTransaction] Successfully deleted transaction ${transactionId} from ${normalizedPath}`);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('[deleteTransaction] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+/**
+ * Appends a Close directive to the end of the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} date - The date in YYYY-MM-DD format.
+ * @param {string} account - The account name (e.g., Assets:Bank:Checking).
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+ */
+export async function saveCloseDirective(
+	plugin: BeancountPlugin,
+	date: string,
+	account: string,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const filePath = resolveFilePath(plugin, 'account', date);
+		if (!filePath) {
+			return { success: false, error: 'Beancount file path not set' };
+		}
+
+		// Step 1: Normalize path (handle WSL)
+		const normalizedPath = convertWslPathToWindows(filePath);
+
+		// Step 2: Generate directive text
+		const directiveText = `${date} close ${account}`;
+
+		// Step 3: Create backup if requested
+		await createBackupFile(normalizedPath, createBackup, 'saveCloseDirective');
+
+		// Step 4: Read file and append directive
+		const content = await readFile(normalizedPath, 'utf-8');
+		const newContent = content.endsWith('\n') 
+			? `${content}${directiveText}\n`
+			: `${content}\n${directiveText}\n`;
+
+		// Step 5: Atomic write (write to temp file, then rename)
+		await atomicFileWrite(normalizedPath, newContent);
+
+		console.debug(`[saveCloseDirective] Successfully saved close directive for ${account}`);
+		return { success: true };
+
+	} catch (error) {
+		console.error(`[saveCloseDirective] Error:`, error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+// --- JOURNAL ENTRIES FETCHING ---
+
+/**
+ * Fetches transaction entries from Beancount using BQL query.
+ * Groups postings by transaction ID and reconstructs JournalTransaction objects.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance.
+ * @param {any} filters - Filters object (startDate, endDate, account, payee, tag, searchTerm).
+ * @param {number} page - Page number (1-indexed).
+ * @param {number} pageSize - Number of entries per page.
+ * @returns {Promise<any>} JournalApiResponse with entries, total_count, etc.
+ */
+export async function getTransactionEntries(
+	plugin: BeancountPlugin,
+	filters: any = {},
+	page: number = 1,
+	pageSize: number = 200
+): Promise<any> {
+	try {
+		console.debug('[getTransactionEntries] Fetching with filters:', filters);
+
+		// Build BQL query with filters
+		let whereConditions: string[] = [];
+		
+		if (filters.startDate) {
+			whereConditions.push(`date >= ${filters.startDate}`);
+		}
+		if (filters.endDate) {
+			whereConditions.push(`date <= ${filters.endDate}`);
+		}
+		if (filters.account) {
+			whereConditions.push(`account ~ "${filters.account}"`);
+		}
+		if (filters.payee) {
+			whereConditions.push(`payee ~ "${filters.payee}"`);
+		}
+		if (filters.tag) {
+			// Tag filter - check if tag is in the tags set
+			whereConditions.push(`"${filters.tag}" IN tags`);
+		}
+
+		const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+		
+		// Query to get all postings with transaction-level data
+		// Note: Single line to avoid shell escaping issues with newlines
+		const query = `SELECT id, date, flag, payee, narration, tags, links, filename, lineno, account, number, currency, cost_number, cost_currency, cost_date, price, entry.meta as entry_meta FROM postings ${whereClause} ORDER BY date DESC, id, account`;
+
+		console.debug('[getTransactionEntries] Running BQL query:', query);
+		const csv = await runQuery(plugin, query);
+
+		// Parse CSV
+		const parser = require('csv-parse/sync');
+		const records = parser.parse(csv, {
+			columns: true,
+			skip_empty_lines: true,
+			trim: true
+		});
+
+		console.debug(`[getTransactionEntries] Parsed ${records.length} posting rows`);
+
+		// Group postings by transaction ID
+		const transactionsMap = new Map<string, any>();
+
+		for (const row of records) {
+			const txnId = row['id'];
+			
+			if (!transactionsMap.has(txnId)) {
+				// Create new transaction object
+				const tagsStr = row['tags'] || '';
+				const linksStr = row['links'] || '';
+				
+				// Parse tags - comes as quoted CSV like "Test,Work"
+				let tags: string[] = [];
+				if (tagsStr && tagsStr.trim()) {
+					tags = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+				}
+
+				// Parse links - comma-separated plain text
+				let links: string[] = [];
+				if (linksStr && linksStr.trim()) {
+					links = linksStr.split(',').map((l: string) => l.trim()).filter((l: string) => l);
+				}
+
+				// Parse entry metadata - comes as key-value pairs or {}
+				const entryMetaStr = row['entry_meta'] || '{}';
+				let metadata: Record<string, any> = {};
+				try {
+					// Try to parse as JSON
+					metadata = JSON.parse(entryMetaStr);
+				} catch {
+					// If parsing fails, store as raw string
+					metadata = { raw: entryMetaStr };
+				}
+
+				// Add filename and lineno to metadata
+				if (row['filename']) {
+					metadata['filename'] = row['filename'];
+				}
+				if (row['lineno']) {
+					const lineno = parseInt(row['lineno']);
+					if (!isNaN(lineno)) {
+						metadata['lineno'] = lineno;
+					}
+				}
+
+				transactionsMap.set(txnId, {
+					id: txnId,
+					type: 'transaction',
+					date: row['date'],
+					flag: row['flag'] || '*',
+					payee: row['payee'] || null,
+					narration: row['narration'] || '',
+					tags,
+					links,
+					metadata,
+					postings: []
+				});
+			}
+
+			// Add posting to transaction
+			const transaction = transactionsMap.get(txnId);
+			const posting: any = {
+				account: row['account'],
+				amount: row['number'] || null,
+				currency: row['currency'] || null,
+				flag: null,
+				comment: null,
+				metadata: {}
+			};
+
+			// Add cost if present
+			if (row['cost_number'] || row['cost_currency']) {
+				posting.cost = {
+					number: row['cost_number'] || null,
+					currency: row['cost_currency'] || null,
+					date: row['cost_date'] || null,
+					label: null,
+					isTotal: false
+				};
+			}
+
+			// Add price if present - price is returned as "amount currency" string
+			const priceStr = row['price'];
+			if (priceStr && priceStr.trim()) {
+				// Parse "100.00 USD" format
+				const priceParts = priceStr.trim().split(/\s+/);
+				if (priceParts.length >= 2) {
+					posting.price = {
+						amount: priceParts[0],
+						currency: priceParts[1],
+						isTotal: false
+					};
+				}
+			}
+
+			transaction.postings.push(posting);
+		}
+
+		// Convert map to array
+		let transactions = Array.from(transactionsMap.values());
+
+		// Apply search term filter (in-memory)
+		if (filters.searchTerm) {
+			const searchLower = filters.searchTerm.toLowerCase();
+			transactions = transactions.filter((txn: any) => {
+				const narrationMatch = txn.narration?.toLowerCase().includes(searchLower);
+				const payeeMatch = txn.payee?.toLowerCase().includes(searchLower);
+				const accountMatch = txn.postings.some((p: any) => 
+					p.account?.toLowerCase().includes(searchLower)
+				);
+				return narrationMatch || payeeMatch || accountMatch;
+			});
+		}
+
+		// Transactions are already sorted by BQL query (date DESC, id, account)
+		// Just ensure consistent ordering
+		transactions.sort((a: any, b: any) => {
+			const dateCompare = b.date.localeCompare(a.date);
+			if (dateCompare !== 0) return dateCompare;
+			return a.id.localeCompare(b.id);
+		});
+
+		// Calculate pagination
+		const totalCount = transactions.length;
+		const offset = (page - 1) * pageSize;
+		const paginatedTransactions = transactions.slice(offset, offset + pageSize);
+		const hasMore = offset + paginatedTransactions.length < totalCount;
+
+		console.debug(`[getTransactionEntries] Returning ${paginatedTransactions.length} of ${totalCount} transactions`);
+
+		return {
+			entries: paginatedTransactions,
+			total_count: totalCount,
+			returned_count: paginatedTransactions.length,
+			offset,
+			limit: pageSize,
+			has_more: hasMore
+		};
+
+	} catch (error) {
+		console.error('[getTransactionEntries] Error:', error);
+		throw error;
 	}
 }

@@ -6,6 +6,10 @@ sidebar_position: 1
 
 One of the primary actions you will perform is adding new financial data to your ledger. The plugin provides a streamlined **Unified Transaction Modal** for this purpose.
 
+:::tip
+This guide covers how to use the transaction modal UI. For details on the underlying Beancount syntax and advanced features, see the [Beancount Transaction Syntax Reference](./beancount-syntax.md).
+:::
+
 ## 🚀 Accessing the Modal
 
 You can open the "Add Transaction" modal in three ways:
@@ -40,9 +44,8 @@ Switch between modes using the dropdown or tabs:
 When you click "Save":
 
 1.  **Validation**: The frontend (`UnifiedTransactionModal.ts`) checks for basic errors (e.g., unbalanced transaction, missing date).
-2.  **Submission**: The data is sent as a JSON payload to `POST /transactions` on the local API.
-3.  **File Operation**:
-    - The Python backend (`journal_api.py`) receives the request.
-    - It creates a backup of your `.beancount` file (e.g., `ledger.beancount.backup.20231025...`).
-    - It appends the new directive string (formatted in Beancount syntax) to the file.
-4.  **Refresh**: The backend reloads the internal Beancount `entries` map, and the frontend Dashboard automatically refreshes to show the new data.
+2.  **File Operation**: The transaction is formatted in Beancount syntax and directly appended to your file.
+    - If backup is enabled, a backup is created first (e.g., `ledger.beancount.backup.20231025...`).
+    - The new directive is appended to the end of the file.
+    - The file is written atomically (temp file + rename) to ensure data integrity.
+3. **Refresh**: After a successful write, the frontend refreshes the Dashboard to show the new data.

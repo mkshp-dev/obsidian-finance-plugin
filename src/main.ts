@@ -10,8 +10,6 @@ import { BQLCodeBlockProcessor } from './ui/markdown/BQLCodeBlockProcessor';
 import { InlineBQLProcessor } from './ui/markdown/InlineBQLProcessor';
 import { OnboardingModal } from './ui/modals/OnboardingModal';
 
-import { BackendProcess } from './core/backend-process';
-import { ApiClient } from './api/client';
 import { JournalService } from './services/journal.service';
 import { createJournalStore } from './stores/journal.store';
 import { Logger } from './utils/logger';
@@ -27,11 +25,9 @@ export default class BeancountPlugin extends Plugin {
 	private bqlProcessor: BQLCodeBlockProcessor;
 	private inlineBqlProcessor: InlineBQLProcessor;
 
-    // Services
-    public backendProcess: BackendProcess;
-    public apiClient: ApiClient;
-    public journalService: JournalService;
-    public journalStore: ReturnType<typeof createJournalStore>;
+	// Services
+	public journalService: JournalService;
+	public journalStore: ReturnType<typeof createJournalStore>;
 
 	/**
 	 * Called when the plugin is loaded by Obsidian.
@@ -45,9 +41,7 @@ export default class BeancountPlugin extends Plugin {
         Logger.log('Plugin loading...');
 
         // Initialize Core Services
-        this.backendProcess = new BackendProcess(this);
-        this.apiClient = new ApiClient(this.backendProcess);
-        this.journalService = new JournalService(this.apiClient);
+        this.journalService = new JournalService(this);
         this.journalStore = createJournalStore(this.journalService);
 
         // Check for onboarding
@@ -100,6 +94,11 @@ export default class BeancountPlugin extends Plugin {
 			id: 'open-beancount-snapshot',
 			name: 'Open Beancount Snapshot',
 			callback: () => { this.activateView(BEANCOUNT_VIEW_TYPE, 'right'); }
+		});
+		this.addCommand({
+			id: 'run-beancount-onboarding',
+			name: 'Run Setup/Onboarding',
+			callback: () => { new OnboardingModal(this.app, this).open(); }
 		});
 
 
@@ -192,11 +191,9 @@ export default class BeancountPlugin extends Plugin {
 
 	/**
 	 * Called when the plugin is unloaded.
-	 * Stops backend processes.
 	 */
 	onunload() {
         Logger.log('Plugin unloading...');
-        this.backendProcess?.stop();
     }
 	
 	// Register BQL processor

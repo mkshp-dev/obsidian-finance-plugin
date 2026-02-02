@@ -34,7 +34,7 @@ export function createJournalStore(service: JournalService) {
     // Actions
 
     /**
-     * Loads entries from the backend based on current filters and pagination.
+     * Loads entries via BQL queries based on current filters and pagination.
      */
     async function loadEntries() {
         loading.set(true);
@@ -110,55 +110,6 @@ export function createJournalStore(service: JournalService) {
         await loadEntries();
     }
 
-    /**
-     * Adds a new entry via the service and reloads.
-     * @param {any} entry - The entry data.
-     * @returns {Promise<boolean>} True if successful.
-     */
-    async function addEntry(entry: any) {
-        try {
-            await service.createEntry(entry);
-            await loadEntries();
-            return true;
-        } catch (err: any) {
-            error.set(err.message);
-            return false;
-        }
-    }
-
-    /**
-     * Updates an existing transaction.
-     * @param {string} id - The transaction ID.
-     * @param {any} data - The updated data.
-     * @returns {Promise<boolean>} True if successful.
-     */
-    async function updateTransaction(id: string, data: any) {
-        try {
-            await service.updateTransaction(id, data);
-            await loadEntries();
-            return true;
-        } catch (err: any) {
-            error.set(err.message);
-            return false;
-        }
-    }
-
-    /**
-     * Deletes a transaction.
-     * @param {string} id - The transaction ID.
-     * @returns {Promise<boolean>} True if successful.
-     */
-    async function deleteTransaction(id: string) {
-        try {
-            await service.deleteTransaction(id);
-            await loadEntries();
-            return true;
-        } catch (err: any) {
-            error.set(err.message);
-            return false;
-        }
-    }
-
     return {
         // State
         entries: { subscribe: entries.subscribe },
@@ -177,10 +128,6 @@ export function createJournalStore(service: JournalService) {
         setFilters,
         clearFilters,
         setPage,
-        refresh,
-        addEntry,
-        updateTransaction,
-        deleteTransaction,
-        reloadBackend: () => service.reloadBackend().then(loadEntries)
+        refresh
     };
 }

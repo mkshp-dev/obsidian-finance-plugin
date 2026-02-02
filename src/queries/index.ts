@@ -63,7 +63,7 @@ export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- 
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQuery(currency: string): string {
-	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
@@ -71,7 +71,7 @@ export function getBalanceSheetQuery(currency: string): string {
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQueryByCost(): string {
-	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
@@ -79,7 +79,7 @@ export function getBalanceSheetQueryByCost(): string {
  * @returns {string} The BQL query string.
  */
 export function getBalanceSheetQueryByUnits(): string {
-	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' GROUP BY account ORDER BY account`;
+	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 /**
@@ -132,15 +132,14 @@ export function getTransactionsQuery(filters: TransactionFilters, limit: number 
 }
 
 /**
- * Query for bean-check (Note: runQuery expects CSV, bean-check might not output CSV)
+ * Query for file validation using bean-query (replaces bean-check)
+ * Uses 'SELECT TRUE LIMIT 0' which validates file syntax without returning data
  * @param {string} filePath - Path to beancount file.
  * @param {string} commandBase - Base command (bean-query).
- * @returns {string} The command string.
+ * @returns {string} The validation command string.
  */
-// This might need a separate function if bean-check output needs different handling
 export function getBeanCheckCommand(filePath: string, commandBase: string): string {
-	const checkCommandBase = commandBase.replace(/bean-query(.exe)?$/, 'bean-check$1');
-	return `${checkCommandBase} "${filePath}"`;
+	return `${commandBase} "${filePath}" "SELECT TRUE LIMIT 0"`;
 }
 
 /**

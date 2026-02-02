@@ -611,11 +611,13 @@
 	}
 	
 	.error-message { 
-		color: var(--text-error); 
+		color: var(--text-on-accent);
 		background-color: var(--background-modifier-error);
 		padding: var(--size-4-3);
 		border-radius: var(--radius-s);
 		border: 1px solid var(--text-error);
+		font-weight: 500;
+		line-height: 1.5;
 	}
 
 	/* Responsive design */

@@ -1,29 +1,63 @@
 ---
-sidebar_position: 6
+sidebar_position: 5
 ---
 
 # Commodities Tab
 
-The **Commodities Tab** manages the currencies and assets used in your ledger.
+The **Commodities Tab** manages all currencies and assets used in your Beancount ledger—from stocks and crypto to forex and commodities.
 
 ## 🪙 Features
 
-### 1. Market Data
-- **List View**: See all commodities declared in your file.
-- **Latest Price**: Shows the most recent price point for each asset.
+### Commodity Overview
+View all commodities declared in your ledger with:
+- **Symbol**: Ticker or commodity code (e.g., `AAPL`, `BTC`, `EUR`)
+- **Latest Price**: Most recent price point with date
+- **Status Indicator**: Quick visual indicator of price data availability
+  - 🟢 **Automated**: Price fetcher configured and working
+  - ⚪ **Manual**: No automated source configured
+  - ❌ **Error**: Price fetcher failed
 
-### 2. Metadata Management
-- **Logo**: Assign a URL for the commodity icon.
-- **Price Source**: Configure the source string for automated price fetching (e.g., `yahoo/AAPL`).
+### Metadata Management
+For each commodity, you can configure:
+- **Commodity Details**: Access via click to open detailed view modal
+- **Price Source**: The fetch source string (e.g., `yahoo/AAPL` for Yahoo Finance)
+- **Logo/Icon URL**: Custom image URL for the commodity
+- **Display Name**: Human-readable name
+- **Quote Currency**: The currency this commodity is priced in
 
-### 3. Price Updates
-- **Validation**: "Test Price Source" button runs `bean-price -e` to verify the configuration works.
-- **Update**: (Planned) Batch update prices from the UI.
+### Price Validation
+- **Test Price Source**: Verify your price fetcher configuration works correctly
+- **Validate Format**: Ensures the price source string is valid
+- **Live Testing**: Runs `bean-price` to check if the source can actually fetch prices
 
 ## 🛠 Under the Hood
 
-1.  **Controller**: `CommoditiesController.ts`.
-2.  **API Integration**:
-    - **GET** `/commodities?detailed=true`: Fetches symbol, latest price date, and metadata.
-    - **PUT** `/commodities/{symbol}`: Updates the `commodity` directive in your file with new metadata.
-    - **POST** `/commodities/{symbol}/validate_price`: Spawns a `bean-price` process to test the fetcher.
+### Controller Architecture
+`CommoditiesController.ts` manages:
+- Commodity list fetching and state
+- Detail modal interactions
+- Price validation operations
+- Metadata update operations
+
+### Data Fetching
+The tab fetches commodity information via direct Beancount file analysis:
+1. Scans for all `commodity` directives in the ledger
+2. Extracts metadata from the directives
+3. Queries for the latest price date in the ledger
+4. Displays combined information to the user
+
+### Price Management
+When you configure a price source:
+1. The setting is stored in the `commodity` directive metadata (e.g., `meta: {"price-source": "yahoo/AAPL"}`)
+2. Clicking "Test Price Source" runs: `bean-price -e <commodity> <fetcher-config>`
+3. If successful, the price source is saved to your Beancount file
+4. Beancount's price updating tools can then use this configuration for automated fetches
+
+### File Operations
+Commodity metadata changes follow the atomic write pattern:
+1. Locate the commodity directive in the file
+2. Create a backup if enabled
+3. Update the directive metadata
+4. Write atomically to the file
+
+This ensures your commodity configuration is always safe and recoverable.
