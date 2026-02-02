@@ -7,6 +7,7 @@ import { createStructuredFolder, getMainLedgerPath, getDemoTransactionsForYear, 
 import { runQuery } from '../../utils/index';
 import { ConfirmModal } from './ConfirmModal';
 import { SystemDetector } from '../../utils/SystemDetector';
+import { UNIFIED_DASHBOARD_VIEW_TYPE } from '../views/dashboard/unified-dashboard-view';
 
 type DataChoice = 'demo' | 'existing';
 type OnboardingStep = 'prerequisites' | 'file-setup' | 'verification';
@@ -31,10 +32,13 @@ export class OnboardingModal extends Modal {
     private dataChoice: DataChoice | null = null;
     private existingFilePath: string = '';
     private structuredFolderName: string = 'Finances';
+    private operatingCurrency: string = 'USD'; // Default operating currency
 
     constructor(app: App, plugin: BeancountPlugin) {
         super(app);
         this.plugin = plugin;
+        // Initialize with existing setting if available
+        this.operatingCurrency = plugin.settings.operatingCurrency || 'USD';
     }
 
     onOpen() {
@@ -123,58 +127,87 @@ export class OnboardingModal extends Modal {
         
         // Detection status
         if (this.prerequisitesChecked) {
-            const statusSection = contentEl.createDiv({ cls: 'detection-status' });
+            const statusSection = contentEl.createDiv({ cls: 'detection-results' });
             statusSection.style.marginBottom = '20px';
             statusSection.style.padding = '15px';
+            statusSection.style.border = '1px solid var(--background-modifier-border)';
             statusSection.style.borderRadius = '5px';
             
-            if (this.pythonValid && this.beanQueryValid) {
-                statusSection.style.backgroundColor = 'var(--background-modifier-success)';
-                statusSection.style.border = '2px solid var(--color-green)';
+            statusSection.createEl('h4', { text: '🎯 Detection Results' });
+            
+            // Commands grid
+            const commandsGrid = statusSection.createDiv({ cls: 'commands-grid' });
+            commandsGrid.style.display = 'grid';
+            commandsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(250px, 1fr))';
+            commandsGrid.style.gap = '15px';
+            commandsGrid.style.marginTop = '15px';
+            
+            // Python card
+            const pythonCard = commandsGrid.createDiv({ cls: 'command-item' });
+            pythonCard.style.padding = '12px';
+            pythonCard.style.border = '1px solid var(--background-modifier-border)';
+            pythonCard.style.borderRadius = '5px';
+            pythonCard.style.backgroundColor = this.pythonValid ? 'var(--background-modifier-success)' : 'var(--background-modifier-error)';
+            
+            const pythonHeader = pythonCard.createDiv({ cls: 'command-header' });
+            pythonHeader.style.display = 'flex';
+            pythonHeader.style.justifyContent = 'space-between';
+            pythonHeader.style.alignItems = 'center';
+            pythonHeader.style.marginBottom = '8px';
+            pythonHeader.createEl('strong', { text: 'Python:' });
+            pythonHeader.createEl('span', { text: this.pythonValid ? '✅' : '❌' });
+            
+            if (this.pythonValid) {
+                const pythonCmd = pythonCard.createEl('code');
+                pythonCmd.style.display = 'block';
+                pythonCmd.style.fontSize = '0.85em';
+                pythonCmd.style.marginBottom = '5px';
+                pythonCmd.textContent = this.pythonCommand || '';
                 
-                statusSection.createEl('h4', { text: '✅ All Prerequisites Met!' });
-                
-                const detailsDiv = statusSection.createDiv();
-                detailsDiv.style.marginTop = '10px';
-                detailsDiv.innerHTML = `
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; margin-top: 10px;">
-                        <strong>Python:</strong> <code>${this.pythonCommand}</code>
-                        <strong>Version:</strong> <span>${this.pythonVersion}</span>
-                        <strong>Bean Query:</strong> <code>${this.beanQueryCommand}</code>
-                        <strong>Version:</strong> <span>${this.beanQueryVersion || 'detected'}</span>
-                    </div>
-                `;
+                if (this.pythonVersion) {
+                    const pythonVer = pythonCard.createDiv();
+                    pythonVer.style.fontSize = '0.85em';
+                    pythonVer.style.color = 'var(--text-muted)';
+                    pythonVer.innerHTML = `<strong>Version:</strong> ${this.pythonVersion}`;
+                }
             } else {
-                statusSection.style.backgroundColor = 'var(--background-modifier-error)';
-                statusSection.style.border = '2px solid var(--color-red)';
+                pythonCard.createDiv().textContent = 'Not found';
+            }
+            
+            // Bean Query card
+            const beanQueryCard = commandsGrid.createDiv({ cls: 'command-item' });
+            beanQueryCard.style.padding = '12px';
+            beanQueryCard.style.border = '1px solid var(--background-modifier-border)';
+            beanQueryCard.style.borderRadius = '5px';
+            beanQueryCard.style.backgroundColor = this.beanQueryValid ? 'var(--background-modifier-success)' : 'var(--background-modifier-error)';
+            
+            const beanQueryHeader = beanQueryCard.createDiv({ cls: 'command-header' });
+            beanQueryHeader.style.display = 'flex';
+            beanQueryHeader.style.justifyContent = 'space-between';
+            beanQueryHeader.style.alignItems = 'center';
+            beanQueryHeader.style.marginBottom = '8px';
+            beanQueryHeader.createEl('strong', { text: 'Bean Query:' });
+            beanQueryHeader.createEl('span', { text: this.beanQueryValid ? '✅' : '❌' });
+            
+            if (this.beanQueryValid) {
+                const beanQueryCmd = beanQueryCard.createEl('code');
+                beanQueryCmd.style.display = 'block';
+                beanQueryCmd.style.fontSize = '0.85em';
+                beanQueryCmd.style.marginBottom = '5px';
+                beanQueryCmd.textContent = this.beanQueryCommand || '';
                 
-                statusSection.createEl('h4', { text: '❌ Prerequisites Not Met' });
-                
-                const errorList = statusSection.createEl('ul');
-                errorList.style.marginTop = '10px';
-                errorList.style.marginLeft = '20px';
-                
-                if (!this.pythonValid) {
-                    errorList.createEl('li', { text: '❌ Python 3.8+ not found or not accessible' });
+                if (this.beanQueryVersion) {
+                    const beanQueryVer = beanQueryCard.createDiv();
+                    beanQueryVer.style.fontSize = '0.85em';
+                    beanQueryVer.style.color = 'var(--text-muted)';
+                    beanQueryVer.innerHTML = `<strong>Version:</strong> ${this.beanQueryVersion}`;
                 }
-                if (!this.beanQueryValid) {
-                    errorList.createEl('li', { text: '❌ bean-query command not found (install Beancount v3+)' });
-                }
-                
-                if (this.prerequisiteErrors.length > 0) {
-                    const detailsDiv = statusSection.createDiv();
-                    detailsDiv.style.marginTop = '15px';
-                    detailsDiv.createEl('strong', { text: 'Details:' });
-                    const detailsList = detailsDiv.createEl('ul');
-                    detailsList.style.fontSize = '0.85em';
-                    detailsList.style.marginLeft = '20px';
-                    detailsList.style.color = 'var(--text-muted)';
-                    this.prerequisiteErrors.forEach(err => {
-                        detailsList.createEl('li', { text: err });
-                    });
-                }
-                
-                // Installation instructions
+            } else {
+                beanQueryCard.createDiv().textContent = 'Not found - Install Beancount';
+            }
+            
+            // Show installation instructions if not all passed
+            if (!this.pythonValid || !this.beanQueryValid) {
                 this.renderInstallationInstructions(statusSection);
             }
         }
@@ -332,6 +365,7 @@ export class OnboardingModal extends Modal {
         demoRadio.checked = this.dataChoice === 'demo';
         demoRadio.onchange = () => {
             this.dataChoice = 'demo';
+            this.operatingCurrency = 'USD'; // Auto-set to USD for demo data
             this.render();
         };
         
@@ -452,6 +486,27 @@ export class OnboardingModal extends Modal {
                 .onChange(value => {
                     this.structuredFolderName = value || 'Finances';
                 }));
+        
+        // Operating currency setting
+        new Setting(folderSection)
+            .setName('Operating currency')
+            .setDesc('The main currency for your financial records (e.g., USD, EUR, GBP)')
+            .addText(text => text
+                .setPlaceholder('USD')
+                .setValue(this.operatingCurrency)
+                .onChange(value => {
+                    this.operatingCurrency = (value || 'USD').toUpperCase();
+                }));
+        
+        // Show note about demo currency
+        if (this.dataChoice === 'demo') {
+            const currencyNote = folderSection.createDiv();
+            currencyNote.style.marginTop = '5px';
+            currencyNote.style.fontSize = '0.9em';
+            currencyNote.style.color = 'var(--text-muted)';
+            currencyNote.style.fontStyle = 'italic';
+            currencyNote.innerHTML = '💡 <strong>Note:</strong> Demo data uses USD. You can change this setting later.';
+        }
 
         // Setup button
         const buttonContainer = contentEl.createDiv({ cls: 'onboarding-buttons' });
@@ -509,6 +564,7 @@ export class OnboardingModal extends Modal {
         summaryList.createEl('li').innerHTML = `<strong>Bean Query:</strong> ${this.beanQueryCommand}`;
         summaryList.createEl('li').innerHTML = `<strong>File Mode:</strong> Structured Layout (${this.structuredFolderName}/)`;
         summaryList.createEl('li').innerHTML = `<strong>Data Source:</strong> ${this.dataChoice === 'demo' ? 'Demo Data' : 'Existing Ledger'}`;
+        summaryList.createEl('li').innerHTML = `<strong>Operating Currency:</strong> ${this.operatingCurrency}`;
         
         const nextStepsDiv = contentEl.createDiv();
         nextStepsDiv.style.marginTop = '20px';
@@ -531,10 +587,8 @@ export class OnboardingModal extends Modal {
         
         const doneBtn = buttonContainer.createEl('button', { text: 'Open Dashboard & Close', cls: 'mod-cta' });
         doneBtn.onclick = async () => {
-            // Open dashboard
-            const leaf = this.app.workspace.getLeaf(true);
-            await leaf.setViewState({ type: 'unified-finance-dashboard', active: true });
-            this.app.workspace.revealLeaf(leaf);
+            // Use the plugin's activateView method to properly open the dashboard
+            await (this.plugin as any).activateView(UNIFIED_DASHBOARD_VIEW_TYPE, 'tab');
             this.close();
         };
         
@@ -592,6 +646,7 @@ export class OnboardingModal extends Modal {
             this.plugin.settings.structuredFolderName = this.structuredFolderName;
             this.plugin.settings.structuredFolderPath = mainLedgerPath;
             this.plugin.settings.beancountFilePath = mainLedgerPath;
+            this.plugin.settings.operatingCurrency = this.operatingCurrency; // Save operating currency
             await this.plugin.saveSettings();
             
             Logger.log('Onboarding: Created demo structured layout');
@@ -604,6 +659,7 @@ export class OnboardingModal extends Modal {
                 this.plugin.settings.structuredFolderName = this.structuredFolderName;
                 this.plugin.settings.structuredFolderPath = mainLedgerPath;
                 this.plugin.settings.beancountFilePath = mainLedgerPath;
+                this.plugin.settings.operatingCurrency = this.operatingCurrency; // Save operating currency
                 await this.plugin.saveSettings();
                 
                 Logger.log('Onboarding: Configured to use existing structured layout');
