@@ -1,8 +1,6 @@
 # Beancount for Obsidian
 
-<p align="center">
-  <img src="logo_light.png" alt="Beancount for Obsidian Logo" width="200"/>
-</p>
+![Plugin Logo](Primary_horizonatal_logo.png)
 
 A comprehensive Beancount integration for [Obsidian.md](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
