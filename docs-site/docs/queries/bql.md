@@ -16,11 +16,13 @@ Use standard Markdown code blocks with the `bql` language identifier to create f
 
 ### Basic Usage
 
+    ````
     ```bql
     SELECT account, sum(position)
     WHERE account ~ '^Expenses'
     GROUP BY account
     ```
+    ````
 
 ### Features
 - **Interactive Results**: Sortable columns and responsive layout.
