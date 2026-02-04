@@ -10,31 +10,22 @@ A comprehensive Beancount integration for [Obsidian.md](https://obsidian.md) tha
 
 ## ✨ Key Features
 
-<table>
-<tr>
-<td width="33%" align="center">
-<img src="docs/assets/overview.png" alt="Dashboard" width="250"/>
+![Unified Dashboard](docs/assets/overview.png)
+<p align="center"><em>📊 Unified Dashboard - Net worth tracking, balance sheets, and interactive charts in one view</em></p>
+
+<details>
+<summary><strong>🔍 Live BQL Queries</strong> - Click to see</summary>
 <br/>
-<strong>📊 Unified Dashboard</strong>
+<img src="docs/assets/bql-query.png" alt="BQL Queries"/>
+<p align="center"><em>Embed dynamic financial data directly in your notes with shorthand support</em></p>
+</details>
+
+<details>
+<summary><strong>⚡ Smart Transaction Entry</strong> - Click to see</summary>
 <br/>
-<sub>Net worth tracking, balance sheets, and interactive charts—all in one view</sub>
-</td>
-<td width="33%" align="center">
-<img src="docs/assets/bql-query.png" alt="BQL Queries" width="250"/>
-<br/>
-<strong>🔍 Live BQL Queries</strong>
-<br/>
-<sub>Embed dynamic financial data directly in your notes, also comes with shorthand support</sub>
-</td>
-<td width="33%" align="center">
-<img src="docs/assets/adding-transaction.png" alt="Transactions" width="250"/>
-<br/>
-<strong>⚡ Smart Entry</strong>
-<br/>
-<sub>Quick transaction creation with account autocomplete and validation</sub>
-</td>
-</tr>
-</table>
+<img src="docs/assets/adding-transaction.png" alt="Transactions"/>
+<p align="center"><em>Quick transaction creation with account autocomplete and validation</em></p>
+</details>
 
 **Highlights:**
 - 📈 Real-time financial metrics and trend visualization
