@@ -2,7 +2,7 @@
 
 ![Plugin Logo](docs/assets/Primary_horizontal_logo.png)
 
-A comprehensive Beancount integration for [Obsidian.md](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
+A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
 📘 **[Full Documentation](https://mkshp-dev.github.io/obsidian-finance-plugin/)** - Read the complete guide for features, configuration, and usage.
 
