@@ -39,7 +39,7 @@ For beta testers who want to try the latest development version:
    - Open Command Palette (`Ctrl/Cmd + P`)
    - Run: "BRAT: Add a beta plugin for testing"
    - Enter repository: `mkshp-dev/obsidian-finance-plugin`
-   - Select branch: `agent` (or `master` for stable)
+   - Select branch: `dev` (or `master` for stable)
 
 3. **Enable Plugin**:
    - Go to Settings → Community Plugins

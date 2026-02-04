@@ -37,7 +37,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl:
-            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/agent/docs-site/',
+            'https://github.com/mkshp-dev/obsidian-finance-plugin/tree/dev/docs-site/',
         },
         blog: false,
         theme: {

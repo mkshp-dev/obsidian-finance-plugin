@@ -26,7 +26,7 @@ This guide covers how to install Beancount for Obsidian and the required depende
 For testing beta versions:
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from Community Plugins
 2. Use BRAT to add: `mkshp-dev/obsidian-finance-plugin`
-3. Select the `agent` branch for latest features
+3. Select the `dev` branch for latest features
 4. Enable the plugin in Community Plugins
 
 ---
