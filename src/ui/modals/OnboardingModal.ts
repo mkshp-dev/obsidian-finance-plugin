@@ -118,12 +118,13 @@ export class OnboardingModal extends Modal {
         const reqList = reqSection.createEl('ul');
         reqList.style.marginLeft = '20px';
         reqList.createEl('li', { text: 'Python 3.8 or higher' });
-        reqList.createEl('li', { text: 'Beancount v3+ (with bean-query command)' });
+        reqList.createEl('li', { text: 'Beancount v3+ (pip install beancount)' });
+        reqList.createEl('li', { text: 'Bean Query (pip install beanquery - separate package)' });
         
         const optionalNote = reqSection.createEl('p', { cls: 'setting-item-description' });
         optionalNote.style.marginTop = '10px';
         optionalNote.style.fontStyle = 'italic';
-        optionalNote.innerHTML = '<strong>Note:</strong> bean-price is optional and only needed for automated price fetching.';
+        optionalNote.innerHTML = '<strong>Note:</strong> bean-query is NOT included with Beancount and requires separate installation. bean-price is optional and only needed for automated price fetching.';
         
         // Detection status
         if (this.prerequisitesChecked) {
@@ -203,7 +204,7 @@ export class OnboardingModal extends Modal {
                     beanQueryVer.innerHTML = `<strong>Version:</strong> ${this.beanQueryVersion}`;
                 }
             } else {
-                beanQueryCard.createDiv().textContent = 'Not found - Install Beancount';
+                beanQueryCard.createDiv().textContent = 'Not found - Install beanquery package';
             }
             
             // Show installation instructions if not all passed
@@ -262,6 +263,7 @@ export class OnboardingModal extends Modal {
                     <li>Install Python 3.8+ from <a href="https://www.python.org/downloads/">python.org</a></li>
                     <li>Open PowerShell or Command Prompt</li>
                     <li>Install Beancount: <code>pip install beancount</code></li>
+                    <li>Install Bean Query (separate): <code>pip install beanquery</code></li>
                     <li>Verify installation: <code>bean-query --version</code></li>
                 </ol>
                 <p style="margin-top: 10px;"><strong>Alternative (WSL):</strong> Install in Windows Subsystem for Linux</p>
@@ -273,6 +275,7 @@ export class OnboardingModal extends Modal {
                     <li>Install Homebrew if not already installed: <code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</code></li>
                     <li>Install Python: <code>brew install python@3.11</code></li>
                     <li>Install Beancount: <code>pip3 install beancount</code></li>
+                    <li>Install Bean Query (separate): <code>pip3 install beanquery</code></li>
                     <li>Verify: <code>bean-query --version</code></li>
                 </ol>
             `;
@@ -282,6 +285,7 @@ export class OnboardingModal extends Modal {
                 <ol style="margin-left: 20px;">
                     <li>Install Python 3.8+: <code>sudo apt install python3 python3-pip</code> (Debian/Ubuntu)</li>
                     <li>Install Beancount: <code>pip3 install beancount</code></li>
+                    <li>Install Bean Query (separate): <code>pip3 install beanquery</code></li>
                     <li>Verify: <code>bean-query --version</code></li>
                 </ol>
             `;
