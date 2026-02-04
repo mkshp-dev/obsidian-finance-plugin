@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Obsidian Finance Plugin',
+  title: 'Beancount for Obsidian',
   tagline: 'Comprehensive financial dashboard for Obsidian with Beancount integration',
   favicon: 'img/favicon.ico',
 
@@ -55,10 +55,10 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Obsidian Finance',
+      title: 'Beancount for Obsidian',
       logo: {
-        alt: 'Obsidian Finance Logo',
-        src: 'img/logo.svg',
+        alt: 'Beancount for Obsidian Logo',
+        src: 'img/logo.png',
       },
       items: [
         {

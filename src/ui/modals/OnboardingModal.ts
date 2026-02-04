@@ -543,7 +543,7 @@ export class OnboardingModal extends Modal {
     
     private renderVerificationStep(contentEl: HTMLElement) {
         contentEl.createEl('p', { 
-            text: 'Your Obsidian Finance plugin is now configured and ready to use!',
+            text: 'Beancount for Obsidian is now configured and ready to use!',
             cls: 'setting-item-description'
         });
         

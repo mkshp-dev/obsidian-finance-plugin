@@ -1,6 +1,10 @@
-# Obsidian Finance Plugin
+# Beancount for Obsidian
 
-A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md) that integrates with your [Beancount](https://beancount.github.io/docs/) plain-text accounting ledger.
+<p align="center">
+  <img src="logo_light.png" alt="Beancount for Obsidian Logo" width="200"/>
+</p>
+
+A comprehensive Beancount integration for [Obsidian.md](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
 📘 **[Full Documentation](https://mkshp-dev.github.io/obsidian-finance-plugin/)** - Read the complete guide for features, configuration, and usage.
 
@@ -41,7 +45,7 @@ For beta testers who want to try the latest development version:
 
 3. **Enable Plugin**:
    - Go to Settings → Community Plugins
-   - Find "Beancount Finance Plugin" and enable it
+   - Find "Beancount for Obsidian" and enable it
 
 BRAT will automatically check for updates and notify you of new versions. This is the recommended way to test beta features before official releases.
 

@@ -4,7 +4,11 @@ sidebar_position: 1
 
 # Introduction
 
-The **Obsidian Finance Plugin** is a comprehensive financial dashboard for [Obsidian.md](https://obsidian.md) that seamlessly integrates with [Beancount](https://beancount.github.io/docs/), the popular plain-text accounting system.
+<p align="center">
+  <img src="/img/logo.png" alt="Beancount for Obsidian" width="200"/>
+</p>
+
+**Beancount for Obsidian** is a comprehensive financial dashboard for [Obsidian.md](https://obsidian.md) that seamlessly integrates with [Beancount](https://beancount.github.io/docs/), the popular plain-text accounting system.
 
 This plugin transforms your Obsidian vault into a powerful financial analysis tool, allowing you to manage transactions, visualize your net worth, and track your portfolio without leaving your note-taking environment.
 

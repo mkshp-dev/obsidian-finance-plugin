@@ -8,7 +8,7 @@ The Settings page is where you configure the plugin to work with your Beancount 
 
 ## 📋 Overview
 
-Settings are accessible via **Settings → Plugin Options → Beancount Finance Plugin**. The interface is organized into these tabs:
+Settings are accessible via **Settings → Plugin Options → Beancount for Obsidian**. The interface is organized into these tabs:
 
 1. **General** - Currency and debug settings
 2. **Connection** - Beancount and system configuration
