@@ -21,7 +21,6 @@ const sidebars: SidebarsConfig = {
         'getting-started/intro',
         'getting-started/installation',
         'getting-started/first-time-setup',
-        'agent-context', // Keep technical context handy
       ],
     },
     {

@@ -12,7 +12,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: 'Beancount Integration',
-    Svg: require('@site/static/img/document-svg.svg').default,
+    Svg: require('@site/static/img/logo.svg').default,
     description: (
       <>
         Seamlessly integrate with Beancount for powerful double-entry bookkeeping.
@@ -21,8 +21,8 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Unified Dashboard',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Dashboard',
+    Svg: require('@site/static/img/Dashboard.svg').default,
     description: (
       <>
         Access balance sheets, transactions, commodities, and journal entries
@@ -32,7 +32,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'BQL Query Support',
-    Svg: require('@site/static/img/document-svg.svg').default,
+    Svg: require('@site/static/img/BQL.svg').default,
     description: (
       <>
         Run powerful Beancount Query Language (BQL) queries directly in your notes.

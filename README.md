@@ -1,8 +1,37 @@
-# Obsidian Finance Plugin
+# Beancount for Obsidian
 
-A comprehensive financial dashboard plugin for [Obsidian.md](https://obsidian.md) that integrates with your [Beancount](https://beancount.github.io/docs/) plain-text accounting ledger.
+![Plugin Logo](docs/assets/Primary_horizontal_logo.png)
+
+A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
 📘 **[Full Documentation](https://mkshp-dev.github.io/obsidian-finance-plugin/)** - Read the complete guide for features, configuration, and usage.
+
+---
+
+## ✨ Key Features
+
+![Unified Dashboard](docs/assets/overview.png)
+<p align="center"><em>📊 Unified Dashboard - Net worth tracking, balance sheets, and interactive charts in one view</em></p>
+
+<details>
+<summary><strong>🔍 Live BQL Queries</strong> - Click to see</summary>
+<br/>
+<img src="docs/assets/bql-query.png" alt="BQL Queries"/>
+<p align="center"><em>Embed dynamic financial data directly in your notes with shorthand support</em></p>
+</details>
+
+<details>
+<summary><strong>⚡ Smart Transaction Entry</strong> - Click to see</summary>
+<br/>
+<img src="docs/assets/adding-transaction.png" alt="Transactions"/>
+<p align="center"><em>Quick transaction creation with account autocomplete and validation</em></p>
+</details>
+
+**Highlights:**
+- 📈 Real-time financial metrics and trend visualization
+- 📝 Inline BQL queries with customizable shortcuts
+- 💰 Complete transaction, balance, and commodity management
+- 🔄 Direct Beancount file integration—no separate database
 
 ---
 
@@ -14,7 +43,7 @@ This plugin integrates with your existing Beancount setup:
 2. **Beancount v3+**: Install via `pip install beancount`
 3. **bean-query**: Command-line tool for querying Beancount files
 4. **bean-price** *(optional)*: For automatic commodity price fetching
-5. **WSL Support**: Full compatibility for Windows users running Beancount in WSL
+5. **WSL Support** *(optional)*: Full compatibility for Windows users running Beancount in WSL
 
 ---
 
@@ -37,11 +66,11 @@ For beta testers who want to try the latest development version:
    - Open Command Palette (`Ctrl/Cmd + P`)
    - Run: "BRAT: Add a beta plugin for testing"
    - Enter repository: `mkshp-dev/obsidian-finance-plugin`
-   - Select branch: `agent` (or `master` for stable)
+   - Select branch: `dev` (or `master` for stable)
 
 3. **Enable Plugin**:
    - Go to Settings → Community Plugins
-   - Find "Beancount Finance Plugin" and enable it
+   - Find "Beancount for Obsidian" and enable it
 
 BRAT will automatically check for updates and notify you of new versions. This is the recommended way to test beta features before official releases.
 
@@ -77,7 +106,7 @@ npm run build
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
-If this project helps your workflow, consider supporting its development ☕
+If this project helps your workflow, consider supporting its development with a ☕
 
 <a href="https://www.buymeacoffee.com/mkshp" target="_blank">
   <img

@@ -1,7 +1,7 @@
 // src/services/demo-ledger.ts
 
 export const DEMO_LEDGER_CONTENT = `;; Beancount Demo Ledger
-;; Created by Obsidian Finance Plugin
+;; Created by Beancount for Obsidian
 
 option "title" "Personal Finance Demo"
 option "operating_currency" "USD"

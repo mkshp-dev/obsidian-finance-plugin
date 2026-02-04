@@ -38,14 +38,3 @@ Switch between modes using the dropdown or tabs:
 ### 3. Metadata
 - **Tags**: Add `#hashtags` to categorize entries.
 - **Links**: Link entries to other transaction IDs.
-
-## 🛠 Under the Hood
-
-When you click "Save":
-
-1.  **Validation**: The frontend (`UnifiedTransactionModal.ts`) checks for basic errors (e.g., unbalanced transaction, missing date).
-2.  **File Operation**: The transaction is formatted in Beancount syntax and directly appended to your file.
-    - If backup is enabled, a backup is created first (e.g., `ledger.beancount.backup.20231025...`).
-    - The new directive is appended to the end of the file.
-    - The file is written atomically (temp file + rename) to ensure data integrity.
-3. **Refresh**: After a successful write, the frontend refreshes the Dashboard to show the new data.

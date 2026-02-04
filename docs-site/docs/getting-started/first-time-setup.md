@@ -4,24 +4,28 @@ sidebar_position: 3
 
 # First-Time Setup
 
-This guide walks you through your first experience with the Obsidian Finance Plugin using the **3-step onboarding process**.
+This guide walks you through the **3-step onboarding wizard** that appears when you first enable the plugin.
 
-## 🚀 Automatic Onboarding
+## 🚀 Launching the Onboarding
 
-When you first enable the plugin, the **Onboarding Modal** automatically appears if no Beancount file is configured. You can also launch it anytime via Command Palette: **"Obsidian Finance: Run Setup/Onboarding"**.
+The **Onboarding Modal** appears automatically when:
+- You enable the plugin for the first time
+- No Beancount file is configured in settings
 
-The onboarding uses a **step-by-step wizard** with progress indicator to ensure your system is properly configured.
+**Manual Launch:**
+Open Command Palette (`Ctrl/Cmd + P`) → **"Obsidian Finance: Run Setup/Onboarding"**
 
 ---
 
 ## Step 1: Prerequisites Check 🔍
 
-Before setting up your ledger files, the plugin verifies your system has the required software installed.
+The plugin verifies your system has the required software.
 
 ### Required Software
 
 - **Python 3.8 or higher**: The runtime environment for Beancount
-- **Beancount v3+**: The accounting engine with `bean-query` command
+- **Beancount v3+**: The accounting engine (`pip install beancount`)
+- **bean-query**: The query tool for BQL execution (`pip install beanquery` - separate package)
 
 Optional:
 - **bean-price**: For automated price fetching (can be added later)
@@ -60,6 +64,7 @@ The modal displays platform-specific instructions based on your OS:
 # Install Python from python.org
 # Then in PowerShell:
 pip install beancount
+pip install beanquery
 bean-query --version
 ```
 
@@ -67,6 +72,7 @@ bean-query --version
 ```bash
 brew install python@3.11
 pip3 install beancount
+pip3 install beanquery
 bean-query --version
 ```
 
@@ -74,14 +80,15 @@ bean-query --version
 ```bash
 sudo apt install python3 python3-pip  # Debian/Ubuntu
 pip3 install beancount
+pip3 install beanquery
 bean-query --version
 ```
 
 See the [official Beancount installation guide](https://beancount.github.io/docs/installing_beancount.html) for detailed instructions.
 
-### Skipping Prerequisites Check
+### Skipping Prerequisites
 
-You can click **"Skip (Manual Config)"** to bypass the check and configure commands manually later in **Settings → Connection** tab. This is useful if:
+Click **"Skip (Manual Config)"** to configure later in **Settings → Connection**. Useful if:
 - You have Beancount installed in a non-standard location
 - You're using WSL or a custom Python environment
 - You want to configure later
@@ -90,13 +97,7 @@ You can click **"Skip (Manual Config)"** to bypass the check and configure comma
 
 ## Step 2: File Setup 📁
 
-## Step 2: File Setup 📁
-
-After prerequisites are verified, choose your starting point.
-
-### Two Paths Available
-
-You have two paths to choose from:
+Choose your starting point after prerequisites are verified.
 
 #### 📊 Option 1: Start with Demo Data
 
@@ -126,9 +127,9 @@ The demo data is completely safe to explore and modify. You can delete it anytim
 
 **Best for:**
 - Existing Beancount users migrating to Obsidian
-- Users with an established ledger
-- Those wanting to continue with their current setup
+- Users with an esafe to explore and modify. Delete it anytime and start fresh.
 
+### Option 2: Existing File 📁
 **Setup Steps:**
 1. **Select File**: Choose from existing `.beancount` files in your vault via dropdown
 2. **Or Enter Path Manually**: Provide absolute path to file outside vault
@@ -220,7 +221,7 @@ You can run the onboarding wizard anytime:
 After onboarding completes:
 
 ### Verify Connection
-1. Open **Settings → Finance Plugin → Connection**
+1. Open **Settings → Beancount for Obsidian → Connection**
 2. Check for green checkmarks on all tests
 3. If any tests fail, review the [Troubleshooting Guide](../queries/troubleshooting.md)
 

@@ -6,6 +6,9 @@
 }
 
 .featureSvg {
-  height: 200px;
-  width: 200px;
+  height: auto;
+  width: 100%;
+  max-width: 300px;
+  max-height: 250px;
+  object-fit: contain;
 }

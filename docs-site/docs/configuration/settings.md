@@ -8,7 +8,7 @@ The Settings page is where you configure the plugin to work with your Beancount 
 
 ## 📋 Overview
 
-Settings are accessible via **Settings → Plugin Options → Beancount Finance Plugin**. The interface is organized into these tabs:
+Settings are accessible via **Settings → Plugin Options → Beancount for Obsidian**. The interface is organized into these tabs:
 
 1. **General** - Currency and debug settings
 2. **Connection** - Beancount and system configuration
@@ -244,22 +244,3 @@ To restore from a backup:
 1. Open your vault file browser
 2. Locate the backup file (e.g., `finances.beancount.backup.20231025-143022`)
 3. Copy its contents or rename it to restore
-
----
-
-## 🛠 Under the Hood
-
-### Setting Persistence
-- Settings are stored in `data.json` in the plugin folder.
-- Changes take effect immediately without requiring a plugin restart.
-- Some changes (like enabling debug mode) apply instantly; others (like changing file paths) may require refreshing dashboard tabs.
-
-### Validation
-- **Currency codes**: Validated as 3-letter ISO 4217 codes
-- **File paths**: Checked for file existence when settings are saved
-- **Python executables**: Tested by running `python3 --version`
-
-### Cross-Platform Support
-- **Windows**: Full support for native paths and WSL paths
-- **macOS/Linux**: Standard Unix paths expected
-- **WSL on Windows**: Automatically converts between Windows and Linux path formats
