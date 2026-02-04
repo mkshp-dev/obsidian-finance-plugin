@@ -71,13 +71,13 @@ For complex or frequently used queries, use the **Shorthand System**.
 
 #### 1. Setup Template
 Create a note (e.g., `BQL_Shortcuts.md`) and define queries like this:
-
+    ````
     ## WORTH: Net Worth
     ```bql-shorthand
     SELECT convert(sum(position), 'USD')
     WHERE account ~ '^(Assets|Liabilities)'
     ```
-
+    ````
 #### 2. Configure
 Go to **Settings** and point "Shortcuts template file" to `BQL_Shortcuts.md`.
 
