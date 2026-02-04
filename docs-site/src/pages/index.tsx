@@ -13,6 +13,11 @@ function HomepageHeader() {
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <div className="container">
+        <img 
+          src="img/Primary_horizontal_logo.png" 
+          alt="Beancount for Obsidian Logo" 
+          style={{maxWidth: '400px', marginBottom: '2rem'}}
+        />
         <Heading as="h1" className="hero__title">
           {siteConfig.title}
         </Heading>
