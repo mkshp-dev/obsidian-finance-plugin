@@ -5,7 +5,7 @@ sidebar_position: 1
 # Introduction
 
 <p align="center">
-  <img src="/static/img/Primary_horizontal_logo.png" alt="Beancount for Obsidian" width="200"/>
+  <img src="img/Primary_horizontal_logo.png" alt="Beancount for Obsidian" width="200"/>
 </p>
 
 **Beancount for Obsidian** is a comprehensive financial dashboard for [Obsidian.md](https://obsidian.md) that seamlessly integrates with [Beancount](https://beancount.github.io/docs/), the popular plain-text accounting system.
