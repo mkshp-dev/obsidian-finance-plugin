@@ -1,10 +1,46 @@
 # Beancount for Obsidian
 
-![Plugin Logo](Primary_horizontal_logo.png)
+![Plugin Logo](docs/assets/Primary_horizontal_logo.png)
 
 A comprehensive Beancount integration for [Obsidian.md](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
 📘 **[Full Documentation](https://mkshp-dev.github.io/obsidian-finance-plugin/)** - Read the complete guide for features, configuration, and usage.
+
+---
+
+## ✨ Key Features
+
+<table>
+<tr>
+<td width="33%" align="center">
+<img src="docs/assets/overview.png" alt="Dashboard" width="250"/>
+<br/>
+<strong>📊 Unified Dashboard</strong>
+<br/>
+<sub>Net worth tracking, balance sheets, and interactive charts—all in one view</sub>
+</td>
+<td width="33%" align="center">
+<img src="docs/assets/bql-query.png" alt="BQL Queries" width="250"/>
+<br/>
+<strong>🔍 Live BQL Queries</strong>
+<br/>
+<sub>Embed dynamic financial data directly in your notes, also comes with shorthand support</sub>
+</td>
+<td width="33%" align="center">
+<img src="docs/assets/adding-transaction.png" alt="Transactions" width="250"/>
+<br/>
+<strong>⚡ Smart Entry</strong>
+<br/>
+<sub>Quick transaction creation with account autocomplete and validation</sub>
+</td>
+</tr>
+</table>
+
+**Highlights:**
+- 📈 Real-time financial metrics and trend visualization
+- 📝 Inline BQL queries with customizable shortcuts
+- 💰 Complete transaction, balance, and commodity management
+- 🔄 Direct Beancount file integration—no separate database
 
 ---
 
@@ -16,7 +52,7 @@ This plugin integrates with your existing Beancount setup:
 2. **Beancount v3+**: Install via `pip install beancount`
 3. **bean-query**: Command-line tool for querying Beancount files
 4. **bean-price** *(optional)*: For automatic commodity price fetching
-5. **WSL Support**: Full compatibility for Windows users running Beancount in WSL
+5. **WSL Support** *(optional)*: Full compatibility for Windows users running Beancount in WSL
 
 ---
 
