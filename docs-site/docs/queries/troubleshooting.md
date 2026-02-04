@@ -9,16 +9,17 @@ This guide addresses common issues with connectivity, queries, and data display.
 ## 🔌 Connection Issues
 
 ### "bean-query: command not found"
-- **Cause**: The plugin cannot find `bean-query` in your system's PATH.
+- **Cause**: The plugin cannot find `bean-query` in your system's PATH. Note that `bean-query` is **not** included with Beancount and must be installed separately.
 - **Solution**: 
-  1. Go to Settings → Connection Tab
-  2. Click "Test All Commands" to see which commands fail
-  3. If auto-detection fails, manually enter the absolute path to `bean-query`:
+  1. Install beanquery: `pip install beanquery`
+  2. Go to Settings → Connection Tab
+  3. Click "Test All Commands" to see which commands fail
+  4. If auto-detection fails, manually enter the absolute path to `bean-query`:
      - Windows: `C:\Python39\Scripts\bean-query.exe`
      - macOS/Linux: `/usr/local/bin/bean-query` or `~/.local/bin/bean-query`
      - WSL: `wsl bean-query`
-  4. Click "Test Bean Query" to verify it works
-- **Alternative**: Add Beancount's scripts directory to your system PATH
+  5. Click "Test Bean Query" to verify it works
+- **Alternative**: Add beanquery's scripts directory to your system PATH
 
 ### "File not found" errors
 - **Cause**: The Beancount file path in settings is incorrect or the file doesn't exist.

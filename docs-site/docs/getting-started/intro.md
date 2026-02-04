@@ -42,7 +42,7 @@ This documentation is structured to help you get the most out of the plugin:
 
 1.  **Python 3.8+**
 2.  **Beancount v3+** (`pip install beancount`)
-3.  **bean-query** (included with Beancount)
+3.  **bean-query** (`pip install beanquery` - separate package required)
 4.  **bean-price** (optional, for price updates)
 
 The plugin supports Windows, macOS, Linux, and WSL (Windows Subsystem for Linux).

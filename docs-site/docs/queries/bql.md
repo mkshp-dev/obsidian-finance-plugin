@@ -83,16 +83,3 @@ Go to **Settings** and point "Shortcuts template file" to `BQL_Shortcuts.md`.
 Now you can simply write:
 
 > My net worth is `bql-sh:WORTH`
-
-## 🛠 Under the Hood
-
-When a BQL block is rendered:
-
-1.  **Processor**: `BQLCodeBlockProcessor.ts` detects the `bql` block.
-2.  **Execution**: It calls `runQuery()` in `src/utils/index.ts`.
-3.  **Command Construction**: The query is wrapped into a shell command:
-    ```bash
-    bean-query -q -f csv "/path/to/ledger.beancount" "SELECT ..."
-    ```
-4.  **CSV Parsing**: The CSV output is parsed into a JSON array.
-5.  **Rendering**: A Svelte component (`BQLResultTable.svelte`) renders the data grid.

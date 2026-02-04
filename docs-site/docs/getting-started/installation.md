@@ -42,9 +42,18 @@ pip install beancount
 ```
 
 This provides the following command-line tools:
-- `bean-query`: For running BQL queries
 - `bean-check`: For validating Beancount file syntax
 - `bean-price`: For fetching commodity prices (optional)
+
+### 3. Beanquery (Required)
+Bean-query is **not** included with Beancount and must be installed separately:
+
+```bash
+pip install beanquery
+```
+
+This provides:
+- `bean-query`: For running BQL queries (essential for the plugin)
 
 *Verify installation:*
 Open your terminal and run:
@@ -94,12 +103,3 @@ The plugin has native support for **Windows Subsystem for Linux (WSL)**.
 3.  You can use Windows-style paths (e.g., `C:\...`) and the plugin will automatically convert them to `/mnt/c/...` for command execution.
 
 ---
-
-## 🛠 Under the Hood
-
-The plugin uses a **pure TypeScript/Svelte architecture**:
-
-1.  **System Detection**: `SystemDetector.ts` scans your environment (PATH, Registry, WSL) to find a valid Python executable and `bean-query` binary.
-2.  **Direct CLI Execution**: All queries run via direct `bean-query` command execution with proper shell escaping.
-3.  **Atomic File Operations**: Transaction creation/updates use atomic writes (temp file + rename) with optional backups.
-4.  **No Server Needed**: Unlike v1.x, there is no backend server process - everything runs directly via CLI tools.

@@ -27,37 +27,7 @@ Convenient buttons for common operations:
 - **Refresh**: Reloads data from your Beancount file
 - **Open Dashboard**: Opens the full Unified Dashboard view
 
-## 🛠 Under the Hood
-
-The Snapshot View is optimized for minimal performance impact:
-
-### View Registration
-- **View Type**: Registered as `BEANCOUNT_VIEW_TYPE` in the plugin
-- **Location**: Typically placed in the right sidebar for persistent visibility
-- **Lifecycle**: Loads once when opened, refreshes on data changes
-
-### Lightweight Data Fetching
-Unlike the full dashboard, the Snapshot uses targeted queries:
-1. **Minimal Queries**: Executes only essential BQL queries for the metrics displayed
-   - Net Worth: Single query for Assets and Liabilities sum
-   - Monthly Income/Expenses: Targeted queries with date filters for current month
-   - Recent Transactions: Simple `ORDER BY date DESC LIMIT 10` query
-2. **Fast Execution**: Direct CLI execution via `runQuery()` without heavy processing
-3. **Cached Results**: Results are cached until explicit refresh or data change
-
-### Reactivity
-The view stays synchronized with your ledger:
-- **Event Listening**: Listens for transaction creation/update/delete events
-- **Auto-refresh**: Updates automatically when you make changes in the Dashboard
-- **Manual Refresh**: Button available for on-demand updates
-
-### Performance Optimization
-- **Startup Impact**: Minimal - doesn't load until you open the sidebar
-- **Memory Footprint**: Small - only stores essential metrics, not full transaction list
-- **Query Efficiency**: Uses BQL aggregation functions to minimize data transfer
-- **No Polling**: Only fetches data when explicitly needed (open, refresh, or change event)
-
-## 💡 Usage Tips
+##  Usage Tips
 
 ### When to Use
 - **Daily Note Taking**: Keep it open while journaling to reference your finances

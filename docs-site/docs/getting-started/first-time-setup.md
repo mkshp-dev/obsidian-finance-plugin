@@ -21,7 +21,8 @@ Before setting up your ledger files, the plugin verifies your system has the req
 ### Required Software
 
 - **Python 3.8 or higher**: The runtime environment for Beancount
-- **Beancount v3+**: The accounting engine with `bean-query` command
+- **Beancount v3+**: The accounting engine (`pip install beancount`)
+- **bean-query**: The query tool for BQL execution (`pip install beanquery` - separate package)
 
 Optional:
 - **bean-price**: For automated price fetching (can be added later)
@@ -60,6 +61,7 @@ The modal displays platform-specific instructions based on your OS:
 # Install Python from python.org
 # Then in PowerShell:
 pip install beancount
+pip install beanquery
 bean-query --version
 ```
 
@@ -67,6 +69,7 @@ bean-query --version
 ```bash
 brew install python@3.11
 pip3 install beancount
+pip3 install beanquery
 bean-query --version
 ```
 
@@ -74,6 +77,7 @@ bean-query --version
 ```bash
 sudo apt install python3 python3-pip  # Debian/Ubuntu
 pip3 install beancount
+pip3 install beanquery
 bean-query --version
 ```
 
