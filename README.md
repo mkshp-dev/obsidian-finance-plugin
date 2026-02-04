@@ -79,7 +79,7 @@ npm run build
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
-If this project helps your workflow, consider supporting its development ☕
+If this project helps your workflow, consider supporting its development with a ☕
 
 <a href="https://www.buymeacoffee.com/mkshp" target="_blank">
   <img
