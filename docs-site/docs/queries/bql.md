@@ -14,13 +14,15 @@ The plugin supports two distinct modes:
 
 Use standard Markdown code blocks with the `bql` language identifier to create formatted, interactive tables.
 
+:::warning Important
+**Single-Line Queries Only**: BQL queries must be written on a single line. Multi-line queries will only execute the first line and ignore subsequent lines.
+:::
+
 ### Basic Usage
 
     ````
     ```bql
-    SELECT account, sum(position)
-    WHERE account ~ '^Expenses'
-    GROUP BY account
+    SELECT account, sum(position) WHERE account ~ '^Expenses' GROUP BY account
     ```
     ````
 
@@ -41,16 +43,12 @@ SELECT account GROUP BY account ORDER BY account
 
 **Recent Transactions:**
 ```sql
-SELECT date, payee, narration, position
-ORDER BY date DESC LIMIT 20
+SELECT date, payee, narration, position ORDER BY date DESC LIMIT 20
 ```
 
 **Monthly Expenses:**
 ```sql
-SELECT year, month, sum(position)
-WHERE account ~ '^Expenses'
-GROUP BY year, month
-ORDER BY year DESC, month DESC
+SELECT year, month, sum(position) WHERE account ~ '^Expenses' GROUP BY year, month ORDER BY year DESC, month DESC
 ```
 
 ---
@@ -74,8 +72,7 @@ Create a note (e.g., `BQL_Shortcuts.md`) and define queries like this:
     ````
     ## WORTH: Net Worth
     ```bql-shorthand
-    SELECT convert(sum(position), 'USD')
-    WHERE account ~ '^(Assets|Liabilities)'
+    SELECT convert(sum(position), 'USD') WHERE account ~ '^(Assets|Liabilities)'
     ```
     ````
 #### 2. Configure
