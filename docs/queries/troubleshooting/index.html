@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.2">
 <title data-rh="true">Troubleshooting | Obsidian Finance Plugin</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:image" content="https://mkshp-dev.github.io/obsidian-finance-plugin/img/docusaurus-social-card.jpg"><meta data-rh="true" name="twitter:image" content="https://mkshp-dev.github.io/obsidian-finance-plugin/img/docusaurus-social-card.jpg"><meta data-rh="true" property="og:url" content="https://mkshp-dev.github.io/obsidian-finance-plugin/docs/queries/troubleshooting"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Troubleshooting | Obsidian Finance Plugin"><meta data-rh="true" name="description" content="This guide addresses common issues with connectivity, queries, and data display."><meta data-rh="true" property="og:description" content="This guide addresses common issues with connectivity, queries, and data display."><link data-rh="true" rel="icon" href="/obsidian-finance-plugin/img/favicon.ico"><link data-rh="true" rel="canonical" href="https://mkshp-dev.github.io/obsidian-finance-plugin/docs/queries/troubleshooting"><link data-rh="true" rel="alternate" href="https://mkshp-dev.github.io/obsidian-finance-plugin/docs/queries/troubleshooting" hreflang="en"><link data-rh="true" rel="alternate" href="https://mkshp-dev.github.io/obsidian-finance-plugin/docs/queries/troubleshooting" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Troubleshooting","item":"https://mkshp-dev.github.io/obsidian-finance-plugin/docs/queries/troubleshooting"}]}</script><link rel="stylesheet" href="/obsidian-finance-plugin/assets/css/styles.ad3d35f5.css">
-<script src="/obsidian-finance-plugin/assets/js/runtime~main.632f1487.js" defer="defer"></script>
+<script src="/obsidian-finance-plugin/assets/js/runtime~main.8be7e2a4.js" defer="defer"></script>
 <script src="/obsidian-finance-plugin/assets/js/main.37864d00.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -16,9 +16,10 @@
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="-connection-issues">🔌 Connection Issues<a href="#-connection-issues" class="hash-link" aria-label="Direct link to 🔌 Connection Issues" title="Direct link to 🔌 Connection Issues" translate="no">​</a></h2>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="bean-query-command-not-found">&quot;bean-query: command not found&quot;<a href="#bean-query-command-not-found" class="hash-link" aria-label="Direct link to &quot;bean-query: command not found&quot;" title="Direct link to &quot;bean-query: command not found&quot;" translate="no">​</a></h3>
 <ul>
-<li class=""><strong>Cause</strong>: The plugin cannot find <code>bean-query</code> in your system&#x27;s PATH.</li>
+<li class=""><strong>Cause</strong>: The plugin cannot find <code>bean-query</code> in your system&#x27;s PATH. Note that <code>bean-query</code> is <strong>not</strong> included with Beancount and must be installed separately.</li>
 <li class=""><strong>Solution</strong>:<!-- -->
 <ol>
+<li class="">Install beanquery: <code>pip install beanquery</code></li>
 <li class="">Go to Settings → Connection Tab</li>
 <li class="">Click &quot;Test All Commands&quot; to see which commands fail</li>
 <li class="">If auto-detection fails, manually enter the absolute path to <code>bean-query</code>:<!-- -->
@@ -31,7 +32,7 @@
 <li class="">Click &quot;Test Bean Query&quot; to verify it works</li>
 </ol>
 </li>
-<li class=""><strong>Alternative</strong>: Add Beancount&#x27;s scripts directory to your system PATH</li>
+<li class=""><strong>Alternative</strong>: Add beanquery&#x27;s scripts directory to your system PATH</li>
 </ul>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="file-not-found-errors">&quot;File not found&quot; errors<a href="#file-not-found-errors" class="hash-link" aria-label="Direct link to &quot;File not found&quot; errors" title="Direct link to &quot;File not found&quot; errors" translate="no">​</a></h3>
 <ul>
