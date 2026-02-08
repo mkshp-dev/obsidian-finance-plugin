@@ -68,7 +68,11 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 			queryFilePath = convertWindowsPathToWsl(filePath);
 		}
 		
-		const command = `${commandName} -q -f csv "${queryFilePath}" "${query}"`;
+		// Escape quotes in query for shell execution
+		// Replace " with \" to prevent shell parsing issues
+		const escapedQuery = query.replace(/"/g, '\\"');
+		
+		const command = `${commandName} -q -f csv "${queryFilePath}" "${escapedQuery}"`;
 		
 		// Increase maxBuffer to handle large query results (50MB limit)
 		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
