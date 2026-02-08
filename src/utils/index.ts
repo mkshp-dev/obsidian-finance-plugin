@@ -2332,6 +2332,8 @@ export async function getTransactionEntries(
 		console.debug('[getTransactionEntries] Fetching with filters:', filters);
 
 		// Build BQL query with filters
+		// NOTE: Account filter is applied in-memory after grouping to ensure we get all postings
+		// for transactions that match the account filter
 		let whereConditions: string[] = [];
 		
 		if (filters.startDate) {
@@ -2340,9 +2342,10 @@ export async function getTransactionEntries(
 		if (filters.endDate) {
 			whereConditions.push(`date <= ${filters.endDate}`);
 		}
-		if (filters.account) {
-			whereConditions.push(`account ~ "${filters.account}"`);
-		}
+		// Don't apply account filter in BQL - apply it in-memory after grouping
+		// if (filters.account) {
+		//     whereConditions.push(`account ~ "${filters.account}"`);
+		// }
 		if (filters.payee) {
 			whereConditions.push(`payee ~ "${filters.payee}"`);
 		}
@@ -2470,6 +2473,23 @@ export async function getTransactionEntries(
 
 		// Convert map to array
 		let transactions = Array.from(transactionsMap.values());
+
+		// Apply account filter (in-memory) - only include transactions that have at least one posting matching the account
+		if (filters.account) {
+			const accountPattern = filters.account;
+			transactions = transactions.filter((txn: any) => {
+				return txn.postings.some((p: any) => {
+					// Simple regex match - check if account contains or matches the pattern
+					try {
+						const regex = new RegExp(accountPattern);
+						return regex.test(p.account);
+					} catch {
+						// If regex fails, fall back to simple string match
+						return p.account?.includes(accountPattern);
+					}
+				});
+			});
+		}
 
 		// Apply search term filter (in-memory)
 		if (filters.searchTerm) {
