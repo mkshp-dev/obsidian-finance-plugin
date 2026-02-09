@@ -180,10 +180,14 @@ export class CommoditiesController {
             commodities.sort((a, b) => a.symbol.localeCompare(b.symbol));
             this.commodities.set(commodities);
             this.lastUpdated.set(new Date());
+            
+            // Update hasCommodityData flag based on loaded commodities
+            this.hasCommodityData.set(commodities.length > 0);
 
         } catch (error) {
             console.error('Error querying commodities via BQL:', error);
             this.error.set(error instanceof Error ? error.message : 'Failed to query commodities from ledger');
+            this.hasCommodityData.set(false);
         } finally {
             this.loading.set(false);
         }

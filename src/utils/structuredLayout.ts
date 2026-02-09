@@ -34,16 +34,15 @@ export const STRUCTURED_FILES: Record<FileType, string> = {
 
 /**
  * Create the structured folder layout with all required files.
+ * Creates empty directive files - use migrateToStructuredLayout() to populate with data.
  * 
  * @param plugin - The Beancount plugin instance
  * @param folderName - Name of the folder to create (default: "Finances")
- * @param createDemo - Whether to populate with demo data
  * @returns The absolute path to the created folder
  */
 export async function createStructuredFolder(
     plugin: BeancountPlugin,
-    folderName: string = 'Finances',
-    createDemo: boolean = false
+    folderName: string = 'Finances'
 ): Promise<string> {
     try {
         const adapter = plugin.app.vault.adapter;
@@ -80,8 +79,8 @@ export async function createStructuredFolder(
         const currentYear = new Date().getFullYear();
         await ensureYearFile(plugin, folderName, currentYear);
 
-        // Create individual files
-        const files = createDemo ? getDemoFileContents() : getEmptyFileContents();
+        // Create individual files with empty content
+        const files = getEmptyFileContents();
         
         for (const [fileType, fileName] of Object.entries(STRUCTURED_FILES)) {
             if (fileType === 'transactions') continue; // Skip, it's a folder
@@ -404,201 +403,6 @@ function getEmptyFileContents(): Record<FileType, string> {
 `,
         transactions: '' // Folder, not a file
     };
-}
-
-/**
- * Get demo file contents for initial setup.
- */
-function getDemoFileContents(): Record<FileType, string> {
-    const currentYear = new Date().getFullYear();
-    
-    return {
-        ledger: '', // Will be generated with includes
-        accounts: `;; Chart of Accounts
-;; Demo account structure
-
-;; Options (global configuration)
-option "title" "Personal Finance Demo"
-option "operating_currency" "USD"
-option "booking_method" "STRICT"
-
-;; Plugin directives (example - beancount.plugins.auto_accounts)
-;; plugin "beancount.plugins.auto_accounts"
-
-;; Asset accounts
-2020-01-01 open Assets:Checking USD
-  description: "Primary checking account"
-  
-2020-01-01 open Assets:Savings USD
-  description: "High-yield savings account"
-
-2020-01-01 open Assets:Investments USD
-  description: "Investment account"
-  
-;; Liability accounts  
-2020-01-01 open Liabilities:CreditCard USD
-  description: "Credit card account"
-
-;; Income accounts
-2020-01-01 open Income:Salary USD
-  description: "Employment income"
-
-2020-01-01 open Income:Interest USD
-  description: "Interest income"
-  
-;; Expense accounts
-2020-01-01 open Expenses:Food:Groceries USD
-2020-01-01 open Expenses:Food:Dining USD
-2020-01-01 open Expenses:Rent USD
-2020-01-01 open Expenses:Utilities USD
-2020-01-01 open Expenses:Transport USD
-2020-01-01 open Expenses:Shopping USD
-
-;; Equity accounts
-2020-01-01 open Equity:Opening-Balances USD
-
-;; Example of closing an account
-;; ${currentYear}-12-31 close Assets:OldAccount
-`,
-        commodities: `;; Commodity Definitions
-;; Demo commodities with metadata
-
-1970-01-01 commodity USD
-  name: "US Dollar"
-  asset-class: "cash"
-  
-1970-01-01 commodity EUR
-  name: "Euro"
-  asset-class: "cash"
-  
-1970-01-01 commodity AAPL
-  name: "Apple Inc."
-  asset-class: "stock"
-  
-;; Custom directive example (requires plugin support)
-;; ${currentYear}-01-01 custom "budget" Expenses:Food:Groceries "500.00 USD" "monthly"
-`,
-        prices: `;; Price Data
-;; Demo price history
-
-${currentYear}-01-01 price EUR 1.10 USD
-${currentYear}-03-01 price EUR 1.11 USD
-${currentYear}-06-01 price EUR 1.12 USD
-${currentYear}-09-01 price EUR 1.13 USD
-
-${currentYear}-01-01 price AAPL 150.00 USD
-${currentYear}-03-01 price AAPL 165.00 USD
-${currentYear}-06-01 price AAPL 170.00 USD
-`,
-        pads: `;; Pad Directives
-;; Automatic balance padding - fills in missing amounts
-
-;; This pad ensures Assets:Checking balance matches the assertion
-;; Any difference will be attributed to Equity:Opening-Balances
-${currentYear}-01-01 pad Assets:Checking Equity:Opening-Balances
-`,
-        balances: `;; Balance Assertions
-;; Demo balance checks - verify account balances at specific dates
-
-${currentYear}-01-01 balance Assets:Checking 5000.00 USD
-${currentYear}-01-01 balance Assets:Savings 10000.00 USD
-${currentYear}-01-01 balance Liabilities:CreditCard -500.00 USD
-
-;; Add more balance assertions for verification
-${currentYear}-02-01 balance Assets:Checking 3555.00 USD
-`,
-        notes: `;; Notes
-;; Account and transaction notes
-
-${currentYear}-01-01 note Assets:Checking "Primary checking account - switched from old bank"
-${currentYear}-01-15 note Liabilities:CreditCard "APR is 18.99% - consider paying off"
-
-;; Document directives link external files (requires actual files)
-;; ${currentYear}-01-01 document Assets:Checking "statements/checking-jan-${currentYear}.pdf"
-;; ${currentYear}-01-31 document Liabilities:CreditCard "statements/cc-jan-${currentYear}.pdf"
-`,
-        events: `;; Events
-;; Financial events and milestones
-
-${currentYear}-01-01 event "location" "New York"
-${currentYear}-03-15 event "tax-filing" "Filed 2023 Tax Return"
-${currentYear}-06-01 event "employer" "Promoted to Senior Position"
-
-;; Query directives (named BQL queries)
-;; query "monthly-expenses" "
-;;   SELECT date, narration, COST(position) AS amount
-;;   FROM account ~ 'Expenses:'
-;;   WHERE year = YEAR(TODAY()) AND month = MONTH(TODAY())
-;; "
-`,
-        transactions: '' // Folder, not a file
-    };
-}
-
-/**
- * Get demo transactions content for the initial year file.
- */
-export function getDemoTransactionsForYear(year: number): string {
-    return `;; Transactions for ${year}
-;; Demo transactions with various posting features
-
-${year}-01-01 * "Opening Balance"
-  Assets:Checking           5000.00 USD
-  Assets:Savings           10000.00 USD
-  Liabilities:CreditCard    -500.00 USD
-  Equity:Opening-Balances
-
-${year}-01-05 * "Landlord" "Monthly Rent" #rent
-  Expenses:Rent             1200.00 USD
-  Assets:Checking
-
-${year}-01-10 * "Grocery Store" "Weekly Groceries" #food #groceries
-  Expenses:Food:Groceries    150.00 USD
-  Liabilities:CreditCard
-
-${year}-01-15 * "Employer" "Bi-weekly Salary" ^paycheck-001
-  Assets:Checking           3000.00 USD
-  Income:Salary
-
-${year}-01-20 * "Restaurant" "Dinner with friends" #food #dining
-  Expenses:Food:Dining        85.50 USD
-  Liabilities:CreditCard
-
-${year}-01-22 ! "Online Purchase" "Pending charge" #shopping
-  ; Note: ! flag indicates pending/uncertain transaction
-  Expenses:Shopping         125.00 USD
-  Liabilities:CreditCard
-
-${year}-01-25 * "Utility Co" "Electric Bill" #utilities
-  Expenses:Utilities         120.00 USD
-  Assets:Checking
-
-${year}-01-28 * "Gas Station" "Fuel" #transport
-  Expenses:Transport          45.00 USD
-  Liabilities:CreditCard
-
-${year}-02-01 * "Credit Card Co" "Payment" ^cc-payment-001
-  Liabilities:CreditCard     500.00 USD
-  Assets:Checking
-
-${year}-02-05 * "Landlord" "Monthly Rent" #rent
-  Expenses:Rent             1200.00 USD
-  Assets:Checking
-
-;; Transaction with posting metadata
-${year}-02-10 * "Bank" "Interest Payment"
-  Assets:Savings              15.00 USD
-    interest: "0.25% APY"
-  Income:Interest
-
-${year}-02-15 * "Employer" "Bi-weekly Salary" ^paycheck-002
-  Assets:Checking           3000.00 USD
-  Income:Salary
-
-${year}-02-20 * "Investment" "Stock Purchase"
-  Assets:Investments        10 AAPL @ 150.00 USD
-  Assets:Checking
-`;
 }
 
 /**
