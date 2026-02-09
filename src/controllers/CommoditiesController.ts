@@ -3,6 +3,7 @@
 import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
+import { Logger } from '../utils/logger';
 import { 
     parseCommoditiesListCSV, 
     parseCommoditiesPriceDataCSV, 
@@ -355,6 +356,58 @@ export class CommoditiesController {
      */
     public setSearchTerm(term: string): void {
         this.searchTerm.set(term);
+    }
+
+    /**
+     * Creates a new commodity directive in the Beancount file.
+     * @param {string} symbol - The commodity symbol (e.g., BTC, AAPL).
+     * @param {string} date - The date in YYYY-MM-DD format.
+     * @param {string} [priceMetadata] - Optional price metadata (e.g., "yahoo/AAPL", "USD").
+     * @param {string} [logoUrl] - Optional logo URL.
+     * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+     */
+    public async createCommodity(
+        symbol: string,
+        date: string,
+        priceMetadata?: string,
+        logoUrl?: string
+    ): Promise<{ success: boolean; error?: string }> {
+        this.loading.set(true);
+        this.error.set(null);
+        
+        try {
+            // Import the createCommodity utility function
+            const { createCommodity } = await import('../utils/index');
+            
+            const createBackup = this.plugin.settings.createBackups ?? true;
+            const result = await createCommodity(
+                this.plugin,
+                symbol,
+                date,
+                priceMetadata,
+                logoUrl,
+                createBackup
+            );
+
+            if (!result.success) {
+                this.error.set(result.error || 'Failed to create commodity');
+                return result;
+            }
+
+            // Refresh the commodity list to show the new commodity
+            await this.loadData();
+            
+            Logger.log(`[CommoditiesController] Successfully created commodity ${symbol}`);
+            return { success: true };
+
+        } catch (error) {
+            Logger.error('[CommoditiesController] createCommodity error:', error);
+            const errorMsg = error instanceof Error ? error.message : 'Failed to create commodity';
+            this.error.set(errorMsg);
+            return { success: false, error: errorMsg };
+        } finally {
+            this.loading.set(false);
+        }
     }
 
     /**

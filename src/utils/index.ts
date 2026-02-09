@@ -7,6 +7,7 @@ import { readFile, writeFile, copyFile } from 'fs/promises';
 import { existsSync, unlinkSync, renameSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { getTargetFile, getMainLedgerPath, ensureYearFile, type OperationType } from './structuredLayout';
+import { Logger } from './logger';
 
 // --- FILE PATH RESOLVER ---
 
@@ -1140,6 +1141,79 @@ export async function createNote(
 
 	} catch (error) {
 		console.error(`[createNote] Error:`, error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Creates a new Commodity directive in the Beancount file.
+ * 
+ * @param {BeancountPlugin} plugin - The plugin instance (for settings).
+ * @param {string} symbol - The commodity symbol (e.g., BTC, AAPL).
+ * @param {string} date - The date in YYYY-MM-DD format.
+ * @param {string} [priceMetadata] - Optional price metadata (e.g., "yahoo/AAPL", "USD").
+ * @param {string} [logoUrl] - Optional logo URL.
+ * @param {boolean} createBackup - Whether to create a backup before modifying the file.
+ * @returns {Promise<{success: boolean, error?: string}>} The result of the operation.
+ */
+export async function createCommodity(
+	plugin: BeancountPlugin,
+	symbol: string,
+	date: string,
+	priceMetadata?: string,
+	logoUrl?: string,
+	createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const filePath = resolveFilePath(plugin, 'commodity', date);
+		if (!filePath) {
+			return { success: false, error: 'Beancount file path not set' };
+		}
+
+		// Validate symbol format (alphanumeric, uppercase recommended)
+		if (!symbol || !/^[A-Z0-9._-]+$/i.test(symbol)) {
+			return { success: false, error: 'Invalid commodity symbol. Use alphanumeric characters, dots, underscores, or hyphens.' };
+		}
+
+		// Step 1: Normalize path (handle WSL)
+		const normalizedPath = convertWslPathToWindows(filePath);
+
+		// Step 2: Generate directive text
+		// Format: YYYY-MM-DD commodity SYMBOL
+		//   price: "value"
+		//   logo: "url"
+		let directiveText = `${date} commodity ${symbol.toUpperCase()}`;
+		
+		// Add metadata if provided
+		const metadataLines: string[] = [];
+		if (priceMetadata) {
+			metadataLines.push(`  price: "${priceMetadata}"`);
+		}
+		if (logoUrl) {
+			metadataLines.push(`  logo: "${logoUrl}"`);
+		}
+		
+		if (metadataLines.length > 0) {
+			directiveText += '\n' + metadataLines.join('\n');
+		}
+
+		// Step 3: Create backup if requested
+		await createBackupFile(normalizedPath, createBackup, 'createCommodity');
+
+		// Step 4: Read file and append directive
+		const content = await readFile(normalizedPath, 'utf-8');
+		const newContent = content.endsWith('\n') 
+			? `${content}${directiveText}\n`
+			: `${content}\n${directiveText}\n`;
+
+		// Step 5: Atomic write (write to temp file, then rename)
+		await atomicFileWrite(normalizedPath, newContent);
+
+		Logger.log(`[createCommodity] Successfully created commodity ${symbol}`);
+		return { success: true };
+
+	} catch (error) {
+		Logger.error('[createCommodity] Error:', error);
 		return { success: false, error: error instanceof Error ? error.message : String(error) };
 	}
 }

@@ -46,6 +46,11 @@
         console.debug('[CommoditiesTab] handleRefresh');
         controller.refresh();
     }
+
+    function handleAddCommodity() {
+        console.debug('[CommoditiesTab] handleAddCommodity');
+        dispatch('addCommodity');
+    }
 </script>
 
 <div class="commodities-tab">
@@ -64,6 +69,13 @@
         </div>
         
         <div class="header-right">
+            <button 
+                on:click={handleAddCommodity} 
+                class="add-commodity-button"
+                title="Add new commodity"
+            >
+                + Add Commodity
+            </button>
             <input 
                 type="text" 
                 placeholder="Search commodities..." 
@@ -175,6 +187,23 @@
         display: flex;
         align-items: center;
         gap: 10px;
+    }
+
+    .add-commodity-button {
+        padding: 8px 16px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .add-commodity-button:hover {
+        background: var(--interactive-accent-hover);
     }
 
     .search-input {

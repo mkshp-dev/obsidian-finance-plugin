@@ -58,7 +58,7 @@
         {:else if activeTab === 'balancesheet'}
             <BalanceSheetTab controller={balanceSheetController} />
         {:else if activeTab === 'commodities'}
-            <CommoditiesTab controller={commoditiesController} on:openCommodity />
+            <CommoditiesTab controller={commoditiesController} on:openCommodity on:addCommodity />
         {/if}
     </div>
 </div>
