@@ -85,17 +85,7 @@ Configure how your Beancount ledger is organized.
 
 ### Structured Layout
 
-The plugin supports two organizational approaches:
-
-#### Single File Mode (Default)
-- All Beancount directives in one `.beancount` file
-- Simple, traditional approach
-- Good for smaller ledgers or existing setups
-
-#### Structured Layout Mode
-- Organizes your ledger into multiple files by type
-- Recommended for larger ledgers or better organization
-- Easier to navigate and maintain
+The plugin organizes your finances using a structured folder layout with multiple files by type:
 
 **Folder Structure:**
 ```
@@ -116,39 +106,34 @@ Finances/
 
 ### Configuration Options
 
-**Use Structured Layout**
-- **Default**: Disabled
-- **When Enabled**: The plugin will create/use the structured folder layout
-- **Migration**: Can convert existing single-file ledgers to structured layout
-
 **Folder Name**
 - **Default**: `Finances`
 - **Purpose**: Name of the root folder for structured layout
 - **Location**: Created in your vault root directory
 - **Customizable**: Use any folder name you prefer (e.g., `Accounting`, `Ledger`, `Books`)
 
-### Migration to Structured Layout
+### Importing Existing Ledgers
 
-If you have an existing single-file ledger and want to switch to structured layout:
+If you have an existing single-file ledger, the plugin can import and organize it:
 
-1. **Enable** "Use Structured Layout" in settings
-2. **Set** your desired folder name
-3. **Save** settings - the plugin will offer to migrate your data
-4. **Confirm** migration in the popup modal
-5. **Review** the newly created structured folder
+1. **Run Onboarding**: Command Palette → "Run Setup/Onboarding"
+2. **Choose** "Existing File" option
+3. **Select** your existing ledger file
+4. **Set** your desired folder name
+5. **Confirm** - the plugin will organize your data into structured layout
 
-The migration process:
+The import process:
 - Parses your existing ledger
 - Organizes directives by type into appropriate files
 - Creates yearly transaction files
 - Preserves all your data and formatting
-- Creates a backup of your original file
+- Creates a backup of your original file (if backups enabled)
 
 ### Benefits of Structured Layout
 
 **Organization:**
 - Easier to find specific types of entries
-- Clearer separation of concerns
+- Clear separation of concerns
 - Better for version control (smaller diffs)
 
 **Performance:**

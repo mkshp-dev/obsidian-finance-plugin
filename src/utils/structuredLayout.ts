@@ -525,7 +525,6 @@ export async function migrateToStructuredLayout(
 
         // Step 6: Update plugin settings
         const mainLedgerPath = getMainLedgerPath(plugin);
-        plugin.settings.useStructuredLayout = true;
         plugin.settings.structuredFolderName = targetFolderName;
         plugin.settings.structuredFolderPath = mainLedgerPath;
         plugin.settings.beancountFilePath = mainLedgerPath;
@@ -580,79 +579,6 @@ async function extractTransactionYears(plugin: BeancountPlugin): Promise<number[
         Logger.error('[Migration] Failed to extract transaction years:', error);
         // Fallback: return current year
         return [new Date().getFullYear()];
-    }
-}
-
-/**
- * Migrate from structured layout back to single file.
- * Uses BQL PRINT on the structured main ledger (automatically follows includes).
- * Writes consolidated output to ledger.beancount at vault root.
- * 
- * @param plugin - The Beancount plugin instance
- * @returns Promise with success status
- */
-export async function migrateToSingleFile(
-    plugin: BeancountPlugin
-): Promise<{ success: boolean; error?: string }> {
-    try {
-        Logger.log('[Reverse Migration] Starting migration to single file');
-        
-        // Validate that we're in structured mode
-        if (!plugin.settings.useStructuredLayout) {
-            return { success: false, error: 'Not currently in structured layout mode' };
-        }
-
-        // Validate that we have a structured folder path
-        const structuredPath = plugin.settings.structuredFolderPath;
-        if (!structuredPath) {
-            return { success: false, error: 'No structured folder path configured' };
-        }
-
-        Logger.log(`[Reverse Migration] Source: ${structuredPath}`);
-
-        // Check if target file already exists
-        const targetFileName = 'ledger.beancount';
-        const existing = plugin.app.vault.getAbstractFileByPath(targetFileName);
-        
-        if (existing) {
-            return { 
-                success: false, 
-                error: `File ${targetFileName} already exists at vault root. Please rename or delete it first.` 
-            };
-        }
-
-        // Use BQL PRINT to get all directives from structured layout
-        // PRINT automatically follows include statements, giving us consolidated output
-        Logger.log('[Reverse Migration] Extracting all directives using PRINT...');
-        const query = 'PRINT';
-        const consolidatedContent = await runQuery(plugin, query);
-        
-        if (!consolidatedContent || !consolidatedContent.trim()) {
-            return { success: false, error: 'Failed to extract directives - PRINT query returned empty result' };
-        }
-
-        // Create the single file at vault root
-        Logger.log(`[Reverse Migration] Writing to ${targetFileName}...`);
-        await plugin.app.vault.create(targetFileName, consolidatedContent);
-
-        // Update plugin settings to single-file mode
-        // @ts-ignore
-        const singleFilePath = plugin.app.vault.adapter.getFullPath(targetFileName);
-        plugin.settings.useStructuredLayout = false;
-        plugin.settings.beancountFilePath = singleFilePath;
-        // Keep structured folder settings for potential future re-migration
-        await plugin.saveSettings();
-
-        Logger.log('[Reverse Migration] ✓ Migration completed successfully!');
-        new Notice(`Migration complete! All data consolidated into ${targetFileName}`);
-        
-        return { success: true };
-    } catch (error) {
-        Logger.error('[Reverse Migration] Migration failed:', error);
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error)
-        };
     }
 }
 

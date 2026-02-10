@@ -673,10 +673,8 @@ export class OnboardingModal extends Modal {
             const absolutePath = adapter.getFullPath(tempFile.path);
             Logger.log(`Onboarding: Temp file absolute path: ${absolutePath}`);
             
-            // Temporarily set settings to point to demo file with structured layout OFF
-            // This is required so migration can read from the temp file
+            // Temporarily set settings to point to demo file for migration source
             this.plugin.settings.beancountFilePath = absolutePath;
-            this.plugin.settings.useStructuredLayout = false;
             await this.plugin.saveSettings();
             
             Logger.log(`Onboarding: Starting migration from demo file to structured layout`);
@@ -730,9 +728,8 @@ export class OnboardingModal extends Modal {
             }
         }
         
-        // Temporarily set the file path for migration (MUST set useStructuredLayout=false so queries read from source)
+        // Temporarily set the file path for migration source
         this.plugin.settings.beancountFilePath = absolutePath;
-        this.plugin.settings.useStructuredLayout = false;
         await this.plugin.saveSettings();
         
         Logger.log(`[Onboarding] Starting migration with file: ${absolutePath}`);

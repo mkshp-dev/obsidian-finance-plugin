@@ -12,7 +12,7 @@ import { Logger } from './logger';
 // --- FILE PATH RESOLVER ---
 
 /**
- * Get the appropriate file path based on plugin mode (single file vs structured layout).
+ * Get the appropriate file path for structured layout operations.
  * 
  * @param plugin - The plugin instance
  * @param operationType - The type of operation (transaction, account, etc.)
@@ -24,26 +24,17 @@ function resolveFilePath(
 	operationType: OperationType,
 	date?: string
 ): string {
-	if (plugin.settings.useStructuredLayout) {
-		return getTargetFile(plugin, operationType, date);
-	} else {
-		// Single file mode - use configured path
-		return plugin.settings.beancountFilePath;
-	}
+	return getTargetFile(plugin, operationType, date);
 }
 
 /**
- * Get the file path for BQL queries (main ledger file in structured mode).
+ * Get the file path for BQL queries (main ledger file).
  * 
  * @param plugin - The plugin instance
  * @returns The absolute path to the query entry point
  */
 function resolveQueryFilePath(plugin: BeancountPlugin): string {
-	if (plugin.settings.useStructuredLayout) {
-		return getMainLedgerPath(plugin);
-	} else {
-		return plugin.settings.beancountFilePath;
-	}
+	return getMainLedgerPath(plugin);
 }
 
 // --- QUERY RUNNER ---
@@ -1247,18 +1238,6 @@ export async function updateBalance(
 		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
 		const account = accountParts.join(':'); // "Assets:Bank:Checking"
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[updateBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'updateBalance');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// Find the balance assertion using BQL query
 		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
 		const csv = await runQuery(plugin, query);
@@ -1274,9 +1253,28 @@ export async function updateBalance(
 			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[updateBalance] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+			return { success: false, error: `Invalid line number ${lineno} for balance (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
@@ -1336,18 +1334,6 @@ export async function deleteBalance(
 		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
 		const account = accountParts.join(':'); // "Assets:Bank:Checking"
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[deleteBalance] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'deleteBalance');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// Find the balance assertion using BQL query
 		const query = `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`;
 		const csv = await runQuery(plugin, query);
@@ -1363,9 +1349,28 @@ export async function deleteBalance(
 			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[deleteBalance] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteBalance');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for balance` };
+			return { success: false, error: `Invalid line number ${lineno} for balance (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
@@ -1429,18 +1434,6 @@ export async function updateNote(
 		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
 		const account = accountParts.join(':'); // "Assets:Bank:Checking"
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[updateNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'updateNote');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// Find the note using BQL query
 		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
 		const csv = await runQuery(plugin, query);
@@ -1456,9 +1449,28 @@ export async function updateNote(
 			return { success: false, error: `Note not found for ${account} on ${date}` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[updateNote] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+			return { success: false, error: `Invalid line number ${lineno} for note (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
@@ -1534,18 +1546,6 @@ export async function deleteNote(
 		const accountParts = parts.slice(2); // ["Assets", "Bank", "Checking"]
 		const account = accountParts.join(':'); // "Assets:Bank:Checking"
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[deleteNote] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'deleteNote');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// Find the note using BQL query
 		const query = `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`;
 		const csv = await runQuery(plugin, query);
@@ -1561,9 +1561,28 @@ export async function deleteNote(
 			return { success: false, error: `Note not found for ${account} on ${date}` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[deleteNote] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteNote');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for note` };
+			return { success: false, error: `Invalid line number ${lineno} for note (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
@@ -1987,12 +2006,10 @@ export async function createTransaction(
 		// Extract date from transaction data
 		const transactionDate = transactionData.date || new Date().toISOString().split('T')[0];
 		
-		// If structured layout, ensure year file exists
-		if (plugin.settings.useStructuredLayout) {
-			const year = new Date(transactionDate).getFullYear();
-			const folderName = plugin.settings.structuredFolderName || 'Finances';
-			await ensureYearFile(plugin, folderName, year);
-		}
+		// Ensure year file exists for structured layout
+		const year = new Date(transactionDate).getFullYear();
+		const folderName = plugin.settings.structuredFolderName || 'Finances';
+		await ensureYearFile(plugin, folderName, year);
 		
 		// Get target file path
 		const beancountFilePath = resolveFilePath(plugin, 'transaction', transactionDate);
@@ -2054,21 +2071,9 @@ export async function updateTransaction(
 			return { success: false, error: 'Beancount file path not configured' };
 		}
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[updateTransaction] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'updateTransaction');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// First, find the transaction using BQL query to get filename and lineno
-		// Use escaped quotes for shell command
-		const query = `SELECT filename, lineno FROM postings WHERE id = \\"${transactionId}\\" LIMIT 1`;
+		// runQuery() handles quote escaping automatically
+		const query = `SELECT filename, lineno FROM postings WHERE id = "${transactionId}" LIMIT 1`;
 		const csv = await runQuery(plugin, query);
 		
 		const parser = require('csv-parse/sync');
@@ -2082,9 +2087,28 @@ export async function updateTransaction(
 			return { success: false, error: `Transaction with ID ${transactionId} not found` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[updateTransaction] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'updateTransaction');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for transaction` };
+			return { success: false, error: `Invalid line number ${lineno} for transaction (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
@@ -2211,21 +2235,9 @@ export async function deleteTransaction(
 			return { success: false, error: 'Beancount file path not configured' };
 		}
 
-		// Convert WSL path if necessary
-		const normalizedPath = convertWslPathToWindows(beancountFilePath);
-		console.debug(`[deleteTransaction] Path conversion: ${beancountFilePath} -> ${normalizedPath}`);
-
-		// Create backup if enabled
-		const createBackup = plugin.settings.createBackups ?? true;
-		await createBackupFile(normalizedPath, createBackup, 'deleteTransaction');
-
-		// Read current file content
-		const currentContent = await readFile(normalizedPath, 'utf-8');
-		const lines = currentContent.split('\n');
-
 		// First, find the transaction using BQL query to get filename and lineno
-		// Use escaped quotes for shell command
-		const query = `SELECT filename, lineno FROM postings WHERE id = \\"${transactionId}\\" LIMIT 1`;
+		// runQuery() handles quote escaping automatically
+		const query = `SELECT filename, lineno FROM postings WHERE id = "${transactionId}" LIMIT 1`;
 		const csv = await runQuery(plugin, query);
 		
 		const parser = require('csv-parse/sync');
@@ -2239,16 +2251,51 @@ export async function deleteTransaction(
 			return { success: false, error: `Transaction with ID ${transactionId} not found` };
 		}
 
+		// Use the actual filename from the query result (important for structured layouts)
+		const actualFilePath = records[0]['filename'];
 		const lineno = parseInt(records[0]['lineno']);
+		
+		if (!actualFilePath) {
+			return { success: false, error: 'Filename not returned from query' };
+		}
+
+		// Convert WSL path if necessary
+		const normalizedPath = convertWslPathToWindows(actualFilePath);
+		Logger.log(`[deleteTransaction] Using file: ${actualFilePath} -> ${normalizedPath}, line: ${lineno}`);
+
+		// Create backup if enabled
+		const createBackup = plugin.settings.createBackups ?? true;
+		await createBackupFile(normalizedPath, createBackup, 'deleteTransaction');
+
+		// Read current file content
+		const currentContent = await readFile(normalizedPath, 'utf-8');
+		const lines = currentContent.split('\n');
+
 		if (isNaN(lineno) || lineno < 1 || lineno > lines.length) {
-			return { success: false, error: `Invalid line number ${records[0]['lineno']} for transaction` };
+			return { success: false, error: `Invalid line number ${lineno} for transaction (file has ${lines.length} lines)` };
 		}
 
 		// Convert to 0-based index
 		const lineIndex = lineno - 1;
 
 		// Find the start and end of the transaction block
+		// Note: BQL returns a posting line, not the transaction header, so we need to scan backward first
 		let startIndex = lineIndex;
+		
+		// Scan backward to find the transaction header (first non-indented, non-empty line)
+		for (let i = lineIndex - 1; i >= 0; i--) {
+			const line = lines[i];
+			if (line.trim() === '') {
+				// Empty line means we've gone past the transaction start
+				break;
+			} else if (!line.startsWith(' ') && !line.startsWith('\t')) {
+				// Found non-indented line - this is the transaction header
+				startIndex = i;
+				break;
+			}
+			// Otherwise it's an indented line (metadata, other posting), keep scanning backward
+		}
+		
 		let endIndex = lineIndex;
 
 		// Scan forward to find the end of the transaction (next non-indented line or blank line followed by non-indented)
