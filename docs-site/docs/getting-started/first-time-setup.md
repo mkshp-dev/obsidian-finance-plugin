@@ -127,14 +127,15 @@ The demo data is completely safe to explore and modify. You can delete it anytim
 
 **Best for:**
 - Existing Beancount users migrating to Obsidian
-- Users with an esafe to explore and modify. Delete it anytime and start fresh.
+- Users with an existing Beancount file → imports and organizes it into structured layout
+- Safe to explore and modify. Delete it anytime and start fresh.
 
 ### Option 2: Existing File 📁
 **Setup Steps:**
 1. **Select File**: Choose from existing `.beancount` files in your vault via dropdown
 2. **Or Enter Path Manually**: Provide absolute path to file outside vault
 3. **Configure Folder**: Set the folder name for structured layout (default: "Finances")
-4. **Migration**: Plugin automatically migrates single file to structured layout
+4. **Import**: Plugin automatically imports and organizes your file into structured layout
 
 **Path Examples:**
 - Inside vault: Select from dropdown
@@ -156,7 +157,7 @@ After setup completes, you'll see a success screen with:
 
 - Python command and version
 - Bean-query command
-- File mode (Structured Layout)
+- File organization (Structured Layout)
 - Data source (Demo or Existing)
 - Folder location
 
@@ -213,7 +214,7 @@ You can run the onboarding wizard anytime:
 **Use Cases:**
 - Switching from demo data to real data
 - Changing folder names or organization
-- Migrating from single-file to structured layout
+- Importing a different ledger file
 - Starting over with a clean slate
 
 ## ⚙️ Post-Setup Configuration
@@ -272,9 +273,9 @@ Once configured, you're ready to:
 - Inside vault: plugin handles path conversion automatically
 
 **Structured Layout:**
-- Can migrate later - no need to decide immediately
-- Easy to switch back to single file if needed
-- Recommended for ledgers > 500 transactions
+- Organized by directive type for better maintainability
+- Recommended for all ledgers, especially those with > 500 transactions
+- Easy to navigate and version control
 
 **Onboarding:**
 - Can be run multiple times safely

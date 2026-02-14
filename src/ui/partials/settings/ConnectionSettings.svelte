@@ -402,11 +402,7 @@
                 <div class="config-item">
                     <span class="config-label">Mode:</span>
                     <span class="config-value">
-                        {#if plugin.settings.useStructuredLayout}
-                            📂 Structured Layout ({plugin.settings.structuredFolderName}/)
-                        {:else}
-                            📄 Single File
-                        {/if}
+                        📂 Structured Layout ({plugin.settings.structuredFolderName}/)
                     </span>
                 </div>
                 
@@ -433,7 +429,6 @@
                 </p>
                 <ul class="help-list">
                     <li><strong>First-time setup:</strong> Run onboarding (Command Palette → "Run Setup/Onboarding")</li>
-                    <li><strong>Switch modes:</strong> Use the toggle in "File Organization" tab</li>
                 </ul>
             </div>
         {/if}

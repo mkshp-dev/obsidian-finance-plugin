@@ -3,7 +3,7 @@ import { App, Modal, Setting, Notice, TFile } from 'obsidian';
 import type BeancountPlugin from '../../main';
 import { DEMO_LEDGER_CONTENT } from '../../services/demo-ledger';
 import { Logger } from '../../utils/logger';
-import { createStructuredFolder, getMainLedgerPath, getDemoTransactionsForYear, migrateToStructuredLayout } from '../../utils/structuredLayout';
+import { createStructuredFolder, getMainLedgerPath, migrateToStructuredLayout } from '../../utils/structuredLayout';
 import { runQuery } from '../../utils/index';
 import { ConfirmModal } from './ConfirmModal';
 import { SystemDetector } from '../../utils/SystemDetector';
@@ -619,9 +619,10 @@ export class OnboardingModal extends Modal {
             // Move to verification step on success
             this.currentStep = 'verification';
             this.render();
-        } catch (error) {
+        } catch (error: any) {
             Logger.error('Onboarding: Setup failed', error);
-            new Notice('Setup failed. Check console for details.');
+            const errorMessage = error?.message || 'Setup failed. Check console for details.';
+            new Notice(`Setup failed: ${errorMessage}`, 8000);
             buttonEl.textContent = originalText;
             buttonEl.disabled = false;
         }
@@ -630,46 +631,79 @@ export class OnboardingModal extends Modal {
     private async handleDemoStructured() {
         Logger.log('Onboarding: Demo + Structured');
         
+        const tempFilePath = '_demo_temp.beancount';
+        let tempFileCreated = false;
+        let tempFile: TFile | null = null;
+        
         try {
-            // Create structured folder with demo data
-            await createStructuredFolder(this.plugin, this.structuredFolderName, true);
+            // Check if temp file exists using adapter and delete it
+            Logger.log(`Onboarding: Checking for existing temp file at ${tempFilePath}`);
+            const adapter = this.app.vault.adapter;
             
-            // Add demo transactions to current year
-            const currentYear = new Date().getFullYear();
-            const yearFilePath = `${this.structuredFolderName}/transactions/${currentYear}.beancount`;
-            const yearFile = this.app.vault.getAbstractFileByPath(yearFilePath);
-            
-            if (yearFile && yearFile instanceof TFile) {
-                const demoContent = getDemoTransactionsForYear(currentYear);
-                await this.app.vault.modify(yearFile, demoContent);
+            if (await adapter.exists(tempFilePath)) {
+                Logger.log(`Onboarding: Temp file exists, deleting...`);
+                try {
+                    await adapter.remove(tempFilePath);
+                    Logger.log(`Onboarding: Successfully deleted existing temp file`);
+                    // Wait for deletion to complete
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                } catch (deleteError: any) {
+                    Logger.log(`Onboarding: Failed to delete temp file: ${deleteError.message}`);
+                    throw new Error(`Could not delete existing temp file: ${deleteError.message}`);
+                }
             }
             
-            // Update settings
-            const mainLedgerPath = getMainLedgerPath(this.plugin);
-            this.plugin.settings.useStructuredLayout = true;
-            this.plugin.settings.structuredFolderName = this.structuredFolderName;
-            this.plugin.settings.structuredFolderPath = mainLedgerPath;
-            this.plugin.settings.beancountFilePath = mainLedgerPath;
-            this.plugin.settings.operatingCurrency = this.operatingCurrency; // Save operating currency
+            // Create temp file using adapter (since we deleted with adapter, vault cache is stale)
+            Logger.log(`Onboarding: Creating temp file at ${tempFilePath}`);
+            await adapter.write(tempFilePath, DEMO_LEDGER_CONTENT);
+            tempFileCreated = true;
+            Logger.log(`Onboarding: Wrote temporary demo file at ${tempFilePath}`);
+            
+            // Wait for Obsidian to register the file in its vault cache
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Get the TFile from vault now that file exists
+            tempFile = this.app.vault.getAbstractFileByPath(tempFilePath) as TFile;
+            if (!tempFile) {
+                Logger.log(`Onboarding: Error - vault did not register temp file after write`);
+                throw new Error('Failed to register temporary demo file in vault');
+            }
+            
+            // @ts-ignore - accessing internal API to get absolute path
+            const absolutePath = adapter.getFullPath(tempFile.path);
+            Logger.log(`Onboarding: Temp file absolute path: ${absolutePath}`);
+            
+            // Temporarily set settings to point to demo file for migration source
+            this.plugin.settings.beancountFilePath = absolutePath;
             await this.plugin.saveSettings();
             
-            Logger.log('Onboarding: Created demo structured layout');
+            Logger.log(`Onboarding: Starting migration from demo file to structured layout`);
+            
+            // Perform migration using existing logic (same as existing ledger flow)
+            const result = await migrateToStructuredLayout(this.plugin, this.structuredFolderName);
+            
+            if (!result.success) {
+                throw new Error(`Migration failed: ${result.error}`);
+            }
+            
+            Logger.log('Onboarding: Successfully migrated demo data to structured layout');
+            
         } catch (error: any) {
-            // If folder/files already exist, configure settings to use them
-            if (error.message && error.message.includes('already exists')) {
-                Logger.log('Onboarding: Structured folder already exists, configuring to use it');
-                const mainLedgerPath = getMainLedgerPath(this.plugin);
-                this.plugin.settings.useStructuredLayout = true;
-                this.plugin.settings.structuredFolderName = this.structuredFolderName;
-                this.plugin.settings.structuredFolderPath = mainLedgerPath;
-                this.plugin.settings.beancountFilePath = mainLedgerPath;
-                this.plugin.settings.operatingCurrency = this.operatingCurrency; // Save operating currency
-                await this.plugin.saveSettings();
-                
-                Logger.log('Onboarding: Configured to use existing structured layout');
-            } else {
-                // Re-throw other errors
-                throw error;
+            Logger.error('Onboarding: Demo structured setup failed', error);
+            throw error;
+        } finally {
+            // Always clean up temporary file
+            if (tempFileCreated) {
+                try {
+                    const tempFile = this.app.vault.getAbstractFileByPath(tempFilePath);
+                    if (tempFile) {
+                        await this.app.vault.delete(tempFile);
+                        Logger.log('Onboarding: Cleaned up temporary demo file');
+                    }
+                } catch (cleanupError) {
+                    Logger.warn('Onboarding: Failed to clean up temporary demo file', cleanupError);
+                    // Don't throw - cleanup failure shouldn't block onboarding
+                }
             }
         }
     }
@@ -694,9 +728,8 @@ export class OnboardingModal extends Modal {
             }
         }
         
-        // Temporarily set the file path for migration (MUST set useStructuredLayout=false so queries read from source)
+        // Temporarily set the file path for migration source
         this.plugin.settings.beancountFilePath = absolutePath;
-        this.plugin.settings.useStructuredLayout = false;
         await this.plugin.saveSettings();
         
         Logger.log(`[Onboarding] Starting migration with file: ${absolutePath}`);

@@ -30,7 +30,7 @@
         </div>
         <div class="header-right">
              <button class="btn-icon delete-btn" on:click={() => dispatch('delete', entry)} title="Delete">
-                🗑️
+                ❌
             </button>
             <button class="btn-edit" on:click={() => dispatch('edit', entry)}>
                 ✏️ Edit
