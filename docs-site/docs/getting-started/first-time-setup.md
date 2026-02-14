@@ -157,7 +157,7 @@ After setup completes, you'll see a success screen with:
 
 - Python command and version
 - Bean-query command
-- File mode (Structured Layout)
+- File organization (Structured Layout)
 - Data source (Demo or Existing)
 - Folder location
 

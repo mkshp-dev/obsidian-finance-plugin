@@ -211,32 +211,6 @@ function resolveFilePath(plugin, operationType, date?) {
 
 ---
 
-## 🎯 FILE PATH USAGE COMPARISON
-
-### Before Fix (Feb 10, 2026)
-| Function | File Source | Status |
-|----------|-------------|--------|
-| createTransaction | `resolveFilePath()` | ✅ |
-| updateTransaction | ❌ `settings.beancountFilePath` | ❌ WRONG |
-| deleteTransaction | ❌ `settings.beancountFilePath` | ❌ WRONG |
-| updateBalance | ❌ `settings.beancountFilePath` | ❌ WRONG |
-| deleteBalance | ❌ `settings.beancountFilePath` | ❌ WRONG |
-| updateNote | ❌ `settings.beancountFilePath` | ❌ WRONG |
-| deleteNote | ❌ `settings.beancountFilePath` | ❌ WRONG |
-
-### After Fix (Feb 10, 2026)
-| Function | File Source | Status |
-|----------|-------------|--------|
-| createTransaction | `resolveFilePath()` | ✅ CORRECT |
-| updateTransaction | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-| deleteTransaction | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-| updateBalance | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-| deleteBalance | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-| updateNote | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-| deleteNote | ✅ `records[0]['filename']` from BQL | ✅ CORRECT |
-
----
-
 ## 🛡️ SAFETY FEATURES (ALL OPERATIONS)
 
 ✅ **Backup System:**
@@ -282,7 +256,7 @@ function resolveFilePath(plugin, operationType, date?) {
 
 ### 4. **Add integration tests**
 **Priority:** P2 - Quality  
-**Coverage:** Test all 13 CRUD operations against both single-file and structured layouts  
+**Coverage:** Test all 13 CRUD operations with structured layout  
 **Scenarios:** Create → Update → Delete chains  
 **Effort:** High
 
