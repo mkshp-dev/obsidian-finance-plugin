@@ -460,7 +460,7 @@ export async function migrateToStructuredLayout(
 
         // Step 2: Extract all unique years from transactions
         Logger.log('[Migration] Extracting transaction years...');
-        const years = await extractTransactionYears(plugin);
+        const years = await extractTransactionYears(plugin, sourceFile);
         Logger.log(`[Migration] Found years: ${years.join(', ')}`);
 
         // Step 3: Migrate each directive type
@@ -478,7 +478,7 @@ export async function migrateToStructuredLayout(
         for (const migration of migrations) {
             Logger.log(`[Migration] Migrating ${migration.type}...`);
             try {
-                const content = await runQuery(plugin, migration.query);
+                const content = await runQuery(plugin, migration.query, sourceFile);
                 const filePath = path.join(targetFolderName, migration.file);
                 
                 if (content && content.trim()) {
@@ -500,7 +500,7 @@ export async function migrateToStructuredLayout(
         for (const year of years) {
             try {
                 const query = `PRINT FROM type='transaction' AND year=${year}`;
-                const content = await runQuery(plugin, query);
+                const content = await runQuery(plugin, query, sourceFile);
                 const yearFilePath = path.join(targetFolderName, 'transactions', `${year}.beancount`);
                 
                 if (content && content.trim()) {
@@ -547,13 +547,14 @@ export async function migrateToStructuredLayout(
  * Extract all unique years from transactions in the current ledger.
  * 
  * @param plugin - The Beancount plugin instance
+ * @param sourceFile - Path to the source Beancount file to query
  * @returns Array of years as numbers
  */
-async function extractTransactionYears(plugin: BeancountPlugin): Promise<number[]> {
+async function extractTransactionYears(plugin: BeancountPlugin, sourceFile: string): Promise<number[]> {
     try {
         // Query to get all transaction years
         const query = "SELECT DISTINCT year FROM type='transaction' ORDER BY year";
-        const csvOutput = await runQuery(plugin, query);
+        const csvOutput = await runQuery(plugin, query, sourceFile);
         
         if (!csvOutput || !csvOutput.trim()) {
             Logger.log('[Migration] No transactions found');
