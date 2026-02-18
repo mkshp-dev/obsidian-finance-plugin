@@ -1,0 +1,109 @@
+name: 🔒 Security Issue
+description: Report a security vulnerability (private disclosure)
+title: "[Security]: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Security Disclosure Policy
+        
+        **IMPORTANT:** If you've discovered a **critical security vulnerability** that could compromise user data or systems, please DO NOT create a public issue.
+        
+        Instead, please report it privately by:
+        1. Using GitHub's [Security Advisory](https://github.com/mkshp-dev/obsidian-finance-plugin/security/advisories/new) feature (preferred)
+        2. Or emailing the maintainers directly (check README for contact info)
+        
+        This template is for **non-critical security concerns** that don't pose immediate risk.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity Level
+      description: How severe do you consider this issue?
+      options:
+        - Low - Potential issue requiring investigation
+        - Medium - Security improvement suggestion
+        - High - Should be addressed soon
+        - Critical - Immediate risk (DO NOT use public issue - see note above)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue Description
+      description: Describe the security concern (avoid sharing exploit details publicly)
+      placeholder: |
+        General description of the concern...
+        Potential impact...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Security Category
+      description: What type of security concern is this?
+      options:
+        - Data exposure/privacy
+        - File system access
+        - Command injection
+        - Dependency vulnerability
+        - Insecure configuration
+        - Authentication/authorization
+        - Data validation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What could happen if this issue is exploited?
+      placeholder: |
+        An attacker could potentially...
+        User data could be...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce (General)
+      description: High-level steps without sharing exploit code
+      placeholder: |
+        1. Configure plugin with...
+        2. Access...
+        3. Observe...
+
+  - type: textarea
+    id: affected-versions
+    attributes:
+      label: Affected Versions
+      description: Which versions are affected?
+      placeholder: |
+        Tested on: v1.2.3
+        Likely affects: v1.0.0 onwards
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: If you have suggestions for fixing this issue
+      placeholder: |
+        Consider implementing...
+        Add validation for...
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification
+      description: Please confirm
+      options:
+        - label: This is NOT a critical vulnerability requiring immediate private disclosure
+          required: true
+        - label: I have not publicly shared exploit details elsewhere
+          required: true
+        - label: I am willing to work with maintainers on a fix

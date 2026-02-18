@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/mkshp-dev/obsidian-finance-plugin/blob/master/README.md
+    about: Check the comprehensive README for setup instructions and troubleshooting
+  - name: 💬 Discussions
+    url: https://github.com/mkshp-dev/obsidian-finance-plugin/discussions
+    about: Ask questions and discuss ideas with the community

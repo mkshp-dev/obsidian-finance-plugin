@@ -1,0 +1,139 @@
+name: 🔧 Setup/Configuration Help
+description: Get help with installing or configuring the plugin
+title: "[Setup]: "
+labels: ["question", "setup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Need help getting started? Let's troubleshoot your setup together!
+        
+        **Before submitting:** Please check the [README](https://github.com/mkshp-dev/obsidian-finance-plugin/blob/master/README.md) for setup instructions and common issues.
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's Not Working?
+      description: Describe the setup issue you're experiencing
+      placeholder: I'm trying to... but...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Setup Stage
+      description: Where are you in the setup process?
+      options:
+        - Installing the plugin
+        - Configuring Beancount file path
+        - Setting up Python environment
+        - Running connection tests
+        - Creating first BQL query
+        - Setting up dashboard
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which OS are you using?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Windows with WSL
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Information
+      description: |
+        Please provide the following information (as much as you can):
+        1. Do you have Python installed? Which version? (run `python --version` or `python3 --version`)
+        2. Do you have Beancount installed? Which version? (run `bean-check --version`)
+        3. Where is your Beancount file located? (e.g., C:\Users\...\finances.beancount)
+        4. If using WSL: Which distribution? Where is the file in WSL?
+      placeholder: |
+        1. Python 3.10.5 installed via python.org
+        2. Not installed yet / Installed via pip / Version 2.3.5
+        3. C:\Users\MyName\Documents\finances.beancount
+        4. N/A or Ubuntu 22.04, file at /home/user/finances.beancount
+    validations:
+      required: true
+
+  - type: textarea
+    id: connection-tests
+    attributes:
+      label: Connection Test Results
+      description: |
+        Go to Settings → Obsidian Finance Plugin → Connection tab and click "Test All Commands".
+        Paste the results here, or describe what happened.
+      placeholder: |
+        Python Detection: ✓ Success or ✗ Failed
+        Beancount File Access: ✓ Success or ✗ Failed
+        bean-check: ✓ Success or ✗ Failed
+        bean-query: ✓ Success or ✗ Failed
+        bean-price: ✓ Success or ✗ Failed
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Current Plugin Settings
+      description: |
+        What values do you have configured in plugin settings? (Connection tab)
+        **Note:** Don't share sensitive file contents, just paths and Python command.
+      placeholder: |
+        Beancount File Path: C:\Users\...\finances.beancount
+        Beancount Command: python
+        Include Path: (empty)
+        BQL Template File: (empty)
+        File Encoding: utf-8
+
+  - type: textarea
+    id: error-messages
+    attributes:
+      label: Error Messages
+      description: |
+        If you see any error messages (in settings, console, or notifications), paste them here.
+        To see console errors: Press Ctrl+Shift+I (Windows) or Cmd+Option+I (Mac)
+      render: shell
+      placeholder: Error messages here...
+
+  - type: textarea
+    id: steps-taken
+    attributes:
+      label: What Have You Tried?
+      description: What troubleshooting steps have you already taken?
+      placeholder: |
+        - Checked README installation section
+        - Verified Python is in PATH
+        - Tried different file paths
+        - etc.
+
+  - type: checkboxes
+    id: basic-checks
+    attributes:
+      label: Basic Checks
+      description: Please confirm you've verified these
+      options:
+        - label: The plugin is enabled in Obsidian (Settings → Community Plugins)
+        - label: I have a valid Beancount file (even if it's just a test file)
+        - label: I've restarted Obsidian after installing the plugin
+        - label: I've checked the console for error messages (Ctrl+Shift+I or Cmd+Option+I)
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Anything else that might be relevant?
+      placeholder: |
+        - First time using Beancount
+        - Corporate firewall/proxy
+        - Using portable Obsidian
+        - etc.

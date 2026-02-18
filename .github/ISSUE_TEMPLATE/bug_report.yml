@@ -1,0 +1,176 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in the Obsidian Finance Plugin
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below to help us diagnose and fix the issue.
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I try to..., the plugin...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      description: Which part of the plugin is affected?
+      multiple: true
+      options:
+        - Connection/Setup (Beancount file detection, Python environment)
+        - BQL Queries (Code blocks, inline queries, shorthand)
+        - Dashboard (Overview, Balance Sheet, Transactions, Commodities, Journal)
+        - File Operations (Creating/updating/deleting transactions)
+        - Settings/Configuration
+        - UI/Display
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Enter '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: I expected the plugin to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened (include error messages if any)
+      placeholder: Instead, the plugin...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console Logs
+      description: |
+        If applicable, open Developer Tools (Ctrl+Shift+I / Cmd+Option+I) and paste any error messages from the console.
+        **Note:** Enable debug mode in plugin settings for detailed logs.
+      render: shell
+      placeholder: |
+        Console errors here...
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin Version
+      description: Which version of the plugin are you using? (Check in Settings → Community Plugins)
+      placeholder: e.g., 1.2.3
+    validations:
+      required: true
+
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian Version
+      description: Which version of Obsidian are you using? (Check in Settings → About)
+      placeholder: e.g., 1.5.3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Windows with WSL
+        - Other (specify in additional context)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: |
+        Please provide details about your Beancount setup:
+        - Python version (run `python --version` or `python3 --version`)
+        - Beancount version (run `bean-check --version` or `python -m beancount.scripts.check --version`)
+        - Are you using WSL? If yes, which distribution?
+        - Where is your Beancount file located? (e.g., local drive, network drive, WSL filesystem)
+      placeholder: |
+        Python: 3.10.5
+        Beancount: 2.3.5
+        WSL: No
+        File location: C:\Users\...\finances.beancount
+    validations:
+      required: false
+
+  - type: textarea
+    id: bql-query
+    attributes:
+      label: BQL Query (if applicable)
+      description: If the issue involves a BQL query, paste it here
+      render: sql
+      placeholder: |
+        SELECT account, sum(position) as balance
+        FROM BALANCES;
+
+  - type: checkboxes
+    id: connection-tests
+    attributes:
+      label: Connection Test Results (if applicable)
+      description: If the issue involves connection/setup, what did the "Test All Commands" button show? (Settings → Connection)
+      options:
+        - label: Python Detection - Passed
+        - label: Beancount File Access - Passed
+        - label: bean-check - Passed
+        - label: bean-query - Passed
+        - label: bean-price - Passed
+        - label: All tests passed, but issue still occurs
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other information that might help us understand the issue
+      placeholder: |
+        - Screenshots
+        - Special characters in file names/paths
+        - Network setup
+        - Other plugins that might conflict
+        - Any workarounds you've found
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this hasn't been reported before
+          required: true
+        - label: I have checked the README and documentation for troubleshooting steps
+          required: true
+        - label: I have enabled debug mode and checked console logs (if applicable)
+          required: false
