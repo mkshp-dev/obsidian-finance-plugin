@@ -37,9 +37,17 @@
         useWSL: false
     };
 
+    // Command editing state
+    let isEditingCommand = false;
+    let editedBeanQueryCommand = '';
+    let commandVerificationStatus: 'idle' | 'success' | 'error' = 'idle';
+    let commandVerificationMessage = '';
+    let isVerifyingCommand = false;
+
     onMount(async () => {
         await detectSystemAndFiles();
         loadCurrentSettings();
+        await detectCurrentCommands();
     });
 
 
@@ -262,6 +270,104 @@
         await runAllTests();
     }
 
+    // Detect current commands from settings
+    async function detectCurrentCommands() {
+        const systemDetector = SystemDetector.getInstance();
+        
+        // If we have a beancount command set, get its version
+        if (plugin.settings.beancountCommand) {
+            try {
+                const versionResult = await systemDetector.testCommand(`${plugin.settings.beancountCommand} --version`);
+                if (versionResult.success && versionResult.output) {
+                    const versionMatch = versionResult.output.match(/(\d+\.\d+\.\d+)/);
+                    optimalCommands.beanQuery = plugin.settings.beancountCommand;
+                    optimalCommands.beanQueryVersion = versionMatch ? versionMatch[1] : 'unknown';
+                }
+            } catch (error) {
+                // Silently handle - command might not be set yet
+            }
+        }
+    }
+
+    // Command editing functions
+    function enableCommandEdit() {
+        isEditingCommand = true;
+        editedBeanQueryCommand = plugin.settings.beancountCommand || '';
+    }
+
+    function cancelCommandEdit() {
+        isEditingCommand = false;
+        editedBeanQueryCommand = '';
+    }
+
+    async function saveCommandEdit() {
+        if (!editedBeanQueryCommand.trim()) {
+            new Notice('❌ Command cannot be empty');
+            return;
+        }
+
+        plugin.settings.beancountCommand = editedBeanQueryCommand.trim();
+        await plugin.saveSettings();
+        
+        isEditingCommand = false;
+        commandVerificationStatus = 'idle';
+        commandVerificationMessage = '';
+        
+        // Re-detect command info
+        await detectCurrentCommands();
+        
+        new Notice('✅ Command saved successfully');
+        
+        dispatch('settingsChanged', {
+            beancountCommand: editedBeanQueryCommand.trim()
+        });
+    }
+
+    async function verifyCommand() {
+        const commandToVerify = isEditingCommand ? editedBeanQueryCommand : plugin.settings.beancountCommand;
+        
+        if (!commandToVerify || !commandToVerify.trim()) {
+            commandVerificationStatus = 'error';
+            commandVerificationMessage = 'No command to verify';
+            return;
+        }
+
+        if (!plugin.settings.beancountFilePath) {
+            commandVerificationStatus = 'error';
+            commandVerificationMessage = 'No beancount file configured. Please run onboarding first.';
+            new Notice('❌ No beancount file configured');
+            return;
+        }
+
+        isVerifyingCommand = true;
+        commandVerificationStatus = 'idle';
+        commandVerificationMessage = 'Verifying...';
+
+        try {
+            const systemDetector = SystemDetector.getInstance();
+            const testQuery = 'SELECT TRUE LIMIT 1';
+            const command = `${commandToVerify.trim()} -f csv "${plugin.settings.beancountFilePath}" "${testQuery}"`;
+            
+            const result = await systemDetector.testCommand(command, 15000);
+            
+            if (result.success) {
+                commandVerificationStatus = 'success';
+                commandVerificationMessage = '✅ Command verified successfully';
+                new Notice('✅ Command verified successfully');
+            } else {
+                commandVerificationStatus = 'error';
+                commandVerificationMessage = `❌ Verification failed: ${result.error || 'Unknown error'}`;
+                new Notice('❌ Command verification failed');
+            }
+        } catch (error) {
+            commandVerificationStatus = 'error';
+            commandVerificationMessage = `❌ Error: ${error.message}`;
+            new Notice(`❌ Verification error: ${error.message}`);
+        } finally {
+            isVerifyingCommand = false;
+        }
+    }
+
     $: {
         // Auto-update when WSL or platform changes
         if (platform && typeof useWSL !== 'undefined') {
@@ -394,264 +500,103 @@
         </div>
     {/if}
 
-    <div class="file-section">
-        <h4>📁 Current Configuration</h4>
+    <div class="commands-section">
+        <h4>⚙️ Commands</h4>
         
-        {#if plugin.settings.beancountFilePath}
-            <div class="config-display">
-                <div class="config-item">
-                    <span class="config-label">Mode:</span>
-                    <span class="config-value">
-                        📂 Structured Layout ({plugin.settings.structuredFolderName}/)
-                    </span>
+        <div class="command-config">
+            <div class="command-item-config">
+                <div class="command-info-header">
+                    <div class="command-title">
+                        <span class="command-icon">🔹</span>
+                        <span class="command-name">Bean Query Command</span>
+                    </div>
+                    {#if optimalCommands.beanQueryVersion}
+                        <span class="command-version-badge">v{optimalCommands.beanQueryVersion}</span>
+                    {/if}
                 </div>
                 
-                <div class="config-item">
-                    <span class="config-label">Main Ledger:</span>
-                    <code class="config-path">{plugin.settings.beancountFilePath}</code>
-                </div>
-                
-                <div class="config-note">
-                    <span class="note-icon">ℹ️</span>
-                    <span class="note-text">
-                        {#if useWSL && platform === 'win32'}
-                            Paths are automatically converted to WSL format when running commands
+                <div class="command-input-group">
+                    {#if isEditingCommand}
+                        <input 
+                            type="text" 
+                            class="command-input editing"
+                            bind:value={editedBeanQueryCommand}
+                            placeholder="bean-query or python3 -m beancount.query"
+                        />
+                    {:else}
+                        <input 
+                            type="text" 
+                            class="command-input"
+                            value={plugin.settings.beancountCommand}
+                            disabled
+                            placeholder="bean-query or python3 -m beancount.query"
+                        />
+                    {/if}
+                    
+                    <div class="command-actions">
+                        {#if !isEditingCommand}
+                            <button 
+                                class="action-btn edit-btn" 
+                                on:click={enableCommandEdit}
+                                title="Edit command"
+                            >
+                                ✏️ Edit
+                            </button>
+                            <button 
+                                class="action-btn verify-btn" 
+                                on:click={verifyCommand}
+                                disabled={isVerifyingCommand || !plugin.settings.beancountCommand}
+                                title="Verify command works"
+                            >
+                                {#if isVerifyingCommand}
+                                    🔄 Verifying...
+                                {:else}
+                                    ✓ Verify
+                                {/if}
+                            </button>
                         {:else}
-                            Paths are used as-is when running commands
-                        {/if}
-                    </span>
-                </div>
-            </div>
-        {:else}
-            <div class="no-config">
-                <p class="help-text">
-                    No file configuration found. Your file setup is managed through:
-                </p>
-                <ul class="help-list">
-                    <li><strong>First-time setup:</strong> Run onboarding (Command Palette → "Run Setup/Onboarding")</li>
-                </ul>
-            </div>
-        {/if}
-    </div>
-
-    <div class="auto-detection-section">
-        <div class="section-header">
-            <h4>🔍 Automatic Command Detection</h4>
-            <button 
-                class="detect-btn" 
-                class:loading={isDetecting}
-                on:click={runAutoDetection}
-                disabled={isDetecting}
-            >
-                {#if isDetecting}
-                    ⏳ Detecting...
-                {:else}
-                    🔄 Auto-Detect Commands
-                {/if}
-            </button>
-        </div>
-        
-        <div class="detection-status">
-            <span class="status-text">{detectionStatus}</span>
-        </div>
-
-        {#if autoDetectionResults}
-            <div class="detection-results">
-                <h5>🎯 Detected Commands:</h5>
-                <div class="commands-grid">
-                    <div class="command-item python-item" class:success={optimalCommands.python}>
-                        <div class="command-header">
-                            <span class="command-label">Python:</span>
-                            <span class="status-icon">{optimalCommands.python ? '✅' : '❌'}</span>
-                        </div>
-                        <code class="command-code">{optimalCommands.python || 'Not found'}</code>
-                        {#if optimalCommands.pythonVersion}
-                            <div class="python-details">
-                                <div class="python-version">
-                                    <span class="detail-label">Version:</span>
-                                    <span class="detail-value">{optimalCommands.pythonVersion}</span>
-                                </div>
-                            </div>
-                        {/if}
-                    </div>
-                    
-                    <div class="command-item bean-query-item" class:success={optimalCommands.beanQuery}>
-                        <div class="command-header">
-                            <span class="command-label">Bean Query:</span>
-                            <span class="status-icon">{optimalCommands.beanQuery ? '✅' : '❌'}</span>
-                        </div>
-                        <code class="command-code">{optimalCommands.beanQuery || 'Not found'}</code>
-                        {#if optimalCommands.beanQueryVersion}
-                            <div class="bean-query-details">
-                                <div class="bean-query-version">
-                                    <span class="detail-label">Version:</span>
-                                    <span class="detail-value">{optimalCommands.beanQueryVersion}</span>
-                                </div>
-                            </div>
-                        {/if}
-                    </div>
-                    
-                    <div class="command-item bean-price-item" class:success={optimalCommands.beanPrice}>
-                        <div class="command-header">
-                            <span class="command-label">Bean Price:</span>
-                            <span class="status-icon">{optimalCommands.beanPrice ? '✅' : '❌'}</span>
-                        </div>
-                        <code class="command-code">{optimalCommands.beanPrice || 'Not found'}</code>
-                        {#if optimalCommands.beanPriceVersion}
-                            <div class="bean-price-details">
-                                <div class="bean-price-version">
-                                    <span class="detail-label">Version:</span>
-                                    <span class="detail-value">{optimalCommands.beanPriceVersion}</span>
-                                </div>
-                            </div>
+                            <button 
+                                class="action-btn save-btn" 
+                                on:click={saveCommandEdit}
+                                disabled={!editedBeanQueryCommand.trim()}
+                            >
+                                💾 Save
+                            </button>
+                            <button 
+                                class="action-btn cancel-btn" 
+                                on:click={cancelCommandEdit}
+                            >
+                                ✖ Cancel
+                            </button>
                         {/if}
                     </div>
                 </div>
-
-                <div class="environment-info">
-                    <div class="env-item">
-                        <span class="env-label">Environment:</span>
-                        <span class="env-value">
-                            {#if optimalCommands.useWSL}
-                                🐧 WSL (Windows Subsystem for Linux)
-                            {:else if platform === 'win32'}
-                                🪟 Windows Native
-                            {:else}
-                                🖥️ System Native
-                            {/if}
-                        </span>
-                    </div>
-                    
-                    {#if plugin.settings.beancountFilePath}
-                        <div class="env-item">
-                            <span class="env-label">File Path:</span>
-                            <code class="env-code">{plugin.settings.beancountFilePath}</code>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        {:else if !isDetecting}
-            <div class="no-detection">
-                <p class="help-text">
-                    Click "Auto-Detect Commands" to automatically find the best beancount setup for your system.
-                    This will test various command combinations and select the optimal configuration.
-                </p>
-            </div>
-        {/if}
-    </div>
-
-    {#if plugin.settings.beancountFilePath && optimalCommands.beanCheck && optimalCommands.beanQuery && optimalCommands.python}
-        <div class="validation-section">
-            <h4>✅ Connection Validation</h4>
-            
-            <div class="validation-controls">
-                <button 
-                    on:click={runAllTests} 
-                    disabled={isValidating}
-                    class="validate-btn"
-                    class:validating={isValidating}
-                >
-                    {isValidating ? '🔄 Testing All Commands...' : '🧪 Test All Commands'}
-                </button>
                 
-                {#if validationResult.message}
-                    <div class="validation-result" class:valid={validationResult.isValid} class:invalid={!validationResult.isValid}>
-                        {validationResult.message}
+                <!-- Verification Status -->
+                {#if commandVerificationMessage}
+                    <div class="verification-status" class:success={commandVerificationStatus === 'success'} class:error={commandVerificationStatus === 'error'}>
+                        <span class="status-icon">
+                            {#if commandVerificationStatus === 'success'}
+                                ✅
+                            {:else if commandVerificationStatus === 'error'}
+                                ❌
+                            {:else}
+                                ℹ️
+                            {/if}
+                        </span>
+                        <span class="status-message">{commandVerificationMessage}</span>
                     </div>
                 {/if}
-            </div>
-
-            <div class="command-tests">
-                <!-- Bean Query Test -->
-                <div class="command-test-item">
-                    <div class="test-header">
-                        <h5>1. Bean Query</h5>
-                        <button 
-                            on:click={testBeanQuery} 
-                            disabled={commandTests.beanQuery.isRunning || !optimalCommands.beanQuery}
-                            class="test-individual-btn"
-                            class:running={commandTests.beanQuery.isRunning}
-                        >
-                            {#if commandTests.beanQuery.isRunning}
-                                🔄 Testing...
-                            {:else}
-                                🧪 Test
-                            {/if}
-                        </button>
-                        <span class="test-status">
-                            {#if commandTests.beanQuery.isRunning}
-                                🔄
-                            {:else if commandTests.beanQuery.isValid === true}
-                                ✅
-                            {:else if commandTests.beanQuery.isValid === false}
-                                ❌
-                            {:else}
-                                ⭕
-                            {/if}
-                        </span>
-                    </div>
-                    <div class="test-command">
-                        <strong>Command:</strong> 
-                        <code>{commandTests.beanQuery.command || 'Not run yet'}</code>
-                    </div>
-                    {#if commandTests.beanQuery.error}
-                        <div class="test-error">
-                            <strong>Error:</strong> {commandTests.beanQuery.error}
-                        </div>
-                    {/if}
-                    {#if commandTests.beanQuery.output}
-                        <div class="test-output">
-                            <strong>Output:</strong> <pre>{commandTests.beanQuery.output.slice(0, 200)}{commandTests.beanQuery.output.length > 200 ? '...' : ''}</pre>
-                        </div>
-                    {/if}
-                </div>
-
-                <!-- Bean Query CSV Test -->
-                <div class="command-test-item">
-                    <div class="test-header">
-                        <h5>2. Bean Query (CSV Output)</h5>
-                        <button 
-                            on:click={testBeanQueryCsv} 
-                            disabled={commandTests.beanQueryCsv.isRunning || !optimalCommands.beanQuery}
-                            class="test-individual-btn"
-                            class:running={commandTests.beanQueryCsv.isRunning}
-                        >
-                            {#if commandTests.beanQueryCsv.isRunning}
-                                🔄 Testing...
-                            {:else}
-                                🧪 Test
-                            {/if}
-                        </button>
-                        <span class="test-status">
-                            {#if commandTests.beanQueryCsv.isRunning}
-                                🔄
-                            {:else if commandTests.beanQueryCsv.isValid === true}
-                                ✅
-                            {:else if commandTests.beanQueryCsv.isValid === false}
-                                ❌
-                            {:else}
-                                ⭕
-                            {/if}
-                        </span>
-                    </div>
-                    <div class="test-command">
-                        <strong>Command:</strong> 
-                        <code>{commandTests.beanQueryCsv.command || 'Not run yet'}</code>
-                    </div>
-                    {#if commandTests.beanQueryCsv.error}
-                        <div class="test-error">
-                            <strong>Error:</strong> {commandTests.beanQueryCsv.error}
-                        </div>
-                    {/if}
-                    {#if commandTests.beanQueryCsv.output}
-                        <div class="test-output">
-                            <strong>Output:</strong> <pre>{commandTests.beanQueryCsv.output.slice(0, 200)}{commandTests.beanQueryCsv.output.length > 200 ? '...' : ''}</pre>
-                        </div>
-                    {/if}
+                
+                <div class="command-help">
+                    <p class="help-text">
+                        This command is used to execute BQL queries against your Beancount file. 
+                        Common values: <code>bean-query</code>, <code>wsl bean-query</code>, or <code>python3 -m beancount.query</code>
+                    </p>
                 </div>
             </div>
         </div>
-    {/if}
+    </div>
 </div>
 
 <style>
@@ -662,7 +607,7 @@
         border: 1px solid var(--background-modifier-border);
     }
 
-    .system-info, .wsl-section, .auto-detection-section, .file-section, .validation-section {
+    .system-info, .wsl-section, .commands-section {
         margin-bottom: 24px;
         padding: 16px;
         background: var(--background-secondary);
@@ -899,436 +844,202 @@
         flex: 1;
     }
 
-    /* Auto-Detection Section */
-    .section-header {
+    .status-icon {
+        font-size: 14px;
+    }
+
+    /* Commands Section Styles */
+    .commands-section h4 {
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .command-config {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .command-item-config {
+        background: var(--background-primary-alt);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        padding: 16px;
+    }
+
+    .command-info-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 12px;
     }
 
-    .detect-btn {
-        padding: 8px 16px;
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
-        transition: background-color 0.2s;
+    .command-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    .detect-btn:hover:not(:disabled) {
-        background: var(--interactive-accent-hover);
+    .command-icon {
+        font-size: 16px;
     }
 
-    .detect-btn:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-    }
-
-    .detect-btn.loading {
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-
-    .detection-status {
-        padding: 8px 12px;
-        background: var(--background-primary-alt);
-        border-radius: 4px;
-        border-left: 3px solid var(--text-accent);
-        margin-bottom: 16px;
-    }
-
-    .status-text {
-        font-size: 13px;
-        color: var(--text-muted);
-        font-style: italic;
-    }
-
-    .detection-results {
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        padding: 16px;
-        background: var(--background-primary-alt);
-    }
-
-    .detection-results h5 {
-        margin: 0 0 12px 0;
-        color: var(--text-normal);
+    .command-name {
         font-size: 13px;
         font-weight: 600;
-    }
-
-    .commands-grid {
-        display: grid;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-
-    .command-item {
-        display: grid;
-        grid-template-columns: 100px 1fr auto;
-        gap: 8px;
-        align-items: center;
-        padding: 8px;
-        background: var(--background-primary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .command-item.success {
-        border-color: var(--text-success);
-        background: var(--background-modifier-success);
-    }
-
-    .command-label {
-        font-size: 12px;
-        font-weight: 500;
         color: var(--text-normal);
     }
 
-    .command-code {
-        font-family: var(--font-monospace);
-        font-size: 11px;
-        color: var(--text-accent);
-        background: var(--background-secondary);
-        padding: 4px 6px;
-        border-radius: 3px;
-        word-break: break-all;
-    }
-
-    .status-icon {
-        font-size: 14px;
-    }
-
-    /* Enhanced Python Display */
-    .command-item.python-item {
-        grid-template-columns: 1fr;
-        gap: 8px;
-        padding: 12px;
-    }
-
-    .command-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
-    }
-
-    .python-details {
-        margin-top: 10px;
-        padding: 8px;
-        background: var(--background-secondary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .python-version {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 8px;
-    }
-
-    .detail-label {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--text-muted);
-        min-width: 60px;
-    }
-
-    .detail-value {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-success);
-    }
-
-    .python-packages {
-        margin-top: 8px;
-    }
-
-    .packages-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 4px;
-        margin-top: 4px;
-    }
-
-    .package-item {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 10px;
-    }
-
-    .package-name {
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-
-    .package-version {
-        color: var(--text-accent);
-        font-weight: 600;
-    }
-
-    /* Enhanced Bean Query Display */
-    .command-item.bean-query-item {
-        grid-template-columns: 1fr;
-        gap: 8px;
-        padding: 12px;
-    }
-
-    .bean-query-details {
-        margin-top: 8px;
-        padding: 6px 8px;
-        background: var(--background-secondary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .bean-query-version {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .bean-price-details {
-        margin-top: 8px;
-        padding: 6px 8px;
-        background: var(--background-secondary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .bean-price-version {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .bean-check-details {
-        margin-top: 8px;
-        padding: 6px 8px;
-        background: var(--background-secondary);
-        border-radius: 4px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .bean-check-version {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .environment-info {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--background-modifier-border);
-    }
-
-    .env-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .env-label {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--text-normal);
-        min-width: 120px;
-    }
-
-    .env-value {
-        font-size: 12px;
-        color: var(--text-muted);
-    }
-
-    .env-code {
-        font-family: var(--font-monospace);
-        font-size: 11px;
-        color: var(--text-accent);
-        background: var(--background-secondary);
-        padding: 2px 4px;
-        border-radius: 2px;
-        word-break: break-all;
-    }
-
-    .no-detection {
-        padding: 16px;
-        text-align: center;
-        background: var(--background-primary-alt);
-        border-radius: 4px;
-        border: 1px dashed var(--background-modifier-border);
-    }
-
-    .no-detection .help-text {
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.5;
-        margin: 0;
-    }
-
-    .validation-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .validate-btn {
-        padding: 10px 20px;
+    .command-version-badge {
         background: var(--interactive-accent);
         color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
-        transition: background-color 0.2s;
-        align-self: flex-start;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
     }
 
-    .validate-btn:hover:not(:disabled) {
-        background: var(--interactive-accent-hover);
+    .command-input-group {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
     }
 
-    .validate-btn:disabled {
-        opacity: 0.6;
+    .command-input {
+        flex: 1;
+        padding: 8px 12px;
+        font-family: var(--font-monospace);
+        font-size: 12px;
+        background: var(--background-primary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        color: var(--text-normal);
+    }
+
+    .command-input:disabled {
+        background: var(--background-secondary);
+        color: var(--text-muted);
         cursor: not-allowed;
     }
 
-    .validate-btn.validating {
-        background: var(--background-modifier-border);
-        color: var(--text-muted);
+    .command-input.editing {
+        border-color: var(--interactive-accent);
+        background: var(--background-primary);
+        color: var(--text-normal);
     }
 
-    .validation-result {
-        padding: 8px 12px;
+    .command-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .action-btn {
+        padding: 8px 14px;
+        border: none;
         border-radius: 4px;
         font-size: 12px;
         font-weight: 500;
-    }
-
-    .validation-result.valid {
-        background: rgba(46, 160, 67, 0.1);
-        color: var(--text-success);
-        border: 1px solid var(--text-success);
-    }
-
-    .validation-result.invalid {
-        background: rgba(229, 83, 83, 0.1);
-        color: var(--text-error);
-        border: 1px solid var(--text-error);
-    }
-
-    .command-tests {
-        margin-top: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .command-test-item {
-        background: var(--background-secondary);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        padding: 12px;
-    }
-
-    .test-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-
-    .test-header h5 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 600;
-        flex-grow: 1;
-    }
-
-    .test-individual-btn {
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        border: none;
-        border-radius: 4px;
-        padding: 4px 8px;
-        font-size: 10px;
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.2s;
+        white-space: nowrap;
     }
 
-    .test-individual-btn:hover:not(:disabled) {
+    .edit-btn {
+        background: var(--interactive-accent);
+        color: white;
+    }
+
+    .edit-btn:hover:not(:disabled) {
         background: var(--interactive-accent-hover);
     }
 
-    .test-individual-btn:disabled {
-        background: var(--background-modifier-border);
-        color: var(--text-muted);
-        cursor: not-allowed;
-    }
-
-    .test-individual-btn.running {
-        background: var(--color-orange);
-    }
-
-    .test-status {
-        font-size: 14px;
-        min-width: 20px;
-        text-align: center;
-    }
-
-    .test-command {
-        background: var(--background-primary);
-        padding: 6px 8px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 10px;
-    }
-
-    .test-command code {
-        font-family: var(--font-monospace);
-        font-size: 10px;
-        word-break: break-all;
-    }
-
-    .test-error {
-        background: rgba(229, 83, 83, 0.1);
-        color: var(--text-error);
-        padding: 6px 8px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 10px;
-        border: 1px solid var(--text-error);
-    }
-
-    .test-output {
-        background: rgba(68, 181, 68, 0.1);
+    .verify-btn {
+        background: var(--background-modifier-success);
         color: var(--text-success);
-        padding: 6px 8px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 10px;
         border: 1px solid var(--text-success);
     }
 
-    .test-output pre {
+    .verify-btn:hover:not(:disabled) {
+        background: var(--text-success);
+        color: white;
+    }
+
+    .save-btn {
+        background: var(--text-success);
+        color: white;
+    }
+
+    .save-btn:hover:not(:disabled) {
+        opacity: 0.9;
+    }
+
+    .cancel-btn {
+        background: var(--background-modifier-border);
+        color: var(--text-normal);
+    }
+
+    .cancel-btn:hover {
+        background: var(--background-modifier-border-hover);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .verification-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 4px;
+        margin-bottom: 12px;
+        font-size: 12px;
+    }
+
+    .verification-status.success {
+        background: var(--background-modifier-success);
+        border: 1px solid var(--text-success);
+        color: var(--text-success);
+    }
+
+    .verification-status.error {
+        background: var(--background-modifier-error);
+        border: 1px solid var(--text-error);
+        color: var(--text-error);
+    }
+
+    .verification-status .status-icon {
+        font-size: 16px;
+    }
+
+    .verification-status .status-message {
+        flex: 1;
+    }
+
+    .command-help {
+        background: var(--background-secondary);
+        padding: 10px 12px;
+        border-radius: 4px;
+        border-left: 3px solid var(--text-accent);
+    }
+
+    .command-help .help-text {
         margin: 0;
-        font-family: var(--font-monospace);
-        font-size: 9px;
-        white-space: pre-wrap;
-        word-break: break-word;
+        font-size: 11px;
+        line-height: 1.5;
+        color: var(--text-muted);
+    }
+
+    .command-help code {
+        background: var(--background-primary);
+        padding: 2px 4px;
+        border-radius: 2px;
+        font-size: 10px;
+        color: var(--text-accent);
     }
 
     .info-text {
@@ -1338,159 +1049,19 @@
         line-height: 1.4;
     }
 
-    .test-command {
-        font-family: var(--font-monospace);
-        background: var(--background-primary);
-        padding: 2px 4px;
-        border-radius: 2px;
-        font-size: 10px;
-        color: var(--text-accent);
-    }
-
-    /* Configuration Display */
-    .config-display {
-        background: var(--background-primary-alt);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        padding: 16px;
-    }
-
-    .config-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--background-modifier-border);
-    }
-
-    .config-item:last-of-type {
-        border-bottom: none;
-    }
-
-    .config-label {
-        font-weight: 600;
-        color: var(--text-muted);
-        font-size: 13px;
-    }
-
-    .config-value {
-        font-size: 13px;
-        color: var(--text-normal);
-    }
-
-    .config-path {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
-        font-size: 12px;
-        background: var(--background-modifier-border);
-        padding: 6px 10px;
-        border-radius: 4px;
-        color: var(--text-normal);
-        word-break: break-all;
-        flex: 1;
-        margin-left: 12px;
-    }
-
-    .config-note {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 12px;
-        margin-top: 12px;
-        background: var(--background-secondary);
-        border-radius: 4px;
-        border-left: 3px solid var(--interactive-accent);
-    }
-
-    .no-config {
-        background: var(--background-secondary);
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 6px;
-        padding: 20px;
-    }
-
-    .help-list {
-        margin: 12px 0 0 20px;
-        padding: 0;
-        color: var(--text-normal);
-    }
-
-    .help-list li {
-        margin: 8px 0;
-        font-size: 13px;
-    }
-
     @media (max-width: 768px) {
         .connection-settings {
             padding: 12px;
         }
 
-        .system-info, .wsl-section, .command-section, .file-section, .validation-section {
+        .system-info, .wsl-section {
             padding: 12px;
             margin-bottom: 16px;
-        }
-
-        .info-grid {
-            grid-template-columns: 1fr;
         }
 
         .system-grid {
             grid-template-columns: 1fr;
             gap: 12px;
-        }
-
-        .file-path-display {
-            padding: 12px;
-        }
-
-        .file-path-display h5 {
-            font-size: 13px;
-        }
-
-        .path-grid {
-            gap: 10px;
-        }
-
-        .path-card {
-            padding: 10px;
-        }
-
-        .path-code {
-            font-size: 10px;
-            padding: 5px 6px;
-        }
-
-        .path-summary {
-            padding: 8px 10px;
-            font-size: 11px;
-        }
-
-        .selector-header {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        .packages-list {
-            grid-template-columns: 1fr;
-            gap: 3px;
-        }
-
-        .package-item {
-            font-size: 9px;
-        }
-
-        .python-details {
-            padding: 6px;
-        }
-
-        .bean-query-details {
-            padding: 4px 6px;
-        }
-
-        .bean-price-details {
-            padding: 4px 6px;
-        }
-
-        .bean-check-details {
-            padding: 4px 6px;
         }
     }
 </style>

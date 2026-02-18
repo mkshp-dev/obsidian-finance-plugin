@@ -27,16 +27,6 @@ function resolveFilePath(
 	return getTargetFile(plugin, operationType, date);
 }
 
-/**
- * Get the file path for BQL queries (main ledger file).
- * 
- * @param plugin - The plugin instance
- * @returns The absolute path to the query entry point
- */
-function resolveQueryFilePath(plugin: BeancountPlugin): string {
-	return getMainLedgerPath(plugin);
-}
-
 // --- QUERY RUNNER ---
 
 /**
@@ -44,12 +34,16 @@ function resolveQueryFilePath(plugin: BeancountPlugin): string {
  *
  * @param {BeancountPlugin} plugin - The plugin instance (for settings).
  * @param {string} query - The BQL query string.
+ * @param {string} [filepath] - Optional path to a specific Beancount file to query.
+ *                               If not provided, defaults to the main ledger path.
+ *                               Note: Custom filepaths won't include other files unless
+ *                               they have `include` directives.
  * @returns {Promise<string>} The CSV output of the query.
  * @throws {Error} If the query fails or command/path is not set.
  */
-export function runQuery(plugin: BeancountPlugin, query: string): Promise<string> {
+export function runQuery(plugin: BeancountPlugin, query: string, filepath?: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const filePath = resolveQueryFilePath(plugin);
+		const filePath = filepath || getMainLedgerPath(plugin);
 		const commandName = plugin.settings.beancountCommand;
 		if (!filePath) return reject(new Error('File path not set.'));
 		if (!commandName) return reject(new Error('Command not set.'));
@@ -65,6 +59,7 @@ export function runQuery(plugin: BeancountPlugin, query: string): Promise<string
 		const escapedQuery = query.replace(/"/g, '\\"');
 		
 		const command = `${commandName} -q -f csv "${queryFilePath}" "${escapedQuery}"`;
+		console.debug(`[runQuery] Executing command: ${command}`);
 		
 		// Increase maxBuffer to handle large query results (50MB limit)
 		exec(command, { maxBuffer: 50 * 1024 * 1024 }, (error: ExecException | null, stdout: string, stderr: string) => {
