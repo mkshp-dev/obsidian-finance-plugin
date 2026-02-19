@@ -1,0 +1,98 @@
+name: 📝 Documentation Issue
+description: Report an issue with documentation or suggest improvements
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve the documentation! Report errors, unclear sections, or missing information.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: Which documentation needs improvement?
+      options:
+        - README.md
+        - Plugin Settings descriptions
+        - Code comments/inline documentation
+        - Example queries/templates
+        - Architecture/developer documentation
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What kind of documentation issue is this?
+      options:
+        - Incorrect/outdated information
+        - Unclear or confusing explanation
+        - Missing information
+        - Broken links or formatting
+        - Typo or grammar
+        - Example needed
+        - Translation issue
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Where in the documentation is the issue? (Provide a link, section heading, or line number if possible)
+      placeholder: |
+        README.md, "Installation" section
+        or
+        https://github.com/mkshp-dev/obsidian-finance-plugin/blob/master/README.md#L123
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Documentation
+      description: What does the documentation currently say? (Copy the relevant text if applicable)
+      placeholder: The current text says...
+
+  - type: textarea
+    id: issue-description
+    attributes:
+      label: Issue Description
+      description: Describe the problem with the current documentation
+      placeholder: This is confusing because... / This is outdated because... / This should also mention...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested Improvement
+      description: How should it be improved? (Proposed text, structure changes, etc.)
+      placeholder: It should say instead... / Add a section about... / Include an example showing...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: |
+        - Screenshots
+        - Related documentation sections
+        - User perspective (beginner vs. advanced)
+        - etc.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help improve this?
+      options:
+        - label: I'd like to submit a PR to fix this documentation issue
+        - label: I can help review documentation changes
