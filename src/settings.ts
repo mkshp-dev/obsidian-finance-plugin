@@ -34,8 +34,6 @@ export interface BeancountPluginSettings {
     /** Maximum number of backup files to keep (0 = unlimited). */
     maxBackupFiles: number;
     // Structured Layout Settings
-    /** Whether to use structured folder layout instead of single file. */
-    useStructuredLayout: boolean;
     /** Name of the folder for structured layout (e.g., "Finances"). */
     structuredFolderName: string;
     /** Computed absolute path to the structured folder (set automatically). */
@@ -61,7 +59,6 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     createBackups: true,
     maxBackupFiles: 10,
     // Structured Layout Settings
-    useStructuredLayout: false,
     structuredFolderName: 'Finances',
     structuredFolderPath: ''
 }

@@ -34,3 +34,36 @@ Toggle between three views to see different perspectives:
 - Parent account balances automatically aggregate children
 - All values update when new transactions are recorded
 - Account expansion/collapse saves your preferences
+
+---
+
+## 🔍 Behind the Scenes: BQL Queries
+
+Each valuation method uses a different query to fetch account balances:
+
+### Market Value (Convert)
+```sql
+SELECT account, convert(sum(position), 'USD') WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account
+```
+
+Converts all holdings to your operating currency at current market prices.
+
+### Historical Cost
+```sql
+SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account
+```
+
+Shows original purchase prices - useful for tax calculations and understanding gains/losses.
+
+### Units (Raw Holdings)
+```sql
+SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account
+```
+
+Shows actual quantities held (e.g., "50 AAPL", "1.5 BTC", "1000 USD").
+
+:::tip
+The `NOT close_date(account)` filter ensures closed accounts don't appear in the balance sheet.
+:::
+
+**Learn More:** See the [Architecture & Queries](../architecture-queries.md) page for all plugin queries.

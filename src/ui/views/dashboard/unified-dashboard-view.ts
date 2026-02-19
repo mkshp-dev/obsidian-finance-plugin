@@ -4,6 +4,7 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type BeancountPlugin from '../../../main';
 import UnifiedDashboardComponent from './UnifiedDashboardView.svelte';
 import { CommodityDetailModal } from '../../modals/CommodityDetailModal';
+import { CommodityCreateModal } from '../../modals/CommodityCreateModal';
 
 // --- Import ALL controllers ---
 import { OverviewController } from '../../../controllers/OverviewController';
@@ -77,6 +78,15 @@ export class UnifiedDashboardView extends ItemView {
 		this.component.$on('openCommodity', (e: any) => {
 			const symbol = e.detail?.symbol || e.detail;
 			new CommodityDetailModal(this.app, this.plugin, this.commoditiesController, symbol).open();
+		});
+		// When CommoditiesTab dispatches addCommodity, open create modal
+		this.component.$on('addCommodity', () => {
+			new CommodityCreateModal(
+				this.app,
+				this.plugin,
+				this.commoditiesController,
+				() => this.commoditiesController.refresh()
+			).open();
 		});
 		
 		// --- Load initial data via controllers ---

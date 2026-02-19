@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
         'core-features/adding-directives',
         'core-features/beancount-syntax',
         'core-features/snapshot-view',
+        'core-features/architecture-queries',
         {
           type: 'category',
           label: 'Unified Dashboard',

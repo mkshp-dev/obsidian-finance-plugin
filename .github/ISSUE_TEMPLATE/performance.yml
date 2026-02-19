@@ -1,0 +1,165 @@
+name: ⚡ Performance Issue
+description: Report slow performance, freezing, or resource usage problems
+title: "[Performance]: "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us identify and fix performance issues! Please provide detailed information about system behavior.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Performance Issue Description
+      description: Describe the performance problem you're experiencing
+      placeholder: The plugin becomes slow when... / Obsidian freezes when... / High CPU/memory usage during...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Primary Symptom
+      description: What's the main performance problem?
+      multiple: true
+      options:
+        - Slow query execution
+        - Dashboard takes long to load
+        - UI freezing/unresponsive
+        - High CPU usage
+        - High memory usage
+        - Slow file operations (CRUD)
+        - Obsidian becomes sluggish overall
+        - Long startup time
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: trigger
+    attributes:
+      label: When Does It Occur?
+      description: What triggers the performance issue?
+      placeholder: |
+        - When opening the dashboard
+        - When running a specific BQL query
+        - After the plugin has been running for X hours
+        - When working with large files
+        - etc.
+    validations:
+      required: true
+
+  - type: input
+    id: duration
+    attributes:
+      label: How Long Does It Take?
+      description: Approximate duration of the slow operation (if applicable)
+      placeholder: e.g., 10 seconds, 2 minutes, indefinitely frozen
+
+  - type: textarea
+    id: ledger-size
+    attributes:
+      label: Ledger Information
+      description: |
+        Provide details about your Beancount file:
+        - File size (MB)
+        - Approximate number of transactions
+        - Number of accounts
+        - Date range (e.g., 2020-2024)
+        - Any particularly complex queries or custom plugins
+      placeholder: |
+        File size: 5 MB
+        Transactions: ~10,000
+        Accounts: ~100
+        Date range: 2019-2024
+        Custom plugins: None
+    validations:
+      required: true
+
+  - type: textarea
+    id: query
+    attributes:
+      label: Problematic Query (if applicable)
+      description: If a specific BQL query is slow, paste it here
+      render: sql
+      placeholder: |
+        SELECT account, sum(position) 
+        FROM balances 
+        WHERE year >= 2020;
+
+  - type: textarea
+    id: system-specs
+    attributes:
+      label: System Specifications
+      description: |
+        Your system details:
+        - OS and version
+        - CPU (e.g., Intel i5-8250U, Apple M1)
+        - RAM
+        - Is Obsidian running from SSD or HDD?
+        - Is the Beancount file on a local or network drive?
+      placeholder: |
+        OS: Windows 11
+        CPU: Intel i7-10700K
+        RAM: 16 GB
+        Storage: SSD
+        File location: Local SSD
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin Version
+      description: Which version are you using?
+      placeholder: e.g., 1.2.3
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-plugins
+    attributes:
+      label: Other Active Plugins
+      description: List other Obsidian plugins you have enabled (especially if they might interact with this one)
+      placeholder: |
+        - Dataview
+        - Templater
+        - etc.
+
+  - type: textarea
+    id: monitoring
+    attributes:
+      label: Resource Monitoring
+      description: |
+        If you've checked Task Manager or Activity Monitor:
+        - CPU usage during the issue (%)
+        - Memory usage during the issue (MB/GB)
+        - Any console errors or warnings
+      placeholder: |
+        CPU: 80% sustained on one core
+        Memory: Obsidian using 2.5 GB
+        Console: No errors, but many "slow query" warnings
+
+  - type: textarea
+    id: workarounds
+    attributes:
+      label: Workarounds Found
+      description: Have you found any workarounds that improve performance?
+      placeholder: |
+        - Limiting query date ranges
+        - Disabling certain dashboard tabs
+        - Restarting Obsidian
+        - etc.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm
+      options:
+        - label: I have verified this is not caused by other plugins (by disabling them)
+        - label: I have checked console logs for errors (Ctrl+Shift+I / Cmd+Option+I)
+        - label: The performance issue is reproducible
+        - label: I have searched for similar performance reports
+          required: true
