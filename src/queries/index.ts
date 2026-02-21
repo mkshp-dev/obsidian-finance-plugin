@@ -132,14 +132,18 @@ export function getTransactionsQuery(filters: TransactionFilters, limit: number 
 }
 
 /**
- * Query for file validation using bean-query (replaces bean-check)
- * Uses 'SELECT TRUE LIMIT 0' which validates file syntax without returning data
+ * Query for file validation using bean-query with ERRORS query
+ * Returns validation errors from the Beancount file
+ * Note: ERRORS query returns formatted text, not CSV, so don't use -f csv flag
  * @param {string} filePath - Path to beancount file.
  * @param {string} commandBase - Base command (bean-query).
  * @returns {string} The validation command string.
  */
 export function getBeanCheckCommand(filePath: string, commandBase: string): string {
-	return `${commandBase} "${filePath}" "SELECT TRUE LIMIT 0"`;
+	// Use bean-query with ERRORS query to get validation errors
+	// This keeps the plugin dependent only on bean-query
+	// Note: Don't use -f csv flag as ERRORS returns formatted text
+	return `${commandBase} "${filePath}" "ERRORS"`;
 }
 
 /**

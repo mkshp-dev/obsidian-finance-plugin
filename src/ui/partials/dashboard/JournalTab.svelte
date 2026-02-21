@@ -1,11 +1,12 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { debounce, getOpenAccounts, getPayees, getTags } from '../../../utils/index';
+    import { debounce, getOpenAccounts, getPayees, getTags, deleteTransaction, deleteBalance, deleteNote } from '../../../utils/index';
     import TransactionCard from './cards/TransactionCard.svelte';
     import BalanceCard from './cards/BalanceCard.svelte';
     import NoteCard from './cards/NoteCard.svelte';
     import { UnifiedTransactionModal } from '../../modals/UnifiedTransactionModal';
     import { ConfirmModal } from '../../modals/ConfirmModal';
+    import { Notice } from 'obsidian';
     import type { JournalEntry } from '../../../models/journal';
     import { Logger } from '../../../utils/logger';
 
@@ -50,8 +51,7 @@
         setFilters,
         clearFilters,
         setPage,
-        refresh,
-        deleteTransaction
+        refresh
     } = store;
 
     // Local filter state
@@ -158,7 +158,31 @@
             'Delete Entry',
             `Are you sure you want to delete this ${entry.type}?`,
             async () => {
-                await deleteTransaction(entry.id);
+                try {
+                    let result;
+                    
+                    // Call the appropriate delete function based on entry type
+                    if (entry.type === 'transaction') {
+                        result = await deleteTransaction(plugin, entry.id);
+                    } else if (entry.type === 'balance') {
+                        result = await deleteBalance(plugin, entry.id);
+                    } else if (entry.type === 'note') {
+                        result = await deleteNote(plugin, entry.id);
+                    } else {
+                        new Notice(`Deleting ${entry.type} entries is not supported.`);
+                        return;
+                    }
+                    
+                    if (result.success) {
+                        new Notice(`${entry.type.charAt(0).toUpperCase() + entry.type.slice(1)} deleted successfully!`);
+                        await refresh();
+                    } else {
+                        new Notice(`Failed to delete ${entry.type}: ${result.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error deleting entry:', error);
+                    new Notice(`Failed to delete ${entry.type}. Check console for details.`);
+                }
             }
         ).open();
     }

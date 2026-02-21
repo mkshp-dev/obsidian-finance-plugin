@@ -13,6 +13,14 @@
 	export let errorCount = 0;
 	export let errorList: string[] = [];
 
+	// Debug logging for error state
+	$: console.log('[SidebarView.svelte] fileStatus:', fileStatus);
+	$: console.log('[SidebarView.svelte] fileStatusMessage:', fileStatusMessage);
+	$: console.log('[SidebarView.svelte] errorCount:', errorCount);
+	$: console.log('[SidebarView.svelte] errorList:', errorList);
+	$: console.log('[SidebarView.svelte] errorList.length:', errorList.length);
+	$: console.log('[SidebarView.svelte] Showing error section:', fileStatus === 'error' && errorList.length > 0);
+
 	const dispatch = createEventDispatcher();
 
 	function handleRefresh() {
@@ -23,10 +31,6 @@
 		if (fileStatus === 'error' && fileStatusMessage) {
 			new Notice(fileStatusMessage, 0); // Show persistent notice
 		}
-	}
-	
-	function handleEditFile() {
-		dispatch('editFile');
 	}
 
 </script>
@@ -48,13 +52,6 @@
 			{:else if fileStatus === 'error'}
 				<span>❌ {errorCount} Error{errorCount !== 1 ? 's' : ''}</span>
 			{/if}
-		</button>
-
-		<button
-			class="clickable-icon" aria-label="Edit Ledger File" title="Edit Ledger File"
-			on:click={handleEditFile}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
 		</button>
 
 		<button on:click={handleRefresh} disabled={isLoading} class="refresh-button">
@@ -161,18 +158,6 @@
 	.beancount-status-button span { font-weight: 500; }
 	.beancount-status-button.status-ok span { color: var(--text-success); }
 	.beancount-status-button.status-error span { color: var(--text-error); }
-
-	.clickable-icon { /* Style for icon buttons */
-		padding: 4px;
-		cursor: pointer;
-		background: none;
-		border: none;
-		color: var(--icon-color);
-		display: inline-flex; /* Helps alignment */
-		align-items: center;
-	}
-	.clickable-icon:hover { color: var(--icon-color-hover); }
-	.clickable-icon svg { width: var(--icon-xs); height: var(--icon-xs); vertical-align: middle; }
 
 	/* Refresh button and loading spinner */
 	.refresh-button {

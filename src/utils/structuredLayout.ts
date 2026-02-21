@@ -86,7 +86,8 @@ export async function createStructuredFolder(
             if (fileType === 'transactions') continue; // Skip, it's a folder
             if (fileType === 'ledger') continue; // Skip, handled separately with includes
             
-            const filePath = path.join(folderName, fileName);
+            // Normalize path to use forward slashes for Obsidian vault API
+            const filePath = path.join(folderName, fileName).replace(/\\/g, '/');
             const content = files[fileType as FileType] || '';
             
             try {
@@ -109,7 +110,8 @@ export async function createStructuredFolder(
 
         // Generate and create/update ledger.beancount with include statements
         const includeStatements = generateIncludeStatements(folderName, [currentYear]);
-        const ledgerPath = path.join(folderName, STRUCTURED_FILES.ledger);
+        // Normalize path to use forward slashes for Obsidian vault API
+        const ledgerPath = path.join(folderName, STRUCTURED_FILES.ledger).replace(/\\/g, '/');
         
         try {
             const existing = plugin.app.vault.getAbstractFileByPath(ledgerPath);
@@ -129,6 +131,7 @@ export async function createStructuredFolder(
                 try {
                     // Wait a moment for the file to be available
                     await new Promise(resolve => setTimeout(resolve, 100));
+                    // ledgerPath is already normalized, use as-is
                     const existing = plugin.app.vault.getAbstractFileByPath(ledgerPath);
                     if (existing && existing instanceof TFile) {
                         await plugin.app.vault.modify(existing, includeStatements);
@@ -220,7 +223,8 @@ export async function ensureYearFile(
     year: number
 ): Promise<void> {
     const yearFileName = `${year}.beancount`;
-    const yearFilePath = path.join(folderName, 'transactions', yearFileName);
+    // Normalize path to use forward slashes for Obsidian vault API
+    const yearFilePath = path.join(folderName, 'transactions', yearFileName).replace(/\\/g, '/');
     
     const existing = plugin.app.vault.getAbstractFileByPath(yearFilePath);
     
@@ -235,10 +239,14 @@ export async function ensureYearFile(
             await plugin.app.vault.create(yearFilePath, content);
             Logger.log(`[structuredLayout] Created year file: ${yearFilePath}`);
             
-            // Update ledger.beancount to include this year
-            await updateLedgerIncludes(plugin, folderName);
+            // Wait a moment for vault cache to update
+            await new Promise(resolve => setTimeout(resolve, 100));
             
-            new Notice(`Created ${year} transaction file`);
+            // Update ledger.beancount to include this year
+            // Pass the year explicitly to handle vault cache timing issues
+            await updateLedgerIncludes(plugin, folderName, year);
+            
+            new Notice(`Created ${year} transaction file and updated ledger includes`);
         } catch (e: any) {
             // If file already exists, just log it - don't throw
             if (e.message && e.message.includes('already exists')) {
@@ -254,21 +262,107 @@ export async function ensureYearFile(
 }
 
 /**
+ * Update only the transaction include statements in the ledger file, preserving other content.
+ * 
+ * @param plugin - The Beancount plugin instance
+ * @param folderName - Name of the structured folder
+ * @param years - Array of years that have transaction files
+ */
+async function updateTransactionIncludes(
+    plugin: BeancountPlugin,
+    folderName: string,
+    years: number[]
+): Promise<void> {
+    // Normalize path to use forward slashes for Obsidian vault API
+    const ledgerPath = path.join(folderName, STRUCTURED_FILES.ledger).replace(/\\/g, '/');
+    Logger.log(`[updateTransactionIncludes] Looking for ledger at: ${ledgerPath}`);
+    
+    const ledgerFile = plugin.app.vault.getAbstractFileByPath(ledgerPath);
+    
+    if (!ledgerFile || !(ledgerFile instanceof TFile)) {
+        Logger.error(`[updateTransactionIncludes] Ledger file not found at ${ledgerPath}`);
+        new Notice(`Error: Could not find ledger file at ${ledgerPath}`);
+        return;
+    }
+    
+    Logger.log(`[updateTransactionIncludes] Found ledger file, reading content...`);
+    
+    // Read current ledger content
+    const currentContent = await plugin.app.vault.read(ledgerFile);
+    
+    // Find the transaction includes section
+    const transactionMarker = ';; Transaction files by year';
+    const markerIndex = currentContent.indexOf(transactionMarker);
+    
+    if (markerIndex === -1) {
+        // If marker not found, this might be a custom ledger file
+        // Don't modify it automatically
+        Logger.warn(`[updateTransactionIncludes] Transaction marker not found in ledger. File might be customized. Skipping automatic update.`);
+        new Notice('Warning: ledger.beancount appears to be customized. Please manually add transaction includes.');
+        return;
+    }
+    
+    // Split content at the marker
+    const beforeMarker = currentContent.substring(0, markerIndex);
+    
+    // Generate new transaction includes
+    const sortedYears = [...years].sort((a, b) => b - a);
+    const transactionIncludes = [
+        transactionMarker + ' (newest first)',
+        ...sortedYears.map(year => `include "transactions/${year}.beancount"`)
+    ].join('\n') + '\n';
+    
+    // Find where the next section starts (or end of file)
+    // Look for the next ";;" comment or end of file
+    const afterMarkerContent = currentContent.substring(markerIndex);
+    const lines = afterMarkerContent.split('\n');
+    let endOfTransactionSection = 1; // Start after the marker line
+    
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        // Stop when we hit a non-include line that's not empty or a comment continuation
+        if (line && !line.startsWith('include "transactions/') && !line.startsWith(';;')) {
+            endOfTransactionSection = i;
+            break;
+        }
+        if (i === lines.length - 1) {
+            endOfTransactionSection = i + 1;
+        }
+    }
+    
+    const afterIncludes = lines.slice(endOfTransactionSection).join('\n');
+    
+    // Reconstruct the file
+    const newContent = beforeMarker + transactionIncludes + afterIncludes;
+    
+    // Write back
+    await plugin.app.vault.modify(ledgerFile, newContent);
+    Logger.log(`[updateTransactionIncludes] Updated transaction includes: ${years.join(', ')}`);
+}
+
+/**
  * Update the main ledger file's include statements based on existing year files.
  * 
  * @param plugin - The Beancount plugin instance
  * @param folderName - Name of the structured folder
+ * @param additionalYear - Optional year to include even if not found in scan (for newly created files)
  */
 async function updateLedgerIncludes(
     plugin: BeancountPlugin,
-    folderName: string
+    folderName: string,
+    additionalYear?: number
 ): Promise<void> {
     try {
+        Logger.log(`[updateLedgerIncludes] Starting update for folder: ${folderName}, additionalYear: ${additionalYear}`);
+        
         // Scan transactions folder for year files
-        const transactionsFolderPath = path.join(folderName, 'transactions');
+        // Normalize path to use forward slashes for Obsidian vault API
+        const transactionsFolderPath = path.join(folderName, 'transactions').replace(/\\/g, '/');
         const files = plugin.app.vault.getFiles().filter(f => 
             f.path.startsWith(transactionsFolderPath) && f.extension === 'beancount'
         );
+        
+        Logger.log(`[updateLedgerIncludes] Found ${files.length} year files in ${transactionsFolderPath}`);
         
         // Extract years from filenames
         const years: number[] = [];
@@ -276,22 +370,26 @@ async function updateLedgerIncludes(
             const match = file.basename.match(/^(\d{4})$/);
             if (match) {
                 years.push(parseInt(match[1], 10));
+                Logger.log(`[updateLedgerIncludes] Found year from file: ${match[1]}`);
             }
         }
         
-        // Generate new include statements
-        const includeStatements = generateIncludeStatements(folderName, years);
-        
-        // Update ledger file
-        const ledgerPath = path.join(folderName, STRUCTURED_FILES.ledger);
-        const ledgerFile = plugin.app.vault.getAbstractFileByPath(ledgerPath);
-        
-        if (ledgerFile && ledgerFile instanceof TFile) {
-            await plugin.app.vault.modify(ledgerFile, includeStatements);
-            Logger.log(`[structuredLayout] Updated ledger includes with years:`, years);
+        // Add additional year if provided and not already in list
+        if (additionalYear && !years.includes(additionalYear)) {
+            years.push(additionalYear);
+            Logger.log(`[updateLedgerIncludes] Including newly created year: ${additionalYear}`);
         }
+        
+        Logger.log(`[updateLedgerIncludes] All years to include: ${years.join(', ')}`);
+        
+        // Use the smarter update function that preserves other content
+        await updateTransactionIncludes(plugin, folderName, years);
+        
+        Logger.log(`[updateLedgerIncludes] Successfully updated ledger includes with years: ${years.join(', ')}`);
+        new Notice(`Updated ledger.beancount with ${years.length} year file(s)`);
     } catch (e) {
-        Logger.error('[structuredLayout] Failed to update ledger includes:', e);
+        Logger.error('[updateLedgerIncludes] Failed to update ledger includes:', e);
+        new Notice(`Error updating ledger includes: ${e.message}`);
     }
 }
 
@@ -479,7 +577,8 @@ export async function migrateToStructuredLayout(
             Logger.log(`[Migration] Migrating ${migration.type}...`);
             try {
                 const content = await runQuery(plugin, migration.query, sourceFile);
-                const filePath = path.join(targetFolderName, migration.file);
+                // Normalize path to use forward slashes for Obsidian vault API
+                const filePath = path.join(targetFolderName, migration.file).replace(/\\/g, '/');
                 
                 if (content && content.trim()) {
                     await writeToFile(plugin, filePath, content);
@@ -501,7 +600,8 @@ export async function migrateToStructuredLayout(
             try {
                 const query = `PRINT FROM type='transaction' AND year=${year}`;
                 const content = await runQuery(plugin, query, sourceFile);
-                const yearFilePath = path.join(targetFolderName, 'transactions', `${year}.beancount`);
+                // Normalize path to use forward slashes for Obsidian vault API
+                const yearFilePath = path.join(targetFolderName, 'transactions', `${year}.beancount`).replace(/\\/g, '/');
                 
                 if (content && content.trim()) {
                     await writeToFile(plugin, yearFilePath, content);
@@ -520,7 +620,8 @@ export async function migrateToStructuredLayout(
         // Step 5: Update main ledger with includes
         Logger.log('[Migration] Generating main ledger with includes...');
         const includeStatements = generateIncludeStatements(targetFolderName, years);
-        const ledgerPath = path.join(targetFolderName, STRUCTURED_FILES.ledger);
+        // Normalize path to use forward slashes for Obsidian vault API
+        const ledgerPath = path.join(targetFolderName, STRUCTURED_FILES.ledger).replace(/\\/g, '/');
         await writeToFile(plugin, ledgerPath, includeStatements);
 
         // Step 6: Update plugin settings
@@ -596,7 +697,10 @@ async function writeToFile(
     content: string
 ): Promise<void> {
     try {
-        const existing = plugin.app.vault.getAbstractFileByPath(relativePath);
+        // Normalize path to use forward slashes for Obsidian vault API (safety measure)
+        const normalizedPath = relativePath.replace(/\\/g, '/');
+        
+        const existing = plugin.app.vault.getAbstractFileByPath(normalizedPath);
         
         if (existing && existing instanceof TFile) {
             // File exists - replace content (migration always does fresh write)
@@ -604,11 +708,11 @@ async function writeToFile(
         } else {
             // Create new file, with fallback to modify if it was just created
             try {
-                await plugin.app.vault.create(relativePath, content);
+                await plugin.app.vault.create(normalizedPath, content);
             } catch (createError: any) {
                 // If file was just created by another process, try to modify it
                 if (createError.message && createError.message.includes('already exists')) {
-                    const file = plugin.app.vault.getAbstractFileByPath(relativePath);
+                    const file = plugin.app.vault.getAbstractFileByPath(normalizedPath);
                     if (file && file instanceof TFile) {
                         await plugin.app.vault.modify(file, content);
                     } else {
