@@ -4,6 +4,10 @@
 	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../../controllers/BalanceSheetController';
 	import { Logger } from '../../../utils/logger';
 	import { AccountManagementModal } from '../../modals/AccountManagementModal';
+	import SunburstChart from '../../common/SunburstChart.svelte';
+
+	// View mode: 'table' shows the existing hierarchy tables, 'sunburst' shows the radial chart
+	let viewMode: 'table' | 'sunburst' = 'table';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;
@@ -155,6 +159,38 @@
 					<option value="units">Units</option>
 				</select>
 			</div>
+			<!-- View mode toggle -->
+			<div class="view-toggle" role="group" aria-label="View mode">
+				<button
+					class="view-toggle-btn"
+					class:active={viewMode === 'table'}
+					on:click={() => (viewMode = 'table')}
+					title="Table view"
+					aria-pressed={viewMode === 'table'}
+				>
+					<!-- Table icon -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="3" y="3" width="18" height="18" rx="2"/>
+						<path d="M3 9h18M3 15h18M9 3v18"/>
+					</svg>
+					Table
+				</button>
+				<button
+					class="view-toggle-btn"
+					class:active={viewMode === 'sunburst'}
+					on:click={() => (viewMode = 'sunburst')}
+					title="Sunburst chart"
+					aria-pressed={viewMode === 'sunburst'}
+				>
+					<!-- Sunburst / radial icon -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="3"/>
+						<circle cx="12" cy="12" r="7"/>
+						<circle cx="12" cy="12" r="11"/>
+					</svg>
+					Sunburst
+				</button>
+			</div>
 		</div>
 	</div>
 
@@ -171,6 +207,17 @@
 			</div>
 		{/if}
 
+		{#if viewMode === 'sunburst'}
+			<SunburstChart
+				assets={state.assets}
+				liabilities={state.liabilities}
+				equity={state.equity}
+				currency={state.currency}
+				totalAssets={state.totalAssets}
+				totalLiabilities={state.totalLiabilities}
+				totalEquity={state.totalEquity}
+			/>
+		{:else}
 		<div class="balance-sheet-grid">
 			<div class="column">
 				<h4>Assets</h4>
@@ -283,6 +330,7 @@
 				</table>
 			</div>
 		</div>
+		{/if}
 	{/if}
 </div>
 
@@ -362,6 +410,42 @@
 		font-size: 0.9em;
 		color: var(--text-muted);
 		white-space: nowrap;
+	}
+
+	/* View toggle (Table / Sunburst) */
+	.view-toggle {
+		display: flex;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		overflow: hidden;
+	}
+
+	.view-toggle-btn {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 10px;
+		border: none;
+		background: var(--interactive-normal);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: background 0.15s, color 0.15s;
+		border-right: 1px solid var(--background-modifier-border);
+	}
+
+	.view-toggle-btn:last-child {
+		border-right: none;
+	}
+
+	.view-toggle-btn:hover {
+		background: var(--interactive-hover);
+		color: var(--text-normal);
+	}
+
+	.view-toggle-btn.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
 	}
 
 	.valuation-method-selector select {
