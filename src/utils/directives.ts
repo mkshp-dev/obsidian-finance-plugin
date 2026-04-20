@@ -704,6 +704,47 @@ export async function deleteTransaction(
 
 // ─── VALIDATION ────────────────────────────────────────────────────────────────
 
+// ─── OPERATING CURRENCY ────────────────────────────────────────────────────────
+
+/**
+ * Updates the `option "operating_currency" "..."` line in the main ledger file
+ * to reflect the new currency value from plugin settings.
+ *
+ * @param plugin        - The Beancount plugin instance
+ * @param currency      - The new operating currency (e.g. "USD", "EUR")
+ * @param createBackup  - Whether to back up the ledger file before modifying
+ */
+export async function updateOperatingCurrency(
+    plugin: BeancountPlugin,
+    currency: string,
+    createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const { getMainLedgerPath } = await import('./structuredLayout');
+        const ledgerPath = getMainLedgerPath(plugin);
+        if (!ledgerPath) return { success: false, error: 'Main ledger path not set' };
+
+        const normalizedPath = convertWslPathToWindows(ledgerPath);
+        await createBackupFile(normalizedPath, createBackup, 'updateOperatingCurrency');
+
+        const content = await readFile(normalizedPath, 'utf-8');
+        const pattern = /^(option\s+"operating_currency"\s+)"[^"]*"/m;
+
+        if (!pattern.test(content)) {
+            return { success: false, error: 'Could not find option "operating_currency" in ledger file' };
+        }
+
+        const updated = content.replace(pattern, `$1"${currency}"`);
+        await atomicFileWrite(normalizedPath, updated);
+
+        Logger.log(`[updateOperatingCurrency] Updated operating_currency to ${currency}`);
+        return { success: true };
+    } catch (error) {
+        Logger.error('[updateOperatingCurrency] Error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
 export async function validateCommodityLocation(
     filename: string,
     lineno: number,

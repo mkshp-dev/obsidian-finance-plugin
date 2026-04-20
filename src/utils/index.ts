@@ -46,6 +46,7 @@ export {
 	saveOpenDirective,
 	saveCloseDirective,
 	validateCommodityLocation,
+	updateOperatingCurrency,
 } from './directives';
 
 // Re-export structuredLayout helpers that some callers pull from utils/index
