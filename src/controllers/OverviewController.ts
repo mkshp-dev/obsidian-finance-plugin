@@ -85,39 +85,33 @@ export class OverviewController {
 		try {
 			const monthRange = getCurrentMonthRange();
 
-			const [assetsResult, liabilitiesResult, incomeResult, expensesResult, historicalResult] = await Promise.all([
-				this.plugin.runQuery(queries.getTotalAssetsCostQuery(reportingCurrency)),
-				this.plugin.runQuery(queries.getTotalLiabilitiesCostQuery(reportingCurrency)),
+			const [netWorthResult, incomeResult, expensesResult, historicalResult] = await Promise.all([
+				this.plugin.runQuery(queries.getTotalWorthQuery(reportingCurrency, 2)),
 				this.plugin.runQuery(queries.getMonthlyIncomeQuery(monthRange.start, monthRange.end, reportingCurrency)),
 				this.plugin.runQuery(queries.getMonthlyExpensesQuery(monthRange.start, monthRange.end, reportingCurrency)),
 				this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery('month', reportingCurrency))
 			]);
-			Logger.log("OverviewController: Historical Result:", historicalResult);			// Process KPI Data
-			const assetsInventoryStr = parseSingleValue(assetsResult);
-			const liabilitiesInventoryStr = parseSingleValue(liabilitiesResult);
+			Logger.log("OverviewController: Historical Result:", historicalResult);
+
+			// Process KPI Data
+			Logger.log("OverviewController: Net Worth Result:", netWorthResult);
+			const netWorthNum = parseFloat(parseSingleValue(netWorthResult));
+			Logger.log("OverviewController: Parsed Net Worth:", netWorthNum);
+
 			const incomeInventoryStr = parseSingleValue(incomeResult);
 			const expensesInventoryStr = parseSingleValue(expensesResult);
 
-			const assetsStr = extractConvertedAmount(assetsInventoryStr, reportingCurrency);
-			const liabilitiesStr = extractConvertedAmount(liabilitiesInventoryStr, reportingCurrency);
 			const incomeStr = extractConvertedAmount(incomeInventoryStr, reportingCurrency);
 			const expensesStr = extractConvertedAmount(expensesInventoryStr, reportingCurrency);
 
-			const assetsData = parseAmount(assetsStr);
-			const liabilitiesData = parseAmount(liabilitiesStr);
 			const incomeData = parseAmount(incomeStr);
 			const expensesData = parseAmount(expensesStr);
 
 			// In Beancount:
 			// - Income accounts have negative balances (we want positive for display)
 			// - Expense accounts have positive balances (already positive)
-			// - Liability accounts have negative balances (we want positive for display)
 			const incomeAmount = Math.abs(incomeData.amount); // Convert negative income to positive
 			const expensesAmount = expensesData.amount; // Expenses are already positive
-			const liabilitiesAmount = Math.abs(liabilitiesData.amount); // Convert negative liabilities to positive
-
-			// Calculate financial metrics
-			const netWorthNum = assetsData.amount - liabilitiesAmount;
 			const savingsNum = incomeAmount - expensesAmount;
 
 

@@ -4,7 +4,7 @@ import { exec } from 'child_process';
 import type { ExecException } from 'child_process';
 import type BeancountPlugin from '../../../main';
 import BeancountViewComponent from './SidebarView.svelte'; // Assuming this is the correct Svelte component for the sidebar
-import { runQuery, parseSingleValue, convertWslPathToWindows, extractConvertedAmount } from '../../../utils/index';
+import { runQuery, parseSingleValue, convertWslPathToWindows } from '../../../utils/index';
 import * as queries from '../../../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { Logger } from '../../../utils/logger';
@@ -22,7 +22,6 @@ export class BeancountView extends ItemView {
 		assets: "0 USD",
 		liabilities: "0 USD",
 		netWorth: "0.00 USD",
-		hasUnconvertedCommodities: false,
 		kpiError: null as string | null,
 		fileStatus: "checking" as "checking" | "ok" | "error",
 		fileStatusMessage: "" as string | null,
@@ -88,50 +87,32 @@ export class BeancountView extends ItemView {
 				checkResult
 			] = await Promise.all([
 				Promise.all([
-					// --- Use imported runQuery and query functions ---
-					runQuery(this.plugin, queries.getTotalAssetsCostQuery(reportingCurrency)),
-					runQuery(this.plugin, queries.getTotalLiabilitiesCostQuery(reportingCurrency))
+					runQuery(this.plugin, queries.getTotalAssetsQuery(reportingCurrency, 2)),
+					runQuery(this.plugin, queries.getTotalLiabilitiesQuery(reportingCurrency, 2)),
+					runQuery(this.plugin, queries.getTotalWorthQuery(reportingCurrency, 2)),
 				]),
 				this.runBeanCheck()
 			]);
 
-			const [assetsResult, liabilitiesResult] = kpiResults;
-			
-			// Check if results contain multiple currencies (indicates missing price data)
-			const hasMultiCurrencyAssets = assetsResult.includes(',');
-			const hasMultiCurrencyLiabilities = liabilitiesResult.includes(',');
-			const hasUnconvertedCommodities = hasMultiCurrencyAssets || hasMultiCurrencyLiabilities;
-			
-			// Extract reporting currency amounts from potentially multi-currency results
-			const assets = extractConvertedAmount(assetsResult, reportingCurrency);
-			const liabilities = extractConvertedAmount(liabilitiesResult, reportingCurrency);
-			
-			// Calculate net worth: assets - liabilities
-			const assetsNum = parseFloat(assets.split(" ")[0]) || 0;
-			const liabilitiesNum = parseFloat(liabilities.split(" ")[0]) || 0;
-			// Present liabilities as a positive magnitude in the UI. Beancount
-			// often represents liabilities as negative numbers; showing the
-			// absolute value improves readability for users.
-			const liabilitiesDisplay = `${Math.abs(liabilitiesNum).toFixed(2)} ${reportingCurrency}`;
+			const [assetsResult, liabilitiesResult, netWorthResult] = kpiResults;
 
-			// For net worth calculation we want: NetWorth = Assets - Liabilities
-			// Liabilities from Beancount may be negative (normal) or positive
-			// (e.g. overpaid credit card). Using multiplication by -1 preserves
-			// the sign semantics: liabilitiesEffective = liabilitiesNum * -1.
-			// Example: liabilitiesNum = -200 -> liabilitiesEffective = 200
-			//          liabilitiesNum = 50   -> liabilitiesEffective = -50
-			const liabilitiesEffective = liabilitiesNum * -1;
-			const netWorthNum = assetsNum - liabilitiesEffective;
+			const parseNumericResult = (csv: string): number => parseFloat(parseSingleValue(csv)) || 0;
+
+			const assetsNum = parseNumericResult(assetsResult);
+			const liabilitiesRaw = parseNumericResult(liabilitiesResult);
+			const netWorthNum = parseNumericResult(netWorthResult);
+
+			// Liabilities from Beancount are stored as negative; display as positive magnitude
+			const liabilitiesDisplay = `${Math.abs(liabilitiesRaw).toFixed(2)} ${reportingCurrency}`;
 
 			Logger.log('[refreshData] Check result from runBeanCheck:', checkResult);
 			Logger.log('[refreshData] Error count:', checkResult.errorCount);
 			Logger.log('[refreshData] Error list:', checkResult.errorList);
 
 			this.updateProps({
-				assets,
+				assets: `${assetsNum.toFixed(2)} ${reportingCurrency}`,
 				liabilities: liabilitiesDisplay,
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
-				hasUnconvertedCommodities,
 				kpiError: null, 
 				fileStatus: checkResult.status, 
 				fileStatusMessage: checkResult.message,
@@ -143,8 +124,7 @@ export class BeancountView extends ItemView {
 			console.error("Error updating snapshot view:", error);
 			this.updateProps({ 
 				kpiError: error.message, 
-				hasUnconvertedCommodities: false,
-				fileStatus: "error", 
+					fileStatus: "error", 
 				fileStatusMessage: "Failed during refresh.",
 				errorCount: 0,
 				errorList: []

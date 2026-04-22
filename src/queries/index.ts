@@ -20,13 +20,25 @@ export interface TransactionFilters {
 // --- Query Functions ---
 
 
+export function getTotalAssetsQuery(currency: string, rounding: number): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalAssets WHERE account ~ '^Assets'`;
+}
+
+export function getTotalLiabilitiesQuery(currency: string, rounding: number): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalLiabilities WHERE account ~ '^Liabilities'`;
+}
+
+export function getTotalWorthQuery(currency: string, rounding: number): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalWorth WHERE account ~ '^(Assets|Liabilities)'`;
+}
+
 /**
  * Gets converted cost of all Asset accounts
  * @param {string} currency - The target currency.
  * @returns {string} The BQL query string.
  */
 export function getTotalAssetsCostQuery(currency: string): string { // <-- NEW
-	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Assets'`;
+	return `SELECT convert(sum(position), '${currency}') AS _totalAssetsCost WHERE account ~ '^Assets'`;
 }
 
 /**
@@ -35,7 +47,7 @@ export function getTotalAssetsCostQuery(currency: string): string { // <-- NEW
  * @returns {string} The BQL query string.
  */
 export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- NEW
-	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Liabilities'`;
+	return `SELECT convert(sum(position), '${currency}') AS _totalLiabilitiesCost WHERE account ~ '^Liabilities'`;
 }
 
 /**
