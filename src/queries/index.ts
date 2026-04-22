@@ -25,29 +25,24 @@ export function getTotalAssetsQuery(currency: string, rounding: number): string 
 }
 
 export function getTotalLiabilitiesQuery(currency: string, rounding: number): string {
-	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalLiabilities WHERE account ~ '^Liabilities'`;
+	return `SELECT neg(round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding})) AS _totalLiabilities WHERE account ~ '^Liabilities'`;
 }
 
 export function getTotalWorthQuery(currency: string, rounding: number): string {
 	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalWorth WHERE account ~ '^(Assets|Liabilities)'`;
 }
 
-/**
- * Gets converted cost of all Asset accounts
- * @param {string} currency - The target currency.
- * @returns {string} The BQL query string.
- */
-export function getTotalAssetsCostQuery(currency: string): string { // <-- NEW
-	return `SELECT convert(sum(position), '${currency}') AS _totalAssetsCost WHERE account ~ '^Assets'`;
+// This Month Queries
+export function getThisMonthIncomeQuery(currency: string, rounding: number): string {
+	return `SELECT neg(round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding})) AS _thisMonthIncome WHERE account ~ '^Income' AND month=month(today()) AND year=year(today())`;
 }
 
-/**
- * Gets converted cost of all Liability accounts
- * @param {string} currency - The target currency.
- * @returns {string} The BQL query string.
- */
-export function getTotalLiabilitiesCostQuery(currency: string): string { // <-- NEW
-	return `SELECT convert(sum(position), '${currency}') AS _totalLiabilitiesCost WHERE account ~ '^Liabilities'`;
+export function getThisMonthExpensesQuery(currency: string, rounding: number): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _thisMonthExpenses WHERE account ~ '^Expenses' AND month=month(today()) AND year=year(today())`;
+}
+
+export function getThisMonthSavingsQuery(currency: string, rounding: number): string {
+	return `SELECT neg(round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding})) AS _thisMonthNetWorthChange WHERE account ~ '^(Income|Expenses)' AND month=month(today()) AND year=year(today())`;
 }
 
 /**
@@ -137,28 +132,6 @@ export function getBeanCheckCommand(filePath: string, commandBase: string): stri
 	// This keeps the plugin dependent only on bean-query
 	// Note: Don't use -f csv flag as ERRORS returns formatted text
 	return `${commandBase} "${filePath}" "ERRORS"`;
-}
-
-/**
- * Gets monthly income for a period.
- * @param {string} startDate - Start date (YYYY-MM-DD).
- * @param {string} endDate - End date (YYYY-MM-DD).
- * @param {string} currency - Target currency.
- * @returns {string} The BQL query string.
- */
-export function getMonthlyIncomeQuery(startDate: string, endDate: string, currency: string): string { // Must accept 3 args
-	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Income' AND date >= ${startDate} AND date <= ${endDate}`;
-}
-
-/**
- * Gets monthly expenses for a period.
- * @param {string} startDate - Start date (YYYY-MM-DD).
- * @param {string} endDate - End date (YYYY-MM-DD).
- * @param {string} currency - Target currency.
- * @returns {string} The BQL query string.
- */
-export function getMonthlyExpensesQuery(startDate: string, endDate: string, currency: string): string { // Must accept 3 args
-	return `SELECT convert(sum(position), '${currency}') WHERE account ~ '^Expenses' AND date >= ${startDate} AND date <= ${endDate}`;
 }
 
 /**

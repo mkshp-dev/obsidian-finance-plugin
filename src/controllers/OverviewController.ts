@@ -4,7 +4,7 @@ import { writable, type Writable, get } from 'svelte/store';
 import type { ChartConfiguration } from 'chart.js/auto';
 import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
-import { parseAmount, extractConvertedAmount, getCurrentMonthRange, parseSingleValue } from '../utils/index'; // Import helpers
+import { parseAmount, extractConvertedAmount, parseSingleValue } from '../utils/index'; // Import helpers
 import { parse as parseCsv } from 'csv-parse/sync';
 import { Logger } from '../utils/logger';
 
@@ -83,38 +83,23 @@ export class OverviewController {
 		}
 
 		try {
-			const monthRange = getCurrentMonthRange();
-
-			const [netWorthResult, incomeResult, expensesResult, historicalResult] = await Promise.all([
+			const [netWorthResult, incomeResult, expensesResult, savingsResult, historicalResult] = await Promise.all([
 				this.plugin.runQuery(queries.getTotalWorthQuery(reportingCurrency, 2)),
-				this.plugin.runQuery(queries.getMonthlyIncomeQuery(monthRange.start, monthRange.end, reportingCurrency)),
-				this.plugin.runQuery(queries.getMonthlyExpensesQuery(monthRange.start, monthRange.end, reportingCurrency)),
+				this.plugin.runQuery(queries.getThisMonthIncomeQuery(reportingCurrency, 2)),
+				this.plugin.runQuery(queries.getThisMonthExpensesQuery(reportingCurrency, 2)),
+				this.plugin.runQuery(queries.getThisMonthSavingsQuery(reportingCurrency, 2)),
 				this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery('month', reportingCurrency))
 			]);
 			Logger.log("OverviewController: Historical Result:", historicalResult);
 
 			// Process KPI Data
 			Logger.log("OverviewController: Net Worth Result:", netWorthResult);
-			const netWorthNum = parseFloat(parseSingleValue(netWorthResult));
+			const netWorthNum = parseFloat(parseSingleValue(netWorthResult)) || 0;
 			Logger.log("OverviewController: Parsed Net Worth:", netWorthNum);
 
-			const incomeInventoryStr = parseSingleValue(incomeResult);
-			const expensesInventoryStr = parseSingleValue(expensesResult);
-
-			const incomeStr = extractConvertedAmount(incomeInventoryStr, reportingCurrency);
-			const expensesStr = extractConvertedAmount(expensesInventoryStr, reportingCurrency);
-
-			const incomeData = parseAmount(incomeStr);
-			const expensesData = parseAmount(expensesStr);
-
-			// In Beancount:
-			// - Income accounts have negative balances (we want positive for display)
-			// - Expense accounts have positive balances (already positive)
-			const incomeAmount = Math.abs(incomeData.amount); // Convert negative income to positive
-			const expensesAmount = expensesData.amount; // Expenses are already positive
-			const savingsNum = incomeAmount - expensesAmount;
-
-
+			const incomeAmount = parseFloat(parseSingleValue(incomeResult)) || 0;
+			const expensesAmount = parseFloat(parseSingleValue(expensesResult)) || 0;
+			const savingsNum = parseFloat(parseSingleValue(savingsResult)) || 0;
 
 			const newState: Partial<OverviewState> = {
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,

@@ -99,11 +99,9 @@ export class BeancountView extends ItemView {
 			const parseNumericResult = (csv: string): number => parseFloat(parseSingleValue(csv)) || 0;
 
 			const assetsNum = parseNumericResult(assetsResult);
-			const liabilitiesRaw = parseNumericResult(liabilitiesResult);
+			const liabilitiesNum = parseNumericResult(liabilitiesResult);
 			const netWorthNum = parseNumericResult(netWorthResult);
 
-			// Liabilities from Beancount are stored as negative; display as positive magnitude
-			const liabilitiesDisplay = `${Math.abs(liabilitiesRaw).toFixed(2)} ${reportingCurrency}`;
 
 			Logger.log('[refreshData] Check result from runBeanCheck:', checkResult);
 			Logger.log('[refreshData] Error count:', checkResult.errorCount);
@@ -111,7 +109,7 @@ export class BeancountView extends ItemView {
 
 			this.updateProps({
 				assets: `${assetsNum.toFixed(2)} ${reportingCurrency}`,
-				liabilities: liabilitiesDisplay,
+				liabilities: `${liabilitiesNum.toFixed(2)} ${reportingCurrency}`,
 				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
 				kpiError: null, 
 				fileStatus: checkResult.status, 
