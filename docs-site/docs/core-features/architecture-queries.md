@@ -24,39 +24,49 @@ This page documents the exact queries used throughout the plugin, so you can und
 
 ## 📊 Overview Tab Queries
 
-### Net Worth Components
+All KPI queries in the Overview tab use a typed pattern that returns a plain rounded number rather than an inventory string. The `only()` function returns `null` if the position cannot be fully converted to a single currency (e.g. missing price data), which safely excludes unconverted commodities instead of causing an error.
 
-**Total Assets:**
+### Net Worth (single query)
+
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^(Assets|Liabilities)'
 ```
 
-**Total Liabilities:**
+### This Month's Income
+
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Liabilities'
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2))
+WHERE account ~ '^Income'
+  AND month = month(today()) AND year = year(today())
 ```
 
-*Note: Net Worth = Assets - |Liabilities|*
+`neg()` flips the sign because Beancount stores income as negative internally.
 
-### Monthly Income & Expenses
+### This Month's Expenses
 
-**Current Month Income:**
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Income' AND date >= 2026-02-01 AND date <= 2026-02-28
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^Expenses'
+  AND month = month(today()) AND year = year(today())
 ```
 
-**Current Month Expenses:**
+### This Month's Savings (Income − Expenses)
+
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND date >= 2026-02-01 AND date <= 2026-02-28
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2))
+WHERE account ~ '^(Income|Expenses)'
+  AND month = month(today()) AND year = year(today())
 ```
 
-*Dates are dynamically calculated based on current month*
+Date filtering uses BQL's built-in `month(today())` and `year(today())` — no hardcoded dates are passed from TypeScript.
 
 ### Historical Net Worth Chart
 
-**Net Worth Over Time:**
 ```sql
-SELECT year, month, only('USD', convert(last(balance), 'USD', last(date))) WHERE account ~ '^(Assets|Liabilities)' ORDER BY year, month
+SELECT year, month, only('USD', convert(last(balance), 'USD', last(date)))
+WHERE account ~ '^(Assets|Liabilities)'
+ORDER BY year, month
 ```
 
 This query:
@@ -64,6 +74,30 @@ This query:
 - Gets the last balance for each month
 - Converts to your operating currency
 - Includes both Assets and Liabilities for net worth calculation
+
+---
+
+## 🧮 Snapshot View Queries
+
+The sidebar Snapshot View uses three separate queries to display Assets, Liabilities, and Net Worth:
+
+**Assets:**
+```sql
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^Assets'
+```
+
+**Liabilities** (sign-flipped so positive = debt):
+```sql
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2))
+WHERE account ~ '^Liabilities'
+```
+
+**Net Worth:**
+```sql
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^(Assets|Liabilities)'
+```
 
 ---
 

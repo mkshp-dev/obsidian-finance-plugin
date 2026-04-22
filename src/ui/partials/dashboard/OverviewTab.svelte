@@ -21,6 +21,8 @@
 		savingsRate: '0%',
 		chartConfig: null,
 		chartError: null,
+		chartLoading: false,
+		chartInterval: 'month',
 		currency: 'USD',
 	});
 
@@ -36,6 +38,12 @@
 	function handleRefresh() {
 		if (controller) {
 			controller.loadData();
+		}
+	}
+
+	function handleIntervalChange(interval: 'month' | 'week') {
+		if (controller && state.chartInterval !== interval) {
+			controller.setChartInterval(interval);
 		}
 	}
 	// -----------------------
@@ -88,8 +96,24 @@
 		</div>
 		
 		<div class="chart-container">
+			<div class="chart-header">
+				<div class="interval-toggle">
+					<button
+						class:active={state.chartInterval === 'month'}
+						on:click={() => handleIntervalChange('month')}
+						disabled={state.chartLoading}
+					>Monthly</button>
+					<button
+						class:active={state.chartInterval === 'week'}
+						on:click={() => handleIntervalChange('week')}
+						disabled={state.chartLoading}
+					>Weekly</button>
+				</div>
+			</div>
 			{#if state.chartError}
 				<p class="error-message">Chart Error: {state.chartError}</p>
+			{:else if state.chartLoading}
+				<p class="chart-loading">Loading chart...</p>
 			{:else if state.chartConfig}
 				<ChartComponent config={state.chartConfig} height="300px"/>
 			{:else if !state.isLoading}
@@ -175,9 +199,52 @@
 	}
 	
 	.error-message { color: var(--text-error); }
+	.chart-loading { color: var(--text-muted); font-size: var(--font-ui-small); text-align: center; padding: var(--size-4-8) 0; }
 	.chart-container {
 		margin-top: var(--size-4-8);
-		height: 300px;
+		height: 360px;
 		position: relative;
+	}
+
+	.chart-header {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--size-4-2);
+	}
+
+	.interval-toggle {
+		display: flex;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		overflow: hidden;
+	}
+
+	.interval-toggle button {
+		padding: var(--size-4-1) var(--size-4-3);
+		background: var(--interactive-normal);
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: background-color 0.15s, color 0.15s;
+	}
+
+	.interval-toggle button:not(:last-child) {
+		border-right: 1px solid var(--background-modifier-border);
+	}
+
+	.interval-toggle button.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.interval-toggle button:hover:not(.active):not(:disabled) {
+		background: var(--interactive-hover);
+		color: var(--text-normal);
+	}
+
+	.interval-toggle button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

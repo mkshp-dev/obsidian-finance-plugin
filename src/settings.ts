@@ -3,6 +3,7 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
+import { updateOperatingCurrency } from './utils/index';
 
 /**
  * Interface defining the plugin settings.
@@ -183,7 +184,32 @@ export class BeancountSettingTab extends PluginSettingTab {
                 }
 
                 return text;
-            });
+            })
+            .addButton(button => button
+                .setButtonText('Save to ledger')
+                .setTooltip('Update the operating_currency option in your ledger.beancount file')
+                .onClick(async () => {
+                    const currency = this.plugin.settings.operatingCurrency;
+                    if (!currency) {
+                        new Notice('Operating currency is not set.');
+                        return;
+                    }
+                    button.setButtonText('Saving…');
+                    button.setDisabled(true);
+                    const result = await updateOperatingCurrency(
+                        this.plugin,
+                        currency,
+                        this.plugin.settings.createBackups
+                    );
+                    button.setDisabled(false);
+                    button.setButtonText('Save to ledger');
+                    if (result.success) {
+                        new Notice(`Operating currency updated to ${currency} in ledger file.`);
+                    } else {
+                        new Notice(`Failed to update ledger: ${result.error}`);
+                    }
+                })
+            );
 
         new Setting(containerEl)
             .setName('Debug mode')
@@ -496,9 +522,11 @@ export class BeancountSettingTab extends PluginSettingTab {
             return { isValid: false, message: 'Currency is required' };
         }
 
-        const currencyRegex = /^[A-Z]{3}$/;
+        // Beancount currency: starts with an uppercase letter, followed by uppercase
+        // letters, digits, or the symbols ' . _ - (e.g. USD, BTC, GOLD, INR, EUR)
+        const currencyRegex = /^[A-Z][A-Z0-9'._-]*$/;
         if (!currencyRegex.test(currency.toUpperCase())) {
-            return { isValid: false, message: 'Currency should be 3 letters (e.g., USD, EUR, INR)' };
+            return { isValid: false, message: 'Currency must start with a letter and contain only uppercase letters, digits, or \' . _ -' };
         }
 
         return { isValid: true, message: '✅ Valid currency code' };

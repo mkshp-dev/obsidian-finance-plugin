@@ -6,7 +6,6 @@
 	export let assets = "0 USD";
 	export let liabilities = "0 USD";
 	export let netWorth = "0.00 USD";
-	export let hasUnconvertedCommodities = false;
 	export let kpiError: string | null = null;
 	export let fileStatus: "checking" | "ok" | "error" = "checking";
 	export let fileStatusMessage: string | null = "";
@@ -93,14 +92,9 @@
 	{/if}
 </div>
 
-{#if hasUnconvertedCommodities && !kpiError}
-	<div class="conversion-warning">
-		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-			<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-			<path d="M12 9v4"/>
-			<path d="m12 17 .01 0"/>
-		</svg>
-		<span>Some commodities lack price data and are excluded from totals</span>
+{#if !kpiError}
+	<div class="conversion-note">
+		<span>Commodities without price data are excluded from totals</span>
 	</div>
 {/if}
 
@@ -218,25 +212,12 @@
 		white-space: pre-wrap; 
 	}
 
-	/* --- Conversion Warning Styles --- */
-	.conversion-warning {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: var(--font-ui-small);
-		color: var(--text-warning);
-		background-color: var(--background-modifier-warning);
-		padding: 8px 10px;
-		border-radius: 4px;
-		border: 1px solid var(--color-warning);
-		margin-top: 10px;
-	}
-	.conversion-warning svg {
-		flex-shrink: 0;
-		color: var(--text-warning);
-	}
-	.conversion-warning span {
-		line-height: 1.3;
+	/* --- Conversion Note Styles --- */
+	.conversion-note {
+		font-size: var(--font-ui-smaller);
+		color: var(--text-faint);
+		margin-top: 6px;
+		text-align: center;
 	}
 
 	/* --- Error Section Styles --- */

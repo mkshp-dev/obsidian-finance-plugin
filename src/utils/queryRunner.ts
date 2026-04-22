@@ -40,18 +40,15 @@ export function runQuery(plugin: BeancountPlugin, query: string, filepath?: stri
             if (error) return reject(error);
             if (stderr) return reject(new Error(stderr));
 
-            // Strip lines that look like query echoes (bean-query sometimes echoes the query back)
+            // Strip lines that are exact query echoes (bean-query sometimes echoes the query back).
+            // Only match lines that are identical to the full query — NOT pattern-based filters
+            // like 'convert(' or 'sum(', which also appear as column headers in CSV output and
+            // would incorrectly strip the header row, causing parseSingleValue to return 0.
             const lines = stdout.split('\n');
             const filteredLines = lines.filter(line => {
                 const trimmed = line.trim();
                 if (!trimmed) return false;
-                if (
-                    trimmed.includes('SELECT') ||
-                    trimmed.includes('WHERE') ||
-                    trimmed.includes('convert(') ||
-                    trimmed.includes('sum(') ||
-                    trimmed === query.trim()
-                ) {
+                if (trimmed === query.trim()) {
                     return false;
                 }
                 return true;
