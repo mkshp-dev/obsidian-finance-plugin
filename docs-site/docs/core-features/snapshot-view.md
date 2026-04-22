@@ -4,44 +4,65 @@ sidebar_position: 3
 
 # Snapshot View
 
-The **Snapshot View** is a persistent sidebar widget designed to give you "at a glance" financial awareness while you work in your notes.
+The **Snapshot View** is a persistent sidebar widget that gives you at-a-glance financial awareness while you work in your notes.
 
 ## 👁 Features
 
+### File Status Indicator
+The status button at the top shows the health of your Beancount file:
+- **✅ OK** — File is valid, no errors detected
+- **❌ N Errors** — Click to see a notification with the full error message
+- **Checking…** — Validation is in progress
+
 ### Key Metrics
-Displays high-level financial indicators extracted directly from your ledger:
-- **Net Worth**: Your total wealth (Assets - Liabilities) in your Operating Currency
-- **Income (Month)**: Total income accrued for the current month
-- **Expenses (Month)**: Total expenses incurred this month
-- **All Values**: Displayed in your configured Operating Currency with proper formatting
+Displays three high-level financial indicators pulled directly from your ledger:
+- **Net Worth** — Total position across all Assets and Liabilities accounts, converted to your Operating Currency
+- **Assets** — Total value of all Assets accounts in your Operating Currency
+- **Liabilities** — Total value of all Liabilities accounts. Positive numbers represent outstanding debt; negative numbers indicate a credit or overpayment
 
-### Recent Transactions
-Shows a compact list of your most recent transactions (default: last 5-10 entries):
-- **Date** and **Payee** for quick identification
-- **Amount** with proper currency display
-- **Click to View**: Clicking a transaction opens the full Unified Dashboard for details
+All three values are rounded to 2 decimal places and shown in your configured Operating Currency.
 
-### Quick Actions
-Convenient buttons for common operations:
-- **Add Transaction**: Opens the Unified Transaction Modal
-- **Refresh**: Reloads data from your Beancount file
-- **Open Dashboard**: Opens the full Unified Dashboard view
+> **Note:** Commodities without price data are excluded from the totals. If you hold stocks or crypto without price directives, only the cash portion will be reflected.
 
-##  Usage Tips
+### Refresh Button
+Reloads all three KPI values and re-validates the Beancount file on demand.
+
+---
+
+## 🔍 Underlying Queries
+
+The Snapshot View uses three typed BQL queries (using your configured Operating Currency, e.g. `USD`):
+
+**Assets:**
+```sql
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^Assets'
+```
+
+**Liabilities** (sign-flipped so positive = debt):
+```sql
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2))
+WHERE account ~ '^Liabilities'
+```
+
+**Net Worth** (Assets + Liabilities combined):
+```sql
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+WHERE account ~ '^(Assets|Liabilities)'
+```
+
+The `only()` function returns `null` if the position cannot be fully converted to a single currency (e.g., missing price data for a commodity). This is why unconverted commodities are excluded rather than causing an error.
+
+---
+
+## 💡 Usage Tips
 
 ### When to Use
-- **Daily Note Taking**: Keep it open while journaling to reference your finances
-- **Quick Checks**: Glance at net worth without opening the full dashboard
-- **Context Switching**: Maintain financial awareness while working on other tasks
+- **Daily note-taking** — Keep it open while journaling to quickly reference balances
+- **Quick checks** — Glance at net worth without opening the full dashboard
+- **Context switching** — Maintain financial awareness while working on other tasks
 
-### Customization
-The Snapshot View respects your plugin settings:
-- **Operating Currency**: Displays all values in your configured currency
-- **Date Format**: Uses your system's locale for date display
-- **Backup Settings**: Changes made via quick actions follow backup preferences
-
-### Placement Options
+### Placement
 Access the Snapshot View via:
-- **Command**: `Ctrl/Cmd + P` → "Open Beancount Snapshot"
-- **Ribbon**: (if enabled) Click the Beancount icon
-- **Right Sidebar**: Drag and position the view as needed in Obsidian's layout
+- **Command Palette**: `Ctrl/Cmd + P` → "Open Beancount Snapshot"
+- **Right Sidebar**: Drag and position the view anywhere in Obsidian's layout

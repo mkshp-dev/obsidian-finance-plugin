@@ -10,15 +10,15 @@ The **Overview Tab** is the landing page of the Unified Dashboard. It answers th
 
 ### Key Performance Indicators (KPIs)
 At-a-glance metrics displayed at the top:
-- **Net Worth**: Your total wealth (Assets minus Liabilities) in your Operating Currency
+- **Net Worth**: Your total wealth (Assets + Liabilities) in your Operating Currency
 - **Monthly Income**: Total income accrued this calendar month
 - **Monthly Expenses**: Total expenses incurred this calendar month
-- **Savings Rate**: Your efficiency metric: `(Income - Expenses) / Income` as a percentage
+- **Savings Rate**: Your efficiency metric: `Savings / Income` as a percentage
 
 ### Net Worth Chart
 - **Chart Type**: Interactive line chart showing your financial trajectory
 - **Time Period**: Historical net worth from the earliest transaction to today
-- **Data Source**: Calculated as `Assets - |Liabilities|` for each month in your history
+- **Data Source**: Cumulative balance of all Assets and Liabilities accounts per month
 - **Interactivity**: Hover over points to see exact values with dates
 - **Requirements**: Needs at least 2 months of data to render
 
@@ -28,42 +28,48 @@ At-a-glance metrics displayed at the top:
 
 All data on this tab comes from direct **bean-query** BQL queries. Here are the exact queries used:
 
-### Net Worth Components
+### Net Worth
 
-**Total Assets:**
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2) AS _totalWorth
+WHERE account ~ '^(Assets|Liabilities)'
 ```
 
-**Total Liabilities:**
-```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Liabilities'
-```
-
-*Net Worth = Assets - |Liabilities|*
+Assets and Liabilities are summed together in a single query. Beancount stores liabilities as negative, so the result is the true net worth directly.
 
 ### Monthly Metrics
 
 **Current Month Income:**
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Income' AND date >= 2026-02-01 AND date <= 2026-02-28
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2)) AS _thisMonthIncome
+WHERE account ~ '^Income' AND month=month(today()) AND year=year(today())
 ```
 
 **Current Month Expenses:**
 ```sql
-SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND date >= 2026-02-01 AND date <= 2026-02-28
+SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2) AS _thisMonthExpenses
+WHERE account ~ '^Expenses' AND month=month(today()) AND year=year(today())
 ```
 
-*Dates are dynamically calculated based on the current month*
+**Current Month Savings** (net of income and expenses):
+```sql
+SELECT neg(round(number(only('USD', convert(sum(position), 'USD'))), 2)) AS _thisMonthNetWorthChange
+WHERE account ~ '^(Income|Expenses)' AND month=month(today()) AND year=year(today())
+```
+
+`neg()` is used on Income and the combined Income+Expenses queries because Beancount stores income as negative. Dates are resolved natively in BQL using `month(today())` and `year(today())` — no date parameters are passed from the plugin.
+
+*Savings Rate is calculated client-side as `Savings / Income × 100`.*
 
 ### Historical Chart Data
 
 **Net Worth Over Time:**
 ```sql
-SELECT year, month, only('USD', convert(last(balance), 'USD', last(date))) WHERE account ~ '^(Assets|Liabilities)' ORDER BY year, month
+SELECT year, month, only('USD', convert(last(balance), 'USD', last(date)))
+WHERE account ~ '^(Assets|Liabilities)' ORDER BY year, month
 ```
 
-This query groups data by month and gets the last balance for each period, converted to your operating currency.
+Groups data by month and gets the last cumulative balance for each period, converted to your operating currency.
 
 :::tip
 You can run these queries yourself in a BQL code block or use them as templates for custom financial dashboards!

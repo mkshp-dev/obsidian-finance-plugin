@@ -93,8 +93,8 @@ This guide addresses common issues with connectivity, queries, and data display.
 ## 📉 Data Display
 
 ### Liabilities Show as Positive Numbers?
-- **This is intentional!** Beancount stores Liabilities as negative numbers internally, but the plugin displays them as positive magnitudes for user-friendliness.
-- **Net Worth Calculation**: Still correct as `Assets - |Liabilities|`
+- **This is intentional!** Beancount stores Liabilities as negative numbers internally. The plugin uses `neg()` in its BQL query to flip the sign, so outstanding debt displays as a positive number (normal debt) and a credit or overpayment displays as negative.
+- **Net Worth Calculation**: Computed as a single query over `^(Assets|Liabilities)` — no manual subtraction needed.
 
 ### Missing Charts
 - **Requirement**: Charts require at least 2 data points (typically 2 months of history) to render a line.
@@ -110,8 +110,13 @@ This guide addresses common issues with connectivity, queries, and data display.
 - **Debug**: Use a direct BQL query to verify:
   ```bql
   SELECT account, convert(sum(position), 'USD')
-  WHERE account ~ '^Assets|^Liabilities'
+  WHERE account ~ '^(Assets|Liabilities)'
   GROUP BY account
+  ```
+  Or check the combined net worth figure:
+  ```bql
+  SELECT round(number(only('USD', convert(sum(position), 'USD'))), 2)
+  WHERE account ~ '^(Assets|Liabilities)'
   ```
 
 ---
