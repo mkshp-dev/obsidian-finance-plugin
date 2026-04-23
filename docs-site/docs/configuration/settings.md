@@ -122,6 +122,7 @@ Finances/
 ├── pads.beancount            # Pad directives
 ├── notes.beancount           # Note directives
 ├── events.beancount          # Event directives
+├── queries.beancount         # Named query directives
 └── transactions/             # Folder for transaction files
     ├── 2024.beancount        # Transactions by year
     ├── 2025.beancount
@@ -197,18 +198,16 @@ Customize how Beancount Query Language results are displayed in your notes.
 - **Purpose**: Shows the original BQL query above results.
 - **Enable If**: You want to see/debug the SQL being executed or learn BQL syntax.
 
-### Shortcuts Template File
-- **Purpose**: Path to a markdown file defining reusable BQL shortcuts.
-- **Format**: Create a file like `BQL_Shortcuts.md` with shorthand query definitions:
-  ```markdown
-  ## WORTH: Net Worth
-  ```bql-shorthand
-  SELECT convert(sum(position), 'USD')
-  WHERE account ~ '^(Assets|Liabilities)'
+### Named Queries
+- **Purpose**: Explains how to manage reusable BQL queries stored as Beancount `query` directives.
+- **Storage**: Queries are saved to `queries.beancount` inside your structured layout folder.
+- **Format**: Each entry follows the standard Beancount syntax:
   ```
+  YYYY-MM-DD query "name" "SELECT ..."
   ```
-- **Usage**: Reference shortcuts as `bql:WORTH` in inline queries.
-- **Helper Button**: Click **"Create Template"** to generate a starter file with common shortcuts.
+- **Creating Queries**: Use the **Add** ribbon button → **🔍 Query** tab to define a named query via the UI.
+- **Using Queries**: Reference any named query in your notes with `` `bql-q:name` ``.
+- **Direct Editing**: You can also edit `queries.beancount` directly in any text editor.
 
 ---
 

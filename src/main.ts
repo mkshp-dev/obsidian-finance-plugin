@@ -24,7 +24,7 @@ import { Logger } from './utils/logger';
 export default class BeancountPlugin extends Plugin {
 	settings: BeancountPluginSettings;
 	private bqlProcessor: BQLCodeBlockProcessor;
-	private inlineBqlProcessor: InlineBQLProcessor;
+	public inlineBqlProcessor: InlineBQLProcessor;
 
 	// Services
 	public journalService: JournalService;

@@ -6,7 +6,7 @@ import type { JournalTransaction, JournalEntry } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
-import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote, updateBalance, deleteBalance, updateNote, deleteNote } from '../../utils';
+import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote, updateBalance, deleteBalance, updateNote, deleteNote, createQueryDirective } from '../../utils';
 
 export class UnifiedTransactionModal extends Modal {
     plugin: BeancountPlugin;
@@ -70,7 +70,8 @@ export class UnifiedTransactionModal extends Modal {
                 tags,
                 currencies, // Add currencies for autocomplete
                 mode: this.mode,
-                operatingCurrency: this.plugin.settings.operatingCurrency
+                operatingCurrency: this.plugin.settings.operatingCurrency,
+                plugin: this.plugin
             }
         });
 
@@ -264,6 +265,23 @@ export class UnifiedTransactionModal extends Modal {
                     this.close();
                 } else {
                     new Notice(`Failed to add note: ${result.error || 'Unknown error'}`);
+                }
+            } else if (entryData.type === 'query') {
+                const result = await createQueryDirective(
+                    this.plugin,
+                    entryData.date,
+                    entryData.name,
+                    entryData.sql,
+                    this.plugin.settings.createBackups ?? true
+                );
+
+                if (result.success) {
+                    new Notice(`Query "${entryData.name}" saved successfully! Use \`bql-q:${entryData.name}\` in your notes.`);
+                    // Invalidate inline processor cache so new query is immediately available
+                    this.plugin.inlineBqlProcessor.invalidateQueryCache();
+                    this.close();
+                } else {
+                    new Notice(`Failed to save query: ${result.error || 'Unknown error'}`);
                 }
             } else {
                 // Pad entries have no UI - this code path is unreachable

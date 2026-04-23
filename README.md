@@ -17,7 +17,7 @@ A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that t
 <summary><strong>🔍 Live BQL Queries</strong> - Click to see</summary>
 <br/>
 <img src="docs/assets/bql-query.png" alt="BQL Queries"/>
-<p align="center"><em>Embed dynamic financial data directly in your notes with shorthand support</em></p>
+<p align="center"><em>Embed dynamic financial data directly in your notes using named query directives</em></p>
 </details>
 
 <details>
@@ -29,7 +29,7 @@ A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that t
 
 **Highlights:**
 - 📈 Real-time financial metrics and trend visualization
-- 📝 Inline BQL queries with customizable shortcuts
+- 📝 Inline BQL queries with named query directives (`bql-q:name`)
 - 💰 Complete transaction, balance, and commodity management
 - 💹 **Automated Price Fetching** — runs `bean-price` on a schedule; new prices are deduplicated and appended to `prices.beancount` automatically
 - 🔄 Direct Beancount file integration—no separate database

@@ -766,3 +766,114 @@ export async function validateCommodityLocation(
         return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
 }
+
+// ─── QUERY DIRECTIVE ──────────────────────────────────────────────────────────
+
+/**
+ * Parse all query directives from the content of a queries.beancount file.
+ * Returns a map of query name → sql string.
+ * Format: `YYYY-MM-DD query "name" "sql"`
+ */
+export function parseQueryDirectives(content: string): Record<string, string> {
+    const result: Record<string, string> = {};
+    // Match: date query "name" "sql"
+    const pattern = /^\d{4}-\d{2}-\d{2}\s+query\s+"([^"]+)"\s+"((?:[^"\\]|\\.)*)"/gm;
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+        const [, name, sql] = match;
+        result[name] = sql;
+    }
+    return result;
+}
+
+/**
+ * Create a named query directive in queries.beancount.
+ * Format: `YYYY-MM-DD query "name" "sql"`
+ */
+export async function createQueryDirective(
+    plugin: BeancountPlugin,
+    date: string,
+    name: string,
+    sql: string,
+    createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const filePath = getTargetFile(plugin, 'query');
+        if (!filePath) return { success: false, error: 'Beancount file path not set' };
+
+        const normalizedPath = convertWslPathToWindows(filePath);
+
+        // Escape any double-quotes inside the sql string
+        const escapedSql = sql.replace(/"/g, '\\"');
+        const directiveText = `${date} query "${name}" "${escapedSql}"`;
+
+        await createBackupFile(normalizedPath, createBackup, 'createQueryDirective');
+
+        // Ensure file exists; if not, create it with a header
+        let content: string;
+        try {
+            content = await readFile(normalizedPath, 'utf-8');
+        } catch {
+            content = `;; Named Queries\n;; Managed by Beancount for Obsidian\n\n`;
+        }
+
+        const newContent = content.endsWith('\n')
+            ? `${content}${directiveText}\n`
+            : `${content}\n${directiveText}\n`;
+
+        await atomicFileWrite(normalizedPath, newContent);
+        Logger.log(`[createQueryDirective] Saved query directive "${name}"`);
+        return { success: true };
+    } catch (error) {
+        Logger.error('[createQueryDirective] Error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * Delete a named query directive from queries.beancount by name.
+ */
+export async function deleteQueryDirective(
+    plugin: BeancountPlugin,
+    name: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const filePath = getTargetFile(plugin, 'query');
+        if (!filePath) return { success: false, error: 'Beancount file path not set' };
+
+        const normalizedPath = convertWslPathToWindows(filePath);
+        await createBackupFile(normalizedPath, plugin.settings.createBackups ?? true, 'deleteQueryDirective');
+
+        const content = await readFile(normalizedPath, 'utf-8');
+        // Remove lines that declare this query name
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const linePattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}\\s+query\\s+"${escapedName}"[^\n]*\n?`, 'gm');
+        const newContent = content.replace(linePattern, '');
+
+        await atomicFileWrite(normalizedPath, newContent);
+        Logger.log(`[deleteQueryDirective] Deleted query directive "${name}"`);
+        return { success: true };
+    } catch (error) {
+        Logger.error('[deleteQueryDirective] Error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * Read all query directives from queries.beancount.
+ * Returns a map of name → sql.
+ */
+export async function getQueryDirectives(
+    plugin: BeancountPlugin
+): Promise<Record<string, string>> {
+    try {
+        const filePath = getTargetFile(plugin, 'query');
+        if (!filePath) return {};
+
+        const normalizedPath = convertWslPathToWindows(filePath);
+        const content = await readFile(normalizedPath, 'utf-8');
+        return parseQueryDirectives(content);
+    } catch {
+        return {};
+    }
+}

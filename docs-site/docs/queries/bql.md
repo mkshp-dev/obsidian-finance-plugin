@@ -162,22 +162,43 @@ Write a full BQL query inside backticks starting with `bql:`:
 
 > My net worth is `bql:SELECT convert(sum(position), 'USD') WHERE account ~ '^Assets'`
 
-### Shorthand Templates
+### Named Queries (`bql-q:`)
 
-For complex or frequently used queries, use the **Shorthand System**.
+For complex or frequently reused queries, define them once as **named query directives** in `queries.beancount` and reference them by name anywhere in your notes.
 
-#### 1. Setup Template
-Create a note (e.g., `BQL_Shortcuts.md`) and define queries like this:
-    ````
-    ## WORTH: Net Worth
-    ```bql-shorthand
-    SELECT convert(sum(position), 'USD') WHERE account ~ '^(Assets|Liabilities)'
-    ```
-    ````
-#### 2. Configure
-Go to **Settings** and point "Shortcuts template file" to `BQL_Shortcuts.md`.
+#### 1. Define a Query
 
-#### 3. Use
-Now you can simply write:
+Open the **Add** ribbon (the **+** icon) and switch to the **🔍 Query** tab. Fill in:
 
-> My net worth is `bql-sh:WORTH`
+| Field | Example |
+|-------|---------|
+| **Date** | `2024-01-01` |
+| **Query name** | `my_expenses` |
+| **SQL** | `SELECT account, sum(position) WHERE account ~ 'Expenses' GROUP BY account` |
+
+This appends the following directive to `queries.beancount`:
+
+```
+2024-01-01 query "my_expenses" "SELECT account, sum(position) WHERE account ~ 'Expenses' GROUP BY account"
+```
+
+#### 2. Use in Notes
+
+Reference your named query with `bql-q:` followed by its name:
+
+> My monthly expenses: `bql-q:my_expenses`
+
+The plugin looks up the query from `queries.beancount`, executes it, and renders the result inline.
+
+#### 3. Manage Queries Directly
+
+You can also edit `queries.beancount` directly. The format follows the standard [Beancount `query` directive](https://beancount.github.io/docs/beancount_language_syntax/#query):
+
+```
+YYYY-MM-DD query "name" "SELECT ..."
+```
+
+:::tip Instant updates
+After saving a new query via the modal, the inline processor cache is cleared automatically — your `bql-q:` references will reflect the new query on the next note render without reloading Obsidian.
+:::
+

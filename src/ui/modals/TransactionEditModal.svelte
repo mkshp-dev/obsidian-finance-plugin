@@ -7,6 +7,7 @@
 		JournalBalance,
 		JournalNote,
 	} from "../../models/journal";
+	import { runQuery } from "../../utils/queryRunner";
 
 	export let transaction: JournalTransaction | null = null; // Now optional for Add mode
 	export let entry: JournalEntry | null = null; // Support for any entry type
@@ -16,6 +17,7 @@
 	export let currencies: string[] = []; // Add currencies prop
 	export let mode: "add" | "edit" = transaction || entry ? "edit" : "add"; // Auto-detect mode
 	export let operatingCurrency: string = "INR";
+	export let plugin: any = null;
 
 	const dispatch = createEventDispatcher();
 
@@ -45,7 +47,7 @@
 	}
 
 	// Entry type tabs
-	let activeTab: "transaction" | "balance" | "note" = "transaction";
+	let activeTab: "transaction" | "balance" | "note" | "query" = "transaction";
 
 	// Initialize active tab based on existing entry
 	if (entry) {
@@ -55,6 +57,44 @@
 				: (entry.type as "transaction" | "balance" | "note");
 	} else if (transaction) {
 		activeTab = "transaction";
+	}
+
+	// Query directive fields
+	let queryName = "";
+	let querySql = "";
+
+	// Query test state
+	let queryTesting = false;
+	let queryTestRows: string[][] = [];
+	let queryTestError = "";
+
+	async function testQuerySQL() {
+		if (!querySql.trim() || !plugin) return;
+		queryTesting = true;
+		queryTestRows = [];
+		queryTestError = "";
+		try {
+			const csv = await runQuery(plugin, querySql.trim());
+			const lines = csv.trim().split("\n").filter((l) => l.trim());
+			// Parse CSV lines (handles simple quoted fields)
+			queryTestRows = lines.slice(0, 6).map((line) => {
+				const cells: string[] = [];
+				let current = "";
+				let inQuotes = false;
+				for (let i = 0; i < line.length; i++) {
+					const ch = line[i];
+					if (ch === '"') { inQuotes = !inQuotes; }
+					else if (ch === "," && !inQuotes) { cells.push(current.trim()); current = ""; }
+					else { current += ch; }
+				}
+				cells.push(current.trim());
+				return cells;
+			});
+		} catch (e: any) {
+			queryTestError = e.message || String(e);
+		} finally {
+			queryTesting = false;
+		}
 	}
 
 	// Reactive title update
@@ -510,6 +550,10 @@
 		} else if (activeTab === "note") {
 			if (!noteAccount) errors.push("Account is required for note");
 			if (!noteComment) errors.push("Comment is required for note");
+		} else if (activeTab === "query") {
+			if (!queryName.trim()) errors.push("Query name is required");
+			if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(queryName.trim())) errors.push("Query name must start with a letter and contain only letters, numbers, hyphens, or underscores");
+			if (!querySql.trim()) errors.push("SQL is required");
 		}
 
 		return errors.length === 0;
@@ -599,6 +643,13 @@
 				date,
 				account: noteAccount,
 				comment: noteComment,
+			};
+		} else if (activeTab === "query") {
+			entryData = {
+				type: "query",
+				date,
+				name: queryName.trim(),
+				sql: querySql.trim(),
 			};
 		}
 
@@ -707,6 +758,12 @@
 					on:click={() => (activeTab = "note")}
 				>
 					📝 Note
+				</button>
+				<button
+					class="tab-button {activeTab === 'query' ? 'active' : ''}"
+					on:click={() => (activeTab = "query")}
+				>
+					🔍 Query
 				</button>
 			</div>
 		{/if}
@@ -1258,6 +1315,81 @@
 						rows="3"
 					></textarea>
 				</div>
+			</div>
+		{/if}
+
+		<!-- Query Form -->
+		{#if activeTab === "query"}
+			<div class="form-grid">
+				<div class="form-group">
+					<label for="query-date">Date *</label>
+					<input
+						type="date"
+						id="query-date"
+						bind:value={date}
+						required
+					/>
+				</div>
+
+				<div class="form-group full-width">
+					<label for="query-name">Query name *</label>
+					<input
+						type="text"
+						id="query-name"
+						bind:value={queryName}
+						placeholder="e.g. my_expenses"
+						required
+					/>
+					<small style="color: var(--text-muted)">Use in notes with <code>bql-q:{queryName || 'name'}</code></small>
+				</div>
+
+				<div class="form-group full-width">
+					<label for="query-sql">SQL *</label>
+					<textarea
+						id="query-sql"
+						bind:value={querySql}
+						placeholder="SELECT account, sum(position) WHERE account ~ 'Expenses' GROUP BY account"
+						required
+						rows="4"
+						style="font-family: monospace; font-size: 0.9em;"
+					></textarea>
+					<button
+						type="button"
+						class="btn-test-query"
+						on:click={testQuerySQL}
+						disabled={queryTesting || !querySql.trim()}
+					>
+						{queryTesting ? "Running..." : "▶ Test Query"}
+					</button>
+				</div>
+
+				{#if queryTestError}
+					<div class="form-group full-width">
+						<div class="query-test-error">
+							<strong>Error:</strong> {queryTestError}
+						</div>
+					</div>
+				{/if}
+
+				{#if queryTestRows.length > 0}
+					<div class="form-group full-width">
+						<div class="query-test-results">
+							<small style="color: var(--text-muted); display:block; margin-bottom:0.4rem;">
+								Preview {Math.min(queryTestRows.length - 1, 5)} row(s)
+							</small>
+							<table class="query-preview-table">
+								<thead>
+									<tr>{#each queryTestRows[0] as h}<th>{h}</th>{/each}</tr>
+								</thead>
+								<tbody>
+									{#each queryTestRows.slice(1) as row}
+										<tr>{#each row as cell}<td>{cell}</td>{/each}</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -2131,5 +2263,73 @@
 		.metadata-item {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.btn-test-query {
+		margin-top: 0.5rem;
+		padding: 0.35rem 0.9rem;
+		border: 1px solid var(--interactive-accent);
+		border-radius: 4px;
+		background: var(--background-modifier-form-field);
+		color: var(--interactive-accent);
+		cursor: pointer;
+		font-size: 0.85rem;
+		font-weight: 500;
+		transition: all 0.2s;
+	}
+
+	.btn-test-query:hover:not(:disabled) {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.btn-test-query:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.query-test-error {
+		margin-top: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 4px;
+		background: var(--background-modifier-error);
+		color: var(--text-error);
+		font-size: 0.85rem;
+		word-break: break-word;
+	}
+
+	.query-test-results {
+		margin-top: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 4px;
+		background: var(--background-secondary);
+		border: 1px solid var(--background-modifier-border);
+		overflow-x: auto;
+	}
+
+	.query-preview-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.8rem;
+	}
+
+	.query-preview-table th {
+		text-align: left;
+		padding: 0.25rem 0.5rem;
+		border-bottom: 2px solid var(--background-modifier-border);
+		color: var(--text-muted);
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.query-preview-table td {
+		padding: 0.2rem 0.5rem;
+		border-bottom: 1px solid var(--background-modifier-border);
+		color: var(--text-normal);
+		white-space: nowrap;
+	}
+
+	.query-preview-table tr:last-child td {
+		border-bottom: none;
 	}
 </style>

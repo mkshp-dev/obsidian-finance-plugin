@@ -24,9 +24,6 @@ export interface BeancountPluginSettings {
     bqlShowTools: boolean;
     /** Whether to show the query source code above results. */
     bqlShowQuery: boolean;
-    // BQL Shorthand Template File
-    /** Path to the markdown file defining BQL shortcuts. */
-    bqlShorthandsTemplatePath: string;
     /** Whether to enable debug logging. */
     debugMode: boolean;
     // Backup Settings
@@ -62,8 +59,6 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     // BQL Code Block Settings
     bqlShowTools: true,
     bqlShowQuery: false,
-    // BQL Shorthand Template File
-    bqlShorthandsTemplatePath: '',
     debugMode: false,
     // Backup Settings
     createBackups: true,
@@ -314,62 +309,15 @@ export class BeancountSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        containerEl.createEl('h3', { text: 'BQL Shortcuts' });
+        containerEl.createEl('h3', { text: 'Named Queries' });
 
-        const templateSetting = new Setting(containerEl)
-            .setName('Shortcuts template file')
-            .setDesc('Path to markdown file containing BQL shortcut definitions. Leave empty to use defaults.');
-
-        const filePickerContainer = templateSetting.controlEl.createDiv({ cls: 'bql-template-file-picker' });
-
-        const textInput = filePickerContainer.createEl('input', {
-            type: 'text',
-            placeholder: 'e.g., BQL_Shortcuts.md',
-            value: this.plugin.settings.bqlShorthandsTemplatePath
-        });
-        textInput.style.width = '300px';
-        textInput.style.marginRight = '8px';
-
-        this.setupFileAutocomplete(textInput);
-
-        textInput.addEventListener('input', async (event) => {
-            const value = (event.target as HTMLInputElement).value;
-            this.plugin.settings.bqlShorthandsTemplatePath = value;
-            await this.plugin.saveSettings();
-        });
-
-        const browseButton = filePickerContainer.createEl('button', {
-            text: '📁 Browse',
-            cls: 'mod-cta'
-        });
-        browseButton.style.marginRight = '8px';
-        browseButton.addEventListener('click', () => {
-            this.showFileSuggestModal(textInput);
-        });
-
-        const createButton = filePickerContainer.createEl('button', {
-            text: '✨ Create Template',
-        });
-        createButton.addEventListener('click', async () => {
-            const templatePath = this.plugin.settings.bqlShorthandsTemplatePath.trim();
-            if (!templatePath) {
-                new Notice('Please specify a template file path first');
-                return;
-            }
-
-            const { ShorthandParser } = await import('./utils/shorthandParser');
-            try {
-                ShorthandParser.createDefaultTemplateFile(templatePath);
-                new Notice(`Created template file: ${templatePath}`);
-            } catch (error) {
-                new Notice(`Error creating template file: ${error.message}`);
-            }
-        });
-
-        containerEl.createEl('p', {
-            text: 'Use bql-sh:SHORTCUT in your notes to insert live financial data.',
-            cls: 'setting-item-description'
-        });
+        const queryInfoEl = containerEl.createDiv({ cls: 'setting-item-description' });
+        queryInfoEl.style.marginBottom = '12px';
+        queryInfoEl.innerHTML = `
+            <p>Define reusable BQL queries using the Beancount <code>query</code> directive stored in <code>queries.beancount</code>.</p>
+            <p>Use the <strong>Add</strong> ribbon button → <em>🔍 Query</em> tab to create named queries.</p>
+            <p>In your notes, use <code>bql-q:name</code> to insert the query result inline.</p>
+        `;
     }
 
     private renderPerformanceTab(containerEl: HTMLElement): void {

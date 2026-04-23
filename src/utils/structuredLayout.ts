@@ -10,12 +10,12 @@ import * as fs from 'fs';
 /**
  * File types in the structured layout.
  */
-export type FileType = 'ledger' | 'accounts' | 'commodities' | 'prices' | 'pads' | 'balances' | 'notes' | 'events' | 'transactions';
+export type FileType = 'ledger' | 'accounts' | 'commodities' | 'prices' | 'pads' | 'balances' | 'notes' | 'events' | 'transactions' | 'queries';
 
 /**
  * Operation types for routing to appropriate files.
  */
-export type OperationType = 'transaction' | 'account' | 'commodity' | 'price' | 'pad' | 'balance' | 'note' | 'event';
+export type OperationType = 'transaction' | 'account' | 'commodity' | 'price' | 'pad' | 'balance' | 'note' | 'event' | 'query';
 
 /**
  * Structured layout file definitions.
@@ -29,7 +29,8 @@ export const STRUCTURED_FILES: Record<FileType, string> = {
     balances: 'balances.beancount',
     notes: 'notes.beancount',
     events: 'events.beancount',
-    transactions: 'transactions' // This is a folder
+    transactions: 'transactions', // This is a folder
+    queries: 'queries.beancount'
 };
 
 /**
@@ -193,6 +194,9 @@ option "operating_currency" "${operatingCurrency}"
         ';; Pads and balance assertions',
         `include "pads.beancount"`,
         `include "balances.beancount"`,
+        '',
+        ';; Named queries (beancount query directives)',
+        `include "queries.beancount"`,
         '',
         ';; Notes and events',
         `include "notes.beancount"`,
@@ -445,6 +449,9 @@ export function getTargetFile(
         case 'event':
             relativePath = path.join(folderName, STRUCTURED_FILES.events);
             break;
+        case 'query':
+            relativePath = path.join(folderName, STRUCTURED_FILES.queries);
+            break;
         default:
             // Fallback to ledger file
             relativePath = path.join(folderName, STRUCTURED_FILES.ledger);
@@ -500,7 +507,13 @@ function getEmptyFileContents(): Record<FileType, string> {
 ;; Financial events and milestones
 
 `,
-        transactions: '' // Folder, not a file
+        transactions: '', // Folder, not a file
+        queries: `;; Named Queries
+;; Define reusable BQL queries using the beancount query directive
+;; Format: YYYY-MM-DD query "name" "SELECT ..."
+;; Usage in notes: \`bql-q:name\` for inline results
+
+`
     };
 }
 
