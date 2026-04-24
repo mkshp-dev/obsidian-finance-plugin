@@ -133,6 +133,12 @@
 		);
 		modal.open();
 	}
+
+	function handleRefresh() {
+		if (controller) {
+			controller.loadData();
+		}
+	}
 </script>
 
 <div class="balance-sheet-container">
@@ -191,6 +197,27 @@
 					Sunburst
 				</button>
 			</div>
+			<button
+				on:click={handleRefresh}
+				disabled={state.isLoading}
+				class="refresh-button"
+				title="Refresh balance sheet data"
+			>
+				{#if state.isLoading}
+					<svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M21 12a9 9 0 11-6.219-8.56"/>
+					</svg>
+					Refreshing...
+				{:else}
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 12a9 9 0 013.5-7.1"/>
+						<path d="M20.5 5.5a9 9 0 01.5 6.5"/>
+						<path d="M3 12a9 9 0 006.5 8.1"/>
+						<path d="M20.5 18.5a9 9 0 01-6.5-5.5"/>
+					</svg>
+					Refresh
+				{/if}
+			</button>
 		</div>
 	</div>
 
@@ -703,6 +730,11 @@
 		font-weight: 500;
 		line-height: 1.5;
 	}
+
+	.refresh-button { display: inline-flex; align-items: center; gap: 4px; padding: var(--size-4-1) var(--size-4-3); cursor: pointer; }
+	.refresh-button:disabled { opacity: 0.6; cursor: not-allowed; }
+	@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+	.loading-spinner { animation: spin 1s linear infinite; }
 
 	/* Responsive design */
 	@media (max-width: 1200px) {

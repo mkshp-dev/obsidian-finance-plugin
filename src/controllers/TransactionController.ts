@@ -103,6 +103,15 @@ export class TransactionController {
 	}
 
 	/**
+	 * Refreshes data by re-fetching filters and re-running the current filter query.
+	 */
+	async refresh() {
+		const currentFilters = get(this.state).currentFilters;
+		await this.loadFilterData();
+		await this.handleFilterChange(currentFilters);
+	}
+
+	/**
 	 * Updates the transaction list based on new filters.
 	 * @param {queries.TransactionFilters} filters - The filters to apply.
 	 */
