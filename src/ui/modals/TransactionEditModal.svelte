@@ -8,6 +8,7 @@
 		JournalNote,
 	} from "../../models/journal";
 	import { runQuery } from "../../utils/queryRunner";
+	import { getQueryDirectives } from "../../utils";
 
 	export let transaction: JournalTransaction | null = null; // Now optional for Add mode
 	export let entry: JournalEntry | null = null; // Support for any entry type
@@ -62,6 +63,36 @@
 	// Query directive fields
 	let queryName = "";
 	let querySql = "";
+
+	// Saved queries browser
+	let savedQueries: Record<string, string> = {};
+	let savedQueriesLoading = false;
+	let savedQueriesLoaded = false;
+
+	$: if (activeTab === "query" && plugin && !savedQueriesLoaded) {
+		loadSavedQueries();
+	}
+
+	async function loadSavedQueries() {
+		if (!plugin || savedQueriesLoading) return;
+		savedQueriesLoading = true;
+		try {
+			savedQueries = await getQueryDirectives(plugin);
+			savedQueriesLoaded = true;
+		} catch (_) {
+			savedQueries = {};
+		} finally {
+			savedQueriesLoading = false;
+		}
+	}
+
+	function loadQueryIntoForm(name: string, sql: string) {
+		queryName = name;
+		querySql = sql;
+		// Clear previous test results
+		queryTestRows = [];
+		queryTestError = "";
+	}
 
 	// Query test state
 	let queryTesting = false;
@@ -1393,7 +1424,43 @@
 			</div>
 		{/if}
 
-		<!-- Shared accounts datalist -->
+		<!-- Saved Queries Browser -->
+		{#if activeTab === "query"}
+			<div class="saved-queries-section">
+				<div class="saved-queries-header">
+					<span>Saved Named Queries</span>
+					<button
+						type="button"
+						class="btn-refresh-queries"
+						on:click={() => { savedQueriesLoaded = false; loadSavedQueries(); }}
+						disabled={savedQueriesLoading}
+						title="Refresh list"
+					>↻</button>
+				</div>
+				{#if savedQueriesLoading}
+					<p class="saved-queries-empty">Loading…</p>
+				{:else if Object.keys(savedQueries).length === 0}
+					<p class="saved-queries-empty">No named queries saved yet.</p>
+				{:else}
+					<ul class="saved-queries-list">
+						{#each Object.entries(savedQueries) as [name, sql]}
+							<li class="saved-query-item">
+								<div class="saved-query-info">
+									<code class="saved-query-name">bql-q:{name}</code>
+									<span class="saved-query-sql">{sql}</span>
+								</div>
+								<button
+									type="button"
+									class="btn-load-query"
+									on:click={() => loadQueryIntoForm(name, sql)}
+									title="Load into editor"
+								>Load</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		{/if}
 		<datalist id="accounts-list">
 			{#each accounts as account}
 				<option value={account} />
@@ -2331,5 +2398,119 @@
 
 	.query-preview-table tr:last-child td {
 		border-bottom: none;
+	}
+
+	/* Saved Queries Browser */
+	.saved-queries-section {
+		margin-top: 1rem;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	.saved-queries-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.4rem 0.75rem;
+		background: var(--background-secondary);
+		border-bottom: 1px solid var(--background-modifier-border);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-muted);
+	}
+
+	.btn-refresh-queries {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--text-muted);
+		font-size: 1rem;
+		padding: 0 0.25rem;
+		line-height: 1;
+		transition: color 0.15s;
+	}
+
+	.btn-refresh-queries:hover:not(:disabled) {
+		color: var(--text-normal);
+	}
+
+	.btn-refresh-queries:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.saved-queries-empty {
+		margin: 0;
+		padding: 0.6rem 0.75rem;
+		font-size: 0.85rem;
+		color: var(--text-muted);
+	}
+
+	.saved-queries-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		max-height: 200px;
+		overflow-y: auto;
+	}
+
+	.saved-query-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.45rem 0.75rem;
+		border-bottom: 1px solid var(--background-modifier-border);
+	}
+
+	.saved-query-item:last-child {
+		border-bottom: none;
+	}
+
+	.saved-query-item:hover {
+		background: var(--background-modifier-hover);
+	}
+
+	.saved-query-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	.saved-query-name {
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--text-accent);
+		white-space: nowrap;
+	}
+
+	.saved-query-sql {
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.btn-load-query {
+		flex-shrink: 0;
+		padding: 0.2rem 0.6rem;
+		border: 1px solid var(--interactive-accent);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--interactive-accent);
+		cursor: pointer;
+		font-size: 0.78rem;
+		font-weight: 500;
+		transition: all 0.15s;
+	}
+
+	.btn-load-query:hover {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
 	}
 </style>
