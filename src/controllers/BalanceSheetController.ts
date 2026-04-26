@@ -4,7 +4,9 @@ import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
-import { extractConvertedAmount, extractNonReportingCurrencies } from '../utils/index';
+import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
+import type { ChartConfiguration } from 'chart.js/auto';
+import { Logger } from '../utils/logger';
 
 /**
  * Interface representing a node in the balance sheet hierarchy.
@@ -56,6 +58,14 @@ export interface BalanceSheetState {
 	unconvertedWarning: string | null;
 	/** Current valuation method used. */
 	valuationMethod: 'convert' | 'cost' | 'units';
+	/** Chart.js configuration object for the net worth trend chart. */
+	chartConfig: ChartConfiguration | null;
+	/** Error specific to chart data loading. */
+	chartError: string | null;
+	/** Whether chart data is being reloaded (e.g. on interval toggle). */
+	chartLoading: boolean;
+	/** The active chart interval granularity. */
+	chartInterval: 'month' | 'week';
 }
 
 /**
@@ -88,6 +98,10 @@ export class BalanceSheetController {
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
 			valuationMethod: 'convert' as const,
+			chartConfig: null,
+			chartError: null,
+			chartLoading: false,
+			chartInterval: 'month' as const,
 		});
 	}
 
@@ -225,6 +239,141 @@ export class BalanceSheetController {
 	}
 
 	/**
+	 * Changes the chart interval granularity and reloads only the chart data.
+	 */
+	async setChartInterval(interval: 'month' | 'week') {
+		if (get(this.state).chartInterval === interval) return;
+		this.state.update(s => ({ ...s, chartInterval: interval, chartConfig: null, chartError: null, chartLoading: true }));
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
+		try {
+			const result = await this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery(interval, reportingCurrency));
+			this._processChartData(result, interval, reportingCurrency);
+		} catch (e) {
+			Logger.error('Error loading chart data:', e);
+			this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${e.message}` }));
+		}
+	}
+
+	/**
+	 * Parses raw BQL result into chart config and updates the store.
+	 * Handles both monthly (3-col) and weekly (2-col) formats.
+	 */
+	private _processChartData(rawResult: string, interval: 'month' | 'week', reportingCurrency: string) {
+		try {
+			const clean = rawResult.replace(/\r/g, '').trim();
+			const records: string[][] = parseCsv(clean, { columns: false, skip_empty_lines: true, relax_column_count: true });
+			if (records.length === 0) throw new Error('No data available for chart.');
+
+			const dataMap = new Map<string, number>();
+			const labels: string[] = [];
+			const dataPoints: (number | null)[] = [];
+
+			if (interval === 'month') {
+				let minYear = Infinity, maxYear = -Infinity, minMonth = Infinity, maxMonth = -Infinity;
+				for (const row of records) {
+					if (row.length < 3) continue;
+					const year = parseInt(row[0].trim());
+					const monthNum = parseInt(row[1].trim());
+					const nw = parseAmount(extractConvertedAmount(row[2].trim(), reportingCurrency));
+					dataMap.set(`${year}-${monthNum.toString().padStart(2, '0')}`, nw.amount);
+					if (year < minYear || (year === minYear && monthNum < minMonth)) { minYear = year; minMonth = monthNum; }
+					if (year > maxYear || (year === maxYear && monthNum > maxMonth)) { maxYear = year; maxMonth = monthNum; }
+				}
+				let cy = minYear, cm = minMonth;
+				while (cy < maxYear || (cy === maxYear && cm <= maxMonth)) {
+					const key = `${cy}-${cm.toString().padStart(2, '0')}`;
+					labels.push(new Date(cy, cm - 1).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }).toUpperCase());
+					dataPoints.push(dataMap.get(key) ?? null);
+					if (++cm > 12) { cm = 1; cy++; }
+				}
+			} else {
+				const dates: Date[] = [];
+				for (const row of records) {
+					if (row.length < 2) continue;
+					const dateStr = row[0].trim();
+					const d = new Date(dateStr + 'T00:00:00');
+					if (isNaN(d.getTime())) continue;
+					const nw = parseAmount(extractConvertedAmount(row[1].trim(), reportingCurrency));
+					dataMap.set(dateStr, nw.amount);
+					dates.push(d);
+				}
+				if (dates.length === 0) throw new Error('No weekly data.');
+				const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+				const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+				const cur = new Date(minDate);
+				while (cur <= maxDate) {
+					const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+					labels.push(cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }));
+					dataPoints.push(dataMap.get(key) ?? null);
+					cur.setDate(cur.getDate() + 7);
+				}
+			}
+
+			const xAxisTitle = interval === 'month' ? 'Month' : 'Week ending (Sunday)';
+			this.state.update(s => ({ ...s, chartConfig: this._buildChartConfig(labels, dataPoints, reportingCurrency, xAxisTitle), chartError: null, chartLoading: false }));
+		} catch (err) {
+			Logger.error('Error processing chart data:', err);
+			this.state.update(s => ({ ...s, chartConfig: null, chartError: `Failed to process chart data: ${err.message}`, chartLoading: false }));
+		}
+	}
+
+	/**
+	 * Builds a Chart.js line chart configuration for the Net Worth Trend.
+	 */
+	private _buildChartConfig(labels: string[], dataPoints: (number | null)[], currency: string, xAxisTitle: string): ChartConfiguration {
+		return {
+			type: 'line',
+			data: {
+				labels,
+				datasets: [{
+					label: `Net Worth (${currency})`,
+					data: dataPoints,
+					borderColor: 'rgb(75, 192, 192)',
+					backgroundColor: 'rgba(75, 192, 192, 0.1)',
+					tension: 0.3,
+					fill: true,
+					pointRadius: 4,
+					pointHoverRadius: 6,
+					spanGaps: true
+				}]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					title: {
+						display: true,
+						text: `Net Worth Trend (${currency})`,
+						font: { size: 16 }
+					},
+					legend: { display: true, position: 'top' },
+					tooltip: {
+						mode: 'index',
+						intersect: false,
+						callbacks: {
+							label: (context: any) => `Net Worth: ${context.parsed.y.toLocaleString()} ${currency}`
+						}
+					}
+				},
+				scales: {
+					x: {
+						display: true,
+						title: { display: true, text: xAxisTitle },
+						grid: { display: true, color: 'rgba(0, 0, 0, 0.1)' }
+					},
+					y: {
+						display: true,
+						title: { display: true, text: `Amount (${currency})` },
+						grid: { display: true, color: 'rgba(0, 0, 0, 0.1)' },
+						ticks: { callback: (value: any) => value.toLocaleString() }
+					}
+				},
+				interaction: { mode: 'nearest', axis: 'x', intersect: false }
+			}
+		};
+	}
+
+	/**
 	 * Main data fetching method.
 	 * Runs Beancount queries based on the valuation method and updates state.
 	 * @param {'convert' | 'cost' | 'units'} [valuationMethod='convert'] - The valuation method to use.
@@ -300,7 +449,9 @@ export class BalanceSheetController {
 				unconvertedWarning = `Multi-currency accounts detected. ${reportingCurrency} amounts are shown in the first column, other currencies are displayed separately in the second column. Only ${reportingCurrency} amounts are included in totals.`;
 			}
 
-			// Update the store with all new data
+			const currentState = get(this.state);
+
+			// Update the store with all new data (preserve chart state)
 			this.state.set({
 				isLoading: false,
 				error: null,
@@ -313,8 +464,21 @@ export class BalanceSheetController {
 				currency: reportingCurrency,
 				hasUnconvertedCommodities,
 				unconvertedWarning,
-				valuationMethod
+				valuationMethod,
+				chartConfig: currentState.chartConfig,
+				chartError: currentState.chartError,
+				chartLoading: true,
+				chartInterval: currentState.chartInterval,
 			});
+
+			// Load chart data
+			try {
+				const chartResult = await this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery(currentState.chartInterval, reportingCurrency));
+				this._processChartData(chartResult, currentState.chartInterval, reportingCurrency);
+			} catch (chartErr) {
+				Logger.error('Error loading chart data in loadData:', chartErr);
+				this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${chartErr.message}` }));
+			}
 
 		} catch (e) {
 			console.error("Error loading balance sheet:", e);

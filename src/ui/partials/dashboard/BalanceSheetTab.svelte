@@ -5,9 +5,12 @@
 	import { Logger } from '../../../utils/logger';
 	import { AccountManagementModal } from '../../modals/AccountManagementModal';
 	import SunburstChart from '../../common/SunburstChart.svelte';
+	import ChartComponent from '../../common/ChartComponent.svelte';
 
-	// View mode: 'table' shows the existing hierarchy tables, 'sunburst' shows the radial chart
-	let viewMode: 'table' | 'sunburst' = 'table';
+	// Chart selector: which chart is shown in the chart area
+	let selectedChart: 'trend' | 'balances' = 'trend';
+	// Sub-selector for Balances view
+	let selectedBalanceSection: 'assets' | 'liabilities' | 'equity' = 'assets';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;
@@ -16,7 +19,8 @@
 	const placeholderState: Writable<BalanceSheetState> = writable({
 		isLoading: true, error: null, assets: [], liabilities: [], equity: [],
 		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, currency: 'INR',
-		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert'
+		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert',
+		chartConfig: null, chartError: null, chartLoading: false, chartInterval: 'month'
 	});
 	$: stateStore = controller ? controller.state : placeholderState;
 	$: state = $stateStore;
@@ -139,11 +143,18 @@
 			controller.loadData();
 		}
 	}
+
+	function handleIntervalChange(interval: 'month' | 'week') {
+		if (controller && state.chartInterval !== interval) {
+			controller.setChartInterval(interval);
+		}
+	}
 </script>
 
 <div class="balance-sheet-container">
+	<!-- Header: Title + Account Management buttons + Refresh -->
 	<div class="balance-sheet-header">
-		<h2>Accounts & Balance Sheet</h2>
+		<h2>Accounts and Balances</h2>
 		<div class="header-controls">
 			<div class="account-management-section">
 				<button class="account-action-btn open-account-btn" on:click={handleOpenAccount}>
@@ -153,55 +164,11 @@
 					❌ Close Account
 				</button>
 			</div>
-			<div class="valuation-method-selector">
-				<label for="valuation-method">Valuation:</label>
-				<select 
-					id="valuation-method" 
-					value={state.valuationMethod || 'convert'} 
-					on:change={handleValuationMethodChange}
-				>
-					<option value="convert">Market Value (Convert to {state.currency})</option>
-					<option value="cost">At Cost</option>
-					<option value="units">Units</option>
-				</select>
-			</div>
-			<!-- View mode toggle -->
-			<div class="view-toggle" role="group" aria-label="View mode">
-				<button
-					class="view-toggle-btn"
-					class:active={viewMode === 'table'}
-					on:click={() => (viewMode = 'table')}
-					title="Table view"
-					aria-pressed={viewMode === 'table'}
-				>
-					<!-- Table icon -->
-					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<rect x="3" y="3" width="18" height="18" rx="2"/>
-						<path d="M3 9h18M3 15h18M9 3v18"/>
-					</svg>
-					Table
-				</button>
-				<button
-					class="view-toggle-btn"
-					class:active={viewMode === 'sunburst'}
-					on:click={() => (viewMode = 'sunburst')}
-					title="Sunburst chart"
-					aria-pressed={viewMode === 'sunburst'}
-				>
-					<!-- Sunburst / radial icon -->
-					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="12" cy="12" r="3"/>
-						<circle cx="12" cy="12" r="7"/>
-						<circle cx="12" cy="12" r="11"/>
-					</svg>
-					Sunburst
-				</button>
-			</div>
 			<button
 				on:click={handleRefresh}
 				disabled={state.isLoading}
 				class="refresh-button"
-				title="Refresh balance sheet data"
+				title="Refresh data"
 			>
 				{#if state.isLoading}
 					<svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -222,7 +189,7 @@
 	</div>
 
 	{#if state.isLoading}
-		<p>Loading balance sheet...</p>
+		<p>Loading data...</p>
 	{:else if state.error}
 		<p class="error-message">{state.error}</p>
 	{:else}
@@ -234,17 +201,134 @@
 			</div>
 		{/if}
 
-		{#if viewMode === 'sunburst'}
-			<SunburstChart
-				assets={state.assets}
-				liabilities={state.liabilities}
-				equity={state.equity}
-				currency={state.currency}
-				totalAssets={state.totalAssets}
-				totalLiabilities={state.totalLiabilities}
-				totalEquity={state.totalEquity}
-			/>
-		{:else}
+		<!-- Chart Area -->
+		<div class="chart-area">
+			<div class="chart-area-header">
+				<div class="chart-selector" role="group" aria-label="Select chart">
+					<button
+						class="chart-selector-btn"
+						class:active={selectedChart === 'trend'}
+						on:click={() => (selectedChart = 'trend')}
+						aria-pressed={selectedChart === 'trend'}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+						</svg>
+						Net Worth Trend
+					</button>
+					<button
+						class="chart-selector-btn"
+						class:active={selectedChart === 'balances'}
+						on:click={() => (selectedChart = 'balances')}
+						aria-pressed={selectedChart === 'balances'}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="3"/>
+							<circle cx="12" cy="12" r="7"/>
+							<circle cx="12" cy="12" r="11"/>
+						</svg>
+						Balances
+					</button>
+				</div>
+				{#if selectedChart === 'trend'}
+					<div class="interval-toggle">
+						<button
+							class:active={state.chartInterval === 'month'}
+							on:click={() => handleIntervalChange('month')}
+							disabled={state.chartLoading}
+						>Monthly</button>
+						<button
+							class:active={state.chartInterval === 'week'}
+							on:click={() => handleIntervalChange('week')}
+							disabled={state.chartLoading}
+						>Weekly</button>
+					</div>
+				{:else if selectedChart === 'balances'}
+					<div class="balance-section-toggle">
+						<button
+							class:active={selectedBalanceSection === 'assets'}
+							on:click={() => (selectedBalanceSection = 'assets')}
+						>Assets</button>
+						<button
+							class:active={selectedBalanceSection === 'liabilities'}
+							on:click={() => (selectedBalanceSection = 'liabilities')}
+						>Liabilities</button>
+						<button
+							class:active={selectedBalanceSection === 'equity'}
+							on:click={() => (selectedBalanceSection = 'equity')}
+						>Equity</button>
+					</div>
+				{/if}
+			</div>
+
+			{#if selectedChart === 'trend'}
+				<div class="trend-chart-container">
+					{#if state.chartError}
+						<p class="error-message">Chart Error: {state.chartError}</p>
+					{:else if state.chartLoading}
+						<p class="chart-loading">Loading chart...</p>
+					{:else if state.chartConfig}
+						<ChartComponent config={state.chartConfig} height="300px"/>
+					{:else}
+						<p class="chart-loading">Not enough data to display chart.</p>
+					{/if}
+				</div>
+			{:else if selectedChart === 'balances'}
+				{#if selectedBalanceSection === 'assets'}
+					<SunburstChart
+						title="Assets"
+						assets={state.assets}
+						liabilities={[]}
+						equity={[]}
+						currency={state.currency}
+						totalAssets={state.totalAssets}
+						totalLiabilities={0}
+						totalEquity={0}
+					/>
+				{:else if selectedBalanceSection === 'liabilities'}
+					<SunburstChart
+						title="Liabilities"
+						assets={[]}
+						liabilities={state.liabilities}
+						equity={[]}
+						currency={state.currency}
+						totalAssets={0}
+						totalLiabilities={state.totalLiabilities}
+						totalEquity={0}
+					/>
+				{:else}
+					<SunburstChart
+						title="Equity"
+						assets={[]}
+						liabilities={[]}
+						equity={state.equity}
+						currency={state.currency}
+						totalAssets={0}
+						totalLiabilities={0}
+						totalEquity={state.totalEquity}
+					/>
+				{/if}
+			{/if}
+		</div>
+
+		<!-- Balance Sheet (always visible) -->
+		<div class="balance-sheet-section">
+			<div class="balance-sheet-section-header">
+				<h3>Balance Sheet</h3>
+				<div class="valuation-method-selector">
+					<label for="valuation-method">Valuation:</label>
+					<select
+						id="valuation-method"
+						value={state.valuationMethod || 'convert'}
+						on:change={handleValuationMethodChange}
+					>
+						<option value="convert">Market Value (Convert to {state.currency})</option>
+						<option value="cost">At Cost</option>
+						<option value="units">Units</option>
+					</select>
+				</div>
+			</div>
+
 		<div class="balance-sheet-grid">
 			<div class="column">
 				<h4>Assets</h4>
@@ -357,7 +441,7 @@
 				</table>
 			</div>
 		</div>
-		{/if}
+		</div>
 	{/if}
 </div>
 
@@ -385,7 +469,7 @@
 
 	.header-controls {
 		display: flex;
-		gap: var(--size-4-6);
+		gap: var(--size-4-4);
 		align-items: center;
 		flex-wrap: wrap;
 	}
@@ -422,9 +506,124 @@
 		color: var(--text-on-accent);
 	}
 
-	.balance-sheet-header h2:not(:first-child) {
+	/* Chart area */
+	.chart-area {
+		margin-bottom: var(--size-4-8);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-m);
+		padding: var(--size-4-4);
+		background: var(--background-secondary);
+	}
+
+	.chart-area-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--size-4-4);
+		flex-wrap: wrap;
+		gap: var(--size-4-2);
+	}
+
+	.chart-selector {
+		display: flex;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		overflow: hidden;
+	}
+
+	.chart-selector-btn {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 12px;
+		border: none;
+		background: var(--interactive-normal);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.chart-selector-btn:not(:last-child) {
+		border-right: 1px solid var(--background-modifier-border);
+	}
+
+	.chart-selector-btn:hover {
+		background: var(--interactive-hover);
+		color: var(--text-normal);
+	}
+
+	.chart-selector-btn.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.interval-toggle,
+	.balance-section-toggle {
+		display: flex;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		overflow: hidden;
+	}
+
+	.interval-toggle button,
+	.balance-section-toggle button {
+		padding: var(--size-4-1) var(--size-4-3);
+		background: var(--interactive-normal);
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: background-color 0.15s, color 0.15s;
+	}
+
+	.interval-toggle button:not(:last-child),
+	.balance-section-toggle button:not(:last-child) {
+		border-right: 1px solid var(--background-modifier-border);
+	}
+
+	.interval-toggle button.active,
+	.balance-section-toggle button.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.interval-toggle button:hover:not(.active):not(:disabled),
+	.balance-section-toggle button:hover:not(.active) {
+		background: var(--interactive-hover);
+		color: var(--text-normal);
+	}
+
+	.interval-toggle button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.trend-chart-container {
+		height: 320px;
+		position: relative;
+	}
+
+	/* Balance Sheet section */
+	.balance-sheet-section {
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-m);
+		padding: var(--size-4-4);
+	}
+
+	.balance-sheet-section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--size-4-4);
+		flex-wrap: wrap;
+		gap: var(--size-4-2);
+	}
+
+	.balance-sheet-section-header h3 {
 		margin: 0;
 		color: var(--text-normal);
+		font-size: var(--font-ui-larger);
 	}
 
 	.valuation-method-selector {
@@ -437,42 +636,6 @@
 		font-size: 0.9em;
 		color: var(--text-muted);
 		white-space: nowrap;
-	}
-
-	/* View toggle (Table / Sunburst) */
-	.view-toggle {
-		display: flex;
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--radius-s);
-		overflow: hidden;
-	}
-
-	.view-toggle-btn {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		padding: 4px 10px;
-		border: none;
-		background: var(--interactive-normal);
-		color: var(--text-muted);
-		cursor: pointer;
-		font-size: var(--font-ui-small);
-		transition: background 0.15s, color 0.15s;
-		border-right: 1px solid var(--background-modifier-border);
-	}
-
-	.view-toggle-btn:last-child {
-		border-right: none;
-	}
-
-	.view-toggle-btn:hover {
-		background: var(--interactive-hover);
-		color: var(--text-normal);
-	}
-
-	.view-toggle-btn.active {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
 	}
 
 	.valuation-method-selector select {

@@ -17,6 +17,7 @@
 	export let totalAssets: number        = 0;
 	export let totalLiabilities: number   = 0;
 	export let totalEquity: number        = 0;
+	export let title: string              = 'All Accounts';
 
 	// ── SVG geometry ─────────────────────────────────────────────────────────
 	const SIZE    = 480;
@@ -39,6 +40,7 @@
 		endAngle:     number;
 		depth:        number;
 		section:      'Assets' | 'Liabilities' | 'Equity';
+		negative:     boolean;  // true if source item has negative amountNumber
 		sourceItem:   AccountItem | null;
 		children:     SunburstNode[];
 	}
@@ -63,16 +65,22 @@
 		Equity:      213,
 	};
 
-	function getColor(section: string, depth: number): string {
+	function getColor(section: string, depth: number, negative: boolean = false): string {
 		const hue  = SECTION_HUE[section] ?? 200;
-		const sat  = 48;
+		const sat  = 52;
 		const lig  = Math.min(72, 36 + depth * 10);
 		return `hsl(${hue}, ${sat}%, ${lig}%)`;
 	}
 
-	function getHoverColor(section: string): string {
+	function getHoverColor(section: string, negative: boolean = false): string {
 		const hue = SECTION_HUE[section] ?? 200;
-		return `hsl(${hue}, 60%, 55%)`;
+		return `hsl(${hue}, 65%, 55%)`;
+	}
+
+	// ── Anomaly detection (negative Assets/Equity, positive Liabilities) ─────
+	function isAnomalous(section: string, negative: boolean): boolean {
+		if (section === 'Liabilities') return !negative; // positive liability is odd
+		return negative;                                  // negative asset/equity is odd
 	}
 
 	// ── Layout builder ────────────────────────────────────────────────────────
@@ -99,17 +107,19 @@
 			if (slice < 0.003) { angle += slice; continue; } // skip near-invisible arcs
 
 			const p = parentPath ? `${parentPath} › ${item.displayName}` : item.displayName;
+			const isNeg = item.amountNumber < 0;
 			const node: SunburstNode = {
 				id:          item.account,
 				label:       item.displayName,
 				path:        p,
 				amount:      item.amount,
 				value:       Math.abs(item.amountNumber),
-				color:       getColor(section, depth),
+				color:       getColor(section, depth, isNeg),
 				startAngle:  angle,
 				endAngle:    angle + slice,
 				depth,
 				section:     section as SunburstNode['section'],
+				negative:    isNeg,
 				sourceItem:  item,
 				children:    item.children?.length
 					? buildNodes(item.children, section, angle, angle + slice, depth + 1, p)
@@ -161,11 +171,12 @@
 				id, label, path: label,
 				amount:     `${value.toFixed(2)} ${currency}`,
 				value:      Math.abs(value),
-				color:      getColor(section, 0),
+				color:      getColor(section, 0, value < 0),
 				startAngle: sa,
 				endAngle:   ea,
 				depth:      0,
 				section,
+				negative:   value < 0,
 				sourceItem: roots[0] ?? null,
 				children:   ring1Items.length
 					? buildNodes(ring1Items, section, sa, ea, 1, label)
@@ -270,12 +281,20 @@
 		? hoveredNode.label
 		: drillStack.length > 0
 			? (drillStack[drillStack.length - 1].crumb.split(' › ').pop() ?? '')
-			: 'Balance';
+			: title;
+
+	$: centreSectionTotal = (() => {
+		if (title === 'Assets')      return totalAssets;
+		if (title === 'Liabilities') return totalLiabilities;
+		if (title === 'Equity')      return totalEquity;
+		// "All Accounts" — show net worth (Assets minus Liabilities)
+		return Math.abs(totalAssets) - Math.abs(totalLiabilities);
+	})();
 
 	$: centreAmount = hoveredNode
 		? hoveredNode.amount
 		: drillStack.length === 0
-			? `${(Math.abs(totalAssets) - Math.abs(totalLiabilities)).toFixed(2)} ${currency}`
+			? `${centreSectionTotal.toFixed(2)} ${currency}`
 			: '';
 </script>
 
@@ -287,7 +306,7 @@
 			class="crumb-btn"
 			class:active={drillStack.length === 0}
 			on:click={() => drillBack(0)}
-		>All Accounts</button>
+		>{title}</button>
 
 		{#each drillStack as level, i}
 			<span class="crumb-sep" aria-hidden="true">›</span>
@@ -312,12 +331,19 @@
 			role="img"
 			aria-label="Balance Sheet Sunburst — Assets, Liabilities and Equity"
 		>
+			<defs>
+				<!-- Diagonal-stripe hatch for anomalous (unexpected-sign) accounts -->
+				<pattern id="hatch-anomalous" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+					<line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.55)" stroke-width="3"/>
+				</pattern>
+			</defs>
+
 			<!-- ── Arcs ── -->
 			{#each allNodes as node (node.id + '|' + node.depth + '|' + node.startAngle.toFixed(4))}
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<path
 					d={arcPath(node)}
-					fill={hoveredNode === node ? getHoverColor(node.section) : node.color}
+					fill={hoveredNode === node ? getHoverColor(node.section, node.negative) : node.color}
 					stroke="var(--background-primary)"
 					stroke-width="1.5"
 					style="cursor:{node.sourceItem?.children?.length ? 'pointer' : 'default'};transition:fill 0.12s ease;"
@@ -328,6 +354,15 @@
 					aria-label="{node.path}: {node.amount}"
 					on:keydown={(e) => e.key === 'Enter' && onArcClick(node)}
 				/>
+				<!-- Stripe overlay for anomalous-sign accounts -->
+				{#if isAnomalous(node.section, node.negative)}
+					<path
+						d={arcPath(node)}
+						fill="url(#hatch-anomalous)"
+						stroke="none"
+						pointer-events="none"
+					/>
+				{/if}
 			{/each}
 
 			<!-- ── Inline labels (depth 0 & 1 only, only if arc is wide enough) ── -->
@@ -396,6 +431,22 @@
 				Equity
 			</span>
 		</div>
+	{/if}
+
+	<!-- Hatch pattern hint -->
+	{#if grandTotal >= 0.001}
+		<p class="hatch-hint">
+			<svg width="14" height="14" style="vertical-align:-2px;margin-right:4px;">
+				<defs>
+					<pattern id="hatch-hint-pat" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+						<line x1="0" y1="0" x2="0" y2="8" stroke="var(--text-muted)" stroke-width="3"/>
+					</pattern>
+				</defs>
+				<rect width="14" height="14" rx="2" fill="var(--background-modifier-border)" />
+				<rect width="14" height="14" rx="2" fill="url(#hatch-hint-pat)" />
+			</svg>
+			Stripes = unexpected sign (e.g. overdrawn asset, credit liability)
+		</p>
 	{/if}
 
 	<!-- Empty state -->
@@ -511,5 +562,14 @@
 		font-size: var(--font-ui-small);
 		text-align: center;
 		padding: var(--size-4-4);
+	}
+
+	.hatch-hint {
+		margin: 0;
+		font-size: 11px;
+		color: var(--text-faint);
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 </style>
