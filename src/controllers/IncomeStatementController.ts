@@ -1,4 +1,4 @@
-// src/controllers/BalanceSheetController.ts
+// src/controllers/IncomeStatementController.ts
 
 import { writable, type Writable, get } from 'svelte/store';
 import type BeancountPlugin from '../main';
@@ -7,49 +7,28 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
+// Re-export AccountItem so IncomeStatementTab can import from here
+export type { AccountItem } from './BalanceSheetController';
+import type { AccountItem } from './BalanceSheetController';
 
 /**
- * Interface representing a node in the balance sheet hierarchy.
+ * Interface representing the state of the Income Statement view.
  */
-export interface AccountItem {
-	/** Full account path (e.g., "Assets:Bank"). */
-	account: string;
-	/** Display name (e.g., "Bank"). */
-	displayName: string;
-	/** Hierarchy depth level (0-based). */
-	level: number;
-	/** Formatted amount string. */
-	amount: string;
-	/** Numeric amount value. */
-	amountNumber: number;
-	/** String representation of other currencies held. */
-	otherCurrencies: string;
-	/** True if this is a parent category, false if a leaf account. */
-	isCategory: boolean;
-	/** Child accounts/categories. */
-	children?: AccountItem[];
-}
-
-/**
- * Interface representing the state of the Balance Sheet view.
- */
-export interface BalanceSheetState {
+export interface IncomeStatementState {
 	/** Whether data is loading. */
 	isLoading: boolean;
 	/** Error message if loading failed. */
 	error: string | null;
-	/** Tree of Asset accounts. */
-	assets: AccountItem[];
-	/** Tree of Liability accounts. */
-	liabilities: AccountItem[];
-	/** Tree of Equity accounts. */
-	equity: AccountItem[];
-	/** Total numeric value of Assets. */
-	totalAssets: number;
-	/** Total numeric value of Liabilities. */
-	totalLiabilities: number;
-	/** Total numeric value of Equity. */
-	totalEquity: number;
+	/** Tree of Income accounts. */
+	income: AccountItem[];
+	/** Tree of Expense accounts. */
+	expenses: AccountItem[];
+	/** Total numeric value of Income (absolute, positive). */
+	totalIncome: number;
+	/** Total numeric value of Expenses. */
+	totalExpenses: number;
+	/** Net profit (totalIncome - totalExpenses). */
+	netProfit: number;
 	/** The reporting currency used. */
 	currency: string;
 	/** Whether multi-currency entries were detected. */
@@ -58,42 +37,37 @@ export interface BalanceSheetState {
 	unconvertedWarning: string | null;
 	/** Current valuation method used. */
 	valuationMethod: 'convert' | 'cost' | 'units';
-	/** Chart.js configuration object for the net worth trend chart. */
+	/** Chart.js configuration object for the net profit trend chart. */
 	chartConfig: ChartConfiguration | null;
 	/** Error specific to chart data loading. */
 	chartError: string | null;
-	/** Whether chart data is being reloaded (e.g. on interval toggle). */
+	/** Whether chart data is being reloaded. */
 	chartLoading: boolean;
 	/** The active chart interval granularity. */
 	chartInterval: 'month' | 'week';
 }
 
 /**
- * BalanceSheetController
+ * IncomeStatementController
  *
- * Manages the data fetching and state for the Balance Sheet tab.
- * Responsible for querying account balances, building the hierarchy,
- * calculating totals, and handling different valuation methods.
+ * Manages the data fetching and state for the Income Statement tab.
+ * Responsible for querying income/expense account balances, building the hierarchy,
+ * calculating totals, net profit, and handling different valuation methods.
  */
-export class BalanceSheetController {
+export class IncomeStatementController {
 	public plugin: BeancountPlugin;
-	public state: Writable<BalanceSheetState>;
+	public state: Writable<IncomeStatementState>;
 
-	/**
-	 * Creates an instance of BalanceSheetController.
-	 * @param {BeancountPlugin} plugin - The main plugin instance.
-	 */
 	constructor(plugin: BeancountPlugin) {
 		this.plugin = plugin;
 		this.state = writable({
 			isLoading: true,
 			error: null,
-			assets: [],
-			liabilities: [],
-			equity: [],
-			totalAssets: 0,
-			totalLiabilities: 0,
-			totalEquity: 0,
+			income: [],
+			expenses: [],
+			totalIncome: 0,
+			totalExpenses: 0,
+			netProfit: 0,
 			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
@@ -107,79 +81,71 @@ export class BalanceSheetController {
 
 	/**
 	 * Builds a hierarchical structure from flat account entries.
-	 * @param {[string, string][]} accounts - List of [accountName, rawAmount] tuples.
-	 * @param {string} accountType - The root account type (e.g. 'Assets').
-	 * @param {'convert' | 'cost' | 'units'} [valuationMethod='convert'] - The valuation method.
-	 * @returns {AccountItem[]} The list of root account items.
+	 * Income account amounts are negated for display (they are stored as negative in beancount).
 	 */
-	private buildAccountHierarchy(accounts: [string, string][], accountType: string, valuationMethod: 'convert' | 'cost' | 'units' = 'convert'): AccountItem[] {
+	private buildAccountHierarchy(
+		accounts: [string, string][],
+		accountType: 'Income' | 'Expenses',
+		valuationMethod: 'convert' | 'cost' | 'units' = 'convert'
+	): AccountItem[] {
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		const accountMap = new Map<string, AccountItem>();
 		const rootAccounts: AccountItem[] = [];
 
-		// Group accounts by their hierarchy levels
 		for (const [fullAccount, rawAmount] of accounts) {
-			let convertedAmount: string;
-			let otherCurrencies: string;
-			
-			// For all valuation methods, separate operating currency from other currencies
-			convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
-			otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
-			
+			const convertedAmount = extractConvertedAmount(rawAmount, reportingCurrency);
+			const otherCurrencies = extractNonReportingCurrencies(rawAmount, reportingCurrency);
+
+			// Keep raw beancount sign: income is negative (credit), expenses are positive (debit)
 			const amountNumber = parseFloat(convertedAmount.split(' ')[0].replace(/,/g, '')) || 0;
 
 			const parts = fullAccount.split(':');
 			let currentPath = '';
 
-			// Build hierarchy from root to leaf
 			for (let i = 0; i < parts.length; i++) {
 				const part = parts[i];
 				const parentPath = currentPath;
 				currentPath = currentPath ? `${currentPath}:${part}` : part;
-				
+
 				if (!accountMap.has(currentPath)) {
-					// Always use reporting currency for all valuation methods
+					const displayAmountNumber = i === parts.length - 1 ? amountNumber : 0;
+					const displayAmount = i === parts.length - 1
+						? `${amountNumber.toFixed(2)} ${reportingCurrency}`
+						: `0.00 ${reportingCurrency}`;
+
 					const item: AccountItem = {
 						account: currentPath,
 						displayName: part,
 						level: i,
-						amount: i === parts.length - 1 ? convertedAmount : `0.00 ${reportingCurrency}`,
-						amountNumber: i === parts.length - 1 ? amountNumber : 0,
+						amount: displayAmount,
+						amountNumber: displayAmountNumber,
 						otherCurrencies: i === parts.length - 1 ? otherCurrencies : '',
 						isCategory: i < parts.length - 1,
-						children: []
+						children: [],
 					};
 
 					accountMap.set(currentPath, item);
 
-					// Add to parent's children or root
 					if (parentPath && accountMap.has(parentPath)) {
 						accountMap.get(parentPath)!.children!.push(item);
 					} else if (i === 0) {
 						rootAccounts.push(item);
 					}
 				} else if (i === parts.length - 1) {
-					// Update leaf account amount and other currencies
 					const existing = accountMap.get(currentPath)!;
-					existing.amount = convertedAmount;
+					existing.amount = `${amountNumber.toFixed(2)} ${reportingCurrency}`;
 					existing.amountNumber = amountNumber;
 					existing.otherCurrencies = otherCurrencies;
 				}
 			}
 		}
 
-		// Calculate category totals (bottom-up)
-		// Always use reporting currency for all valuation methods
 		this.calculateCategoryTotals(rootAccounts, reportingCurrency);
-
 		return rootAccounts;
 	}
 
 	/**
 	 * Recursively calculates totals for category nodes based on children.
-	 * @param {AccountItem[]} accounts - The account nodes to process.
-	 * @param {string} currency - The reporting currency.
-	 * @returns {number} The sum of amounts.
 	 */
 	private calculateCategoryTotals(accounts: AccountItem[], currency: string): number {
 		let total = 0;
@@ -187,19 +153,16 @@ export class BalanceSheetController {
 			if (account.children && account.children.length > 0) {
 				const childTotal = this.calculateCategoryTotals(account.children, currency);
 				account.amountNumber = childTotal;
-				
-				// Always show amount with reporting currency
 				account.amount = `${childTotal.toFixed(2)} ${currency}`;
-				
-				// Aggregate other currencies from children - collect unique currencies
+
 				const childOtherCurrencies = account.children
 					.map(child => child.otherCurrencies)
 					.filter(curr => curr && curr.trim() !== '')
 					.flatMap(curr => curr.split(/[,\n]/).map(c => c.trim()))
-					.filter((curr, index, arr) => arr.indexOf(curr) === index && curr !== '') // Remove duplicates and empty strings
-					.join('\n'); // Use newlines for better multi-line display
+					.filter((curr, index, arr) => arr.indexOf(curr) === index && curr !== '')
+					.join('\n');
 				account.otherCurrencies = childOtherCurrencies;
-				
+
 				total += childTotal;
 			} else {
 				total += account.amountNumber;
@@ -209,22 +172,10 @@ export class BalanceSheetController {
 	}
 
 	/**
-	 * Sets the valuation method (market value, at cost, or units) and reloads data.
-	 * @param {'convert' | 'cost' | 'units'} method - The valuation method.
-	 */
-	async setValuationMethod(method: 'convert' | 'cost' | 'units') {
-		await this.loadData(method);
-	}
-
-	/**
-	 * Flattens the hierarchy for a linear list display if needed (but keeps children property).
-	 * Useful for ensuring all nodes are traversable in a list.
-	 * @param {AccountItem[]} accounts - The root nodes.
-	 * @returns {AccountItem[]} Flattened list of all nodes.
+	 * Flattens the hierarchy for rendering in a linear list.
 	 */
 	private flattenHierarchy(accounts: AccountItem[]): AccountItem[] {
 		const result: AccountItem[] = [];
-		
 		const flatten = (items: AccountItem[]) => {
 			for (const item of items) {
 				result.push(item);
@@ -233,9 +184,15 @@ export class BalanceSheetController {
 				}
 			}
 		};
-		
 		flatten(accounts);
 		return result;
+	}
+
+	/**
+	 * Sets the valuation method and reloads data.
+	 */
+	async setValuationMethod(method: 'convert' | 'cost' | 'units') {
+		await this.loadData(method);
 	}
 
 	/**
@@ -246,17 +203,18 @@ export class BalanceSheetController {
 		this.state.update(s => ({ ...s, chartInterval: interval, chartConfig: null, chartError: null, chartLoading: true }));
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		try {
-			const result = await this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery(interval, reportingCurrency));
+			const result = await this.plugin.runQuery(queries.getHistoricalNetProfitDataQuery(interval, reportingCurrency));
 			this._processChartData(result, interval, reportingCurrency);
 		} catch (e) {
-			Logger.error('Error loading chart data:', e);
+			Logger.error('Error loading income chart data:', e);
 			this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${e.message}` }));
 		}
 	}
 
 	/**
-	 * Parses raw BQL result into chart config and updates the store.
+	 * Parses raw BQL result into a bar chart config and updates the store.
 	 * Handles both monthly (3-col) and weekly (2-col) formats.
+	 * Net profit = -(sum of Income+Expenses positions) because income is negative in beancount.
 	 */
 	private _processChartData(rawResult: string, interval: 'month' | 'week', reportingCurrency: string) {
 		try {
@@ -274,8 +232,9 @@ export class BalanceSheetController {
 					if (row.length < 3) continue;
 					const year = parseInt(row[0].trim());
 					const monthNum = parseInt(row[1].trim());
-					const nw = parseAmount(extractConvertedAmount(row[2].trim(), reportingCurrency));
-					dataMap.set(`${year}-${monthNum.toString().padStart(2, '0')}`, nw.amount);
+					// Keep raw sign: sum(Income+Expenses) is negative when profitable in beancount
+					const rawVal = parseAmount(extractConvertedAmount(row[2].trim(), reportingCurrency));
+					dataMap.set(`${year}-${monthNum.toString().padStart(2, '0')}`, rawVal.amount);
 					if (year < minYear || (year === minYear && monthNum < minMonth)) { minYear = year; minMonth = monthNum; }
 					if (year > maxYear || (year === maxYear && monthNum > maxMonth)) { maxYear = year; maxMonth = monthNum; }
 				}
@@ -293,8 +252,8 @@ export class BalanceSheetController {
 					const dateStr = row[0].trim();
 					const d = new Date(dateStr + 'T00:00:00');
 					if (isNaN(d.getTime())) continue;
-					const nw = parseAmount(extractConvertedAmount(row[1].trim(), reportingCurrency));
-					dataMap.set(dateStr, nw.amount);
+					const rawVal = parseAmount(extractConvertedAmount(row[1].trim(), reportingCurrency));
+					dataMap.set(dateStr, rawVal.amount);
 					dates.push(d);
 				}
 				if (dates.length === 0) throw new Error('No weekly data.');
@@ -310,32 +269,39 @@ export class BalanceSheetController {
 			}
 
 			const xAxisTitle = interval === 'month' ? 'Month' : 'Week ending (Sunday)';
-			this.state.update(s => ({ ...s, chartConfig: this._buildChartConfig(labels, dataPoints, reportingCurrency, xAxisTitle), chartError: null, chartLoading: false }));
+			this.state.update(s => ({
+				...s,
+				chartConfig: this._buildBarChartConfig(labels, dataPoints, reportingCurrency, xAxisTitle),
+				chartError: null,
+				chartLoading: false,
+			}));
 		} catch (err) {
-			Logger.error('Error processing chart data:', err);
+			Logger.error('Error processing income chart data:', err);
 			this.state.update(s => ({ ...s, chartConfig: null, chartError: `Failed to process chart data: ${err.message}`, chartLoading: false }));
 		}
 	}
 
 	/**
-	 * Builds a Chart.js line chart configuration for the Net Worth Trend.
+	 * Builds a Chart.js bar chart configuration for the Net Profit Trend.
 	 */
-	private _buildChartConfig(labels: string[], dataPoints: (number | null)[], currency: string, xAxisTitle: string): ChartConfiguration {
+	private _buildBarChartConfig(labels: string[], dataPoints: (number | null)[], currency: string, xAxisTitle: string): ChartConfiguration {
 		return {
-			type: 'line',
+			type: 'bar',
 			data: {
 				labels,
 				datasets: [{
-					label: `Net Worth (${currency})`,
+					label: `Net Profit (${currency})`,
 					data: dataPoints,
-					borderColor: 'rgb(75, 192, 192)',
-					backgroundColor: 'rgba(75, 192, 192, 0.1)',
-					tension: 0.3,
-					fill: true,
-					pointRadius: 4,
-					pointHoverRadius: 6,
-					spanGaps: true
-				}]
+					backgroundColor: dataPoints.map(v =>
+						v === null ? 'rgba(180,180,180,0.4)' :
+					v <= 0 ? 'rgba(75, 192, 130, 0.7)' : 'rgba(255, 99, 99, 0.7)'
+				),
+				borderColor: dataPoints.map(v =>
+					v === null ? 'rgba(180,180,180,0.6)' :
+					v <= 0 ? 'rgba(75, 192, 130, 1)' : 'rgba(255, 99, 99, 1)'
+					),
+					borderWidth: 1,
+				}],
 			},
 			options: {
 				responsive: true,
@@ -343,47 +309,46 @@ export class BalanceSheetController {
 				plugins: {
 					title: {
 						display: true,
-						text: `Net Worth Trend (${currency})`,
-						font: { size: 16 }
+						text: `Net Profit Trend (${currency})`,
+						font: { size: 16 },
 					},
-					legend: { display: true, position: 'top' },
+					legend: { display: false },
 					tooltip: {
 						mode: 'index',
 						intersect: false,
 						callbacks: {
-							label: (context: any) => `Net Worth: ${context.parsed.y.toLocaleString()} ${currency}`
-						}
-					}
+							label: (context: any) => `Net Profit: ${context.parsed.y.toLocaleString()} ${currency}`,
+						},
+					},
 				},
 				scales: {
 					x: {
 						display: true,
 						title: { display: true, text: xAxisTitle },
-						grid: { display: true, color: 'rgba(0, 0, 0, 0.1)' }
+						grid: { display: false },
 					},
 					y: {
 						display: true,
 						title: { display: true, text: `Amount (${currency})` },
 						grid: { display: true, color: 'rgba(0, 0, 0, 0.1)' },
-						ticks: { callback: (value: any) => value.toLocaleString() }
-					}
+						ticks: { callback: (value: any) => value.toLocaleString() },
+					},
 				},
-				interaction: { mode: 'nearest', axis: 'x', intersect: false }
-			}
+				interaction: { mode: 'nearest', axis: 'x', intersect: false },
+			},
 		};
 	}
 
 	/**
 	 * Main data fetching method.
-	 * Runs Beancount queries based on the valuation method and updates state.
-	 * @param {'convert' | 'cost' | 'units'} [valuationMethod='convert'] - The valuation method to use.
+	 * Runs Beancount queries and updates the Income Statement state.
 	 */
 	async loadData(valuationMethod: 'convert' | 'cost' | 'units' = 'convert') {
 		this.state.update(s => ({ ...s, isLoading: true, error: null }));
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
-		
+
 		if (valuationMethod === 'convert' && !reportingCurrency) {
-			this.state.update(s => ({ ...s, isLoading: false, error: "Operating currency not set." }));
+			this.state.update(s => ({ ...s, isLoading: false, error: 'Operating currency not set.' }));
 			return;
 		}
 
@@ -391,26 +356,25 @@ export class BalanceSheetController {
 			let query: string;
 			switch (valuationMethod) {
 				case 'convert':
-					query = queries.getBalanceSheetQuery(reportingCurrency);
+					query = queries.getIncomeStatementQuery(reportingCurrency);
 					break;
 				case 'cost':
-					query = queries.getBalanceSheetQueryByCost();
+					query = queries.getIncomeStatementQueryByCost();
 					break;
 				case 'units':
-					query = queries.getBalanceSheetQueryByUnits();
+					query = queries.getIncomeStatementQueryByUnits();
 					break;
 			}
 
 			const result = await this.plugin.runQuery(query);
-			const cleanStdout = result.replace(/\r/g, "").trim();
+			const cleanStdout = result.replace(/\r/g, '').trim();
 			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true });
 
 			const firstRowIsHeader = records[0]?.[0]?.toLowerCase().includes('account');
 			const rows = firstRowIsHeader ? records.slice(1) : records;
 
-			let tempAssets: [string, string][] = [];
-			let tempLiab: [string, string][] = [];
-			let tempEquity: [string, string][] = [];
+			let tempIncome: [string, string][] = [];
+			let tempExpenses: [string, string][] = [];
 			let hasUnconvertedCommodities = false;
 			const unconvertedAccounts: string[] = [];
 
@@ -418,49 +382,41 @@ export class BalanceSheetController {
 				if (row.length < 2) continue;
 				const [account, amountStr] = row;
 
-				// Check for multi-currency results (only relevant for convert method)
 				if (valuationMethod === 'convert' && amountStr.includes(',')) {
 					hasUnconvertedCommodities = true;
 					unconvertedAccounts.push(account);
 				}
 
-				if (account.startsWith('Assets')) {
-					tempAssets.push([account, amountStr]);
-				} else if (account.startsWith('Liabilities')) {
-					tempLiab.push([account, amountStr]);
-				} else if (account.startsWith('Equity')) {
-					tempEquity.push([account, amountStr]);
+				if (account.startsWith('Income')) {
+					tempIncome.push([account, amountStr]);
+				} else if (account.startsWith('Expenses')) {
+					tempExpenses.push([account, amountStr]);
 				}
 			}
 
-			// Build hierarchical structures
-			const assetsHierarchy = this.buildAccountHierarchy(tempAssets, 'Assets', valuationMethod);
-			const liabilitiesHierarchy = this.buildAccountHierarchy(tempLiab, 'Liabilities', valuationMethod);
-			const equityHierarchy = this.buildAccountHierarchy(tempEquity, 'Equity', valuationMethod);
+			const incomeHierarchy = this.buildAccountHierarchy(tempIncome, 'Income', valuationMethod);
+			const expensesHierarchy = this.buildAccountHierarchy(tempExpenses, 'Expenses', valuationMethod);
 
-			// Calculate totals - always use reporting currency
-			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, reportingCurrency);
-			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, reportingCurrency);
-			const totalEquity = this.calculateCategoryTotals(equityHierarchy, reportingCurrency);
+			const totalIncome = this.calculateCategoryTotals(incomeHierarchy, reportingCurrency);
+			const totalExpenses = this.calculateCategoryTotals(expensesHierarchy, reportingCurrency);
+			// totalIncome is negative in beancount (credit accounts); compute conventional profit
+			const netProfit = -(totalIncome + totalExpenses);
 
-			// Create warning message
-			let unconvertedWarning = null;
+			let unconvertedWarning: string | null = null;
 			if (hasUnconvertedCommodities) {
-				unconvertedWarning = `Multi-currency accounts detected. ${reportingCurrency} amounts are shown in the first column, other currencies are displayed separately in the second column. Only ${reportingCurrency} amounts are included in totals.`;
+				unconvertedWarning = `Multi-currency accounts detected. ${reportingCurrency} amounts are shown in the first column, other currencies are displayed separately. Only ${reportingCurrency} amounts are included in totals.`;
 			}
 
 			const currentState = get(this.state);
 
-			// Update the store with all new data (preserve chart state)
 			this.state.set({
 				isLoading: false,
 				error: null,
-				assets: this.flattenHierarchy(assetsHierarchy),
-				liabilities: this.flattenHierarchy(liabilitiesHierarchy),
-				equity: this.flattenHierarchy(equityHierarchy),
-				totalAssets,
-				totalLiabilities,
-				totalEquity,
+				income: this.flattenHierarchy(incomeHierarchy),
+				expenses: this.flattenHierarchy(expensesHierarchy),
+				totalIncome,
+				totalExpenses,
+				netProfit,
 				currency: reportingCurrency,
 				hasUnconvertedCommodities,
 				unconvertedWarning,
@@ -473,15 +429,17 @@ export class BalanceSheetController {
 
 			// Load chart data
 			try {
-				const chartResult = await this.plugin.runQuery(queries.getHistoricalNetWorthDataQuery(currentState.chartInterval, reportingCurrency));
+				const chartResult = await this.plugin.runQuery(
+					queries.getHistoricalNetProfitDataQuery(currentState.chartInterval, reportingCurrency)
+				);
 				this._processChartData(chartResult, currentState.chartInterval, reportingCurrency);
 			} catch (chartErr) {
-				Logger.error('Error loading chart data in loadData:', chartErr);
+				Logger.error('Error loading income chart data in loadData:', chartErr);
 				this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${chartErr.message}` }));
 			}
 
 		} catch (e) {
-			console.error("Error loading balance sheet:", e);
+			console.error('Error loading income statement:', e);
 			this.state.update(s => ({ ...s, isLoading: false, error: e.message }));
 		}
 	}

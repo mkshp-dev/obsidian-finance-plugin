@@ -7,18 +7,21 @@
     import BalanceSheetTab from '../../partials/dashboard/BalanceSheetTab.svelte';
     import CommoditiesTab from '../../partials/dashboard/CommoditiesTab.svelte';
     import JournalTab from '../../partials/dashboard/JournalTab.svelte';
+    import IncomeStatementTab from '../../partials/dashboard/IncomeStatementTab.svelte';
 
     // Types
     import type { OverviewController } from '../../../controllers/OverviewController';
     import type { TransactionController } from '../../../controllers/TransactionController';
     import type { BalanceSheetController } from '../../../controllers/BalanceSheetController';
     import type { CommoditiesController } from '../../../controllers/CommoditiesController';
+    import type { IncomeStatementController } from '../../../controllers/IncomeStatementController';
 
     // Props
     export let overviewController: OverviewController;
     export let transactionController: TransactionController;
     export let balanceSheetController: BalanceSheetController;
     export let commoditiesController: CommoditiesController;
+    export let incomeStatementController: IncomeStatementController;
     export let journalStore: any;
     export let plugin: any = null; // Add plugin prop
 
@@ -29,6 +32,7 @@
         { id: 'transactions', label: 'Transactions' },
         { id: 'journal', label: 'Journal' },
         { id: 'balancesheet', label: 'Accounts & Balances' },
+        { id: 'incomestatement', label: 'Income Statement' },
         { id: 'commodities', label: 'Commodities' }
     ];
 </script>
@@ -57,6 +61,8 @@
             <JournalTab store={journalStore} plugin={plugin} />
         {:else if activeTab === 'balancesheet'}
             <BalanceSheetTab controller={balanceSheetController} />
+        {:else if activeTab === 'incomestatement'}
+            <IncomeStatementTab controller={incomeStatementController} />
         {:else if activeTab === 'commodities'}
             <CommoditiesTab controller={commoditiesController} on:openCommodity on:addCommodity />
         {/if}

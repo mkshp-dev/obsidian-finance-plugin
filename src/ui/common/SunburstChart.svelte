@@ -17,6 +17,14 @@
 	export let totalAssets: number        = 0;
 	export let totalLiabilities: number   = 0;
 	export let totalEquity: number        = 0;
+	export let title: string              = 'All Accounts';
+	// Optional overrides for section labels (used e.g. for Income Statement)
+	export let assetsLabel: string              = 'Assets';
+	export let liabilitiesLabel: string         = 'Liabilities';
+	export let equityLabel: string              = 'Equity';
+	// Expected sign per section: true = expect negative balance, false = expect positive
+	export let assetsExpectNegative: boolean      = false;
+	export let liabilitiesExpectNegative: boolean = true;  // beancount liabilities are credit (negative)
 
 	// ── SVG geometry ─────────────────────────────────────────────────────────
 	const SIZE    = 480;
@@ -39,6 +47,7 @@
 		endAngle:     number;
 		depth:        number;
 		section:      'Assets' | 'Liabilities' | 'Equity';
+		negative:     boolean;  // true if source item has negative amountNumber
 		sourceItem:   AccountItem | null;
 		children:     SunburstNode[];
 	}
@@ -63,16 +72,23 @@
 		Equity:      213,
 	};
 
-	function getColor(section: string, depth: number): string {
+	function getColor(section: string, depth: number, negative: boolean = false): string {
 		const hue  = SECTION_HUE[section] ?? 200;
-		const sat  = 48;
+		const sat  = 52;
 		const lig  = Math.min(72, 36 + depth * 10);
 		return `hsl(${hue}, ${sat}%, ${lig}%)`;
 	}
 
-	function getHoverColor(section: string): string {
+	function getHoverColor(section: string, negative: boolean = false): string {
 		const hue = SECTION_HUE[section] ?? 200;
-		return `hsl(${hue}, 60%, 55%)`;
+		return `hsl(${hue}, 65%, 55%)`;
+	}
+
+	// ── Anomaly detection ────────────────────────────────────────────────────
+	function isAnomalous(section: string, negative: boolean): boolean {
+		if (section === 'Assets')      return assetsExpectNegative ? !negative : negative;
+		if (section === 'Liabilities') return liabilitiesExpectNegative ? !negative : negative;
+		return negative; // equity: expect positive
 	}
 
 	// ── Layout builder ────────────────────────────────────────────────────────
@@ -99,17 +115,19 @@
 			if (slice < 0.003) { angle += slice; continue; } // skip near-invisible arcs
 
 			const p = parentPath ? `${parentPath} › ${item.displayName}` : item.displayName;
+			const isNeg = item.amountNumber < 0;
 			const node: SunburstNode = {
 				id:          item.account,
 				label:       item.displayName,
 				path:        p,
 				amount:      item.amount,
 				value:       Math.abs(item.amountNumber),
-				color:       getColor(section, depth),
+				color:       getColor(section, depth, isNeg),
 				startAngle:  angle,
 				endAngle:    angle + slice,
 				depth,
 				section:     section as SunburstNode['section'],
+				negative:    isNeg,
 				sourceItem:  item,
 				children:    item.children?.length
 					? buildNodes(item.children, section, angle, angle + slice, depth + 1, p)
@@ -161,11 +179,12 @@
 				id, label, path: label,
 				amount:     `${value.toFixed(2)} ${currency}`,
 				value:      Math.abs(value),
-				color:      getColor(section, 0),
+				color:      getColor(section, 0, value < 0),
 				startAngle: sa,
 				endAngle:   ea,
 				depth:      0,
 				section,
+				negative:   value < 0,
 				sourceItem: roots[0] ?? null,
 				children:   ring1Items.length
 					? buildNodes(ring1Items, section, sa, ea, 1, label)
@@ -175,11 +194,11 @@
 
 		const nodes: SunburstNode[] = [];
 		if (aSpan > 0.003)
-			nodes.push(syntheticRoot('__assets__',      'Assets',      'Assets',      totalAssets,      START,          START + aSpan,          aRoots));
+			nodes.push(syntheticRoot('__assets__',      assetsLabel,      'Assets',      totalAssets,      START,          START + aSpan,          aRoots));
 		if (lSpan > 0.003)
-			nodes.push(syntheticRoot('__liabilities__', 'Liabilities', 'Liabilities', totalLiabilities, START + aSpan,  START + aSpan + lSpan,  lRoots));
+			nodes.push(syntheticRoot('__liabilities__', liabilitiesLabel, 'Liabilities', totalLiabilities, START + aSpan,  START + aSpan + lSpan,  lRoots));
 		if (eSpan > 0.003)
-			nodes.push(syntheticRoot('__equity__',      'Equity',      'Equity',      totalEquity,      START + aSpan + lSpan, START + TAU,   eRoots));
+			nodes.push(syntheticRoot('__equity__',      equityLabel,      'Equity',      totalEquity,      START + aSpan + lSpan, START + TAU,   eRoots));
 
 		return nodes;
 	})();
@@ -270,12 +289,20 @@
 		? hoveredNode.label
 		: drillStack.length > 0
 			? (drillStack[drillStack.length - 1].crumb.split(' › ').pop() ?? '')
-			: 'Balance';
+			: title;
+
+	$: centreSectionTotal = (() => {
+		if (title === assetsLabel)      return totalAssets;
+		if (title === liabilitiesLabel) return totalLiabilities;
+		if (title === equityLabel)      return totalEquity;
+		// "All Accounts" — show net worth (Assets minus Liabilities)
+		return Math.abs(totalAssets) - Math.abs(totalLiabilities);
+	})();
 
 	$: centreAmount = hoveredNode
 		? hoveredNode.amount
 		: drillStack.length === 0
-			? `${(Math.abs(totalAssets) - Math.abs(totalLiabilities)).toFixed(2)} ${currency}`
+			? `${centreSectionTotal.toFixed(2)} ${currency}`
 			: '';
 </script>
 
@@ -287,7 +314,7 @@
 			class="crumb-btn"
 			class:active={drillStack.length === 0}
 			on:click={() => drillBack(0)}
-		>All Accounts</button>
+		>{title}</button>
 
 		{#each drillStack as level, i}
 			<span class="crumb-sep" aria-hidden="true">›</span>
@@ -310,14 +337,21 @@
 			viewBox="0 0 {SIZE} {SIZE}"
 			class="sunburst-svg"
 			role="img"
-			aria-label="Balance Sheet Sunburst — Assets, Liabilities and Equity"
+			aria-label="Sunburst chart"
 		>
+			<defs>
+				<!-- Diagonal-stripe hatch for anomalous (unexpected-sign) accounts -->
+				<pattern id="hatch-anomalous" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+					<line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.55)" stroke-width="3"/>
+				</pattern>
+			</defs>
+
 			<!-- ── Arcs ── -->
 			{#each allNodes as node (node.id + '|' + node.depth + '|' + node.startAngle.toFixed(4))}
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<path
 					d={arcPath(node)}
-					fill={hoveredNode === node ? getHoverColor(node.section) : node.color}
+					fill={hoveredNode === node ? getHoverColor(node.section, node.negative) : node.color}
 					stroke="var(--background-primary)"
 					stroke-width="1.5"
 					style="cursor:{node.sourceItem?.children?.length ? 'pointer' : 'default'};transition:fill 0.12s ease;"
@@ -328,6 +362,15 @@
 					aria-label="{node.path}: {node.amount}"
 					on:keydown={(e) => e.key === 'Enter' && onArcClick(node)}
 				/>
+				<!-- Stripe overlay for anomalous-sign accounts -->
+				{#if isAnomalous(node.section, node.negative)}
+					<path
+						d={arcPath(node)}
+						fill="url(#hatch-anomalous)"
+						stroke="none"
+						pointer-events="none"
+					/>
+				{/if}
 			{/each}
 
 			<!-- ── Inline labels (depth 0 & 1 only, only if arc is wide enough) ── -->
@@ -383,19 +426,41 @@
 	<!-- Legend (shown at root level only) -->
 	{#if drillStack.length === 0}
 		<div class="sunburst-legend" aria-label="Chart legend">
-			<span class="legend-item">
-				<span class="legend-dot" style="background:{getColor('Assets', 0)};"></span>
-				Assets
-			</span>
-			<span class="legend-item">
-				<span class="legend-dot" style="background:{getColor('Liabilities', 0)};"></span>
-				Liabilities
-			</span>
-			<span class="legend-item">
-				<span class="legend-dot" style="background:{getColor('Equity', 0)};"></span>
-				Equity
-			</span>
+			{#if Math.abs(totalAssets) > 0.001}
+				<span class="legend-item">
+					<span class="legend-dot" style="background:{getColor('Assets', 0)};"></span>
+					{assetsLabel}
+				</span>
+			{/if}
+			{#if Math.abs(totalLiabilities) > 0.001}
+				<span class="legend-item">
+					<span class="legend-dot" style="background:{getColor('Liabilities', 0)};"></span>
+					{liabilitiesLabel}
+				</span>
+			{/if}
+			{#if Math.abs(totalEquity) > 0.001}
+				<span class="legend-item">
+					<span class="legend-dot" style="background:{getColor('Equity', 0)};"></span>
+					{equityLabel}
+				</span>
+			{/if}
 		</div>
+	{/if}
+
+	<!-- Hatch pattern hint -->
+	{#if grandTotal >= 0.001}
+		<p class="hatch-hint">
+			<svg width="14" height="14" style="vertical-align:-2px;margin-right:4px;">
+				<defs>
+					<pattern id="hatch-hint-pat" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+						<line x1="0" y1="0" x2="0" y2="8" stroke="var(--text-muted)" stroke-width="3"/>
+					</pattern>
+				</defs>
+				<rect width="14" height="14" rx="2" fill="var(--background-modifier-border)" />
+				<rect width="14" height="14" rx="2" fill="url(#hatch-hint-pat)" />
+			</svg>
+			Stripes = unexpected sign
+		</p>
 	{/if}
 
 	<!-- Empty state -->
@@ -511,5 +576,14 @@
 		font-size: var(--font-ui-small);
 		text-align: center;
 		padding: var(--size-4-4);
+	}
+
+	.hatch-hint {
+		margin: 0;
+		font-size: 11px;
+		color: var(--text-faint);
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 </style>

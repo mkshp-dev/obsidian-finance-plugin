@@ -57,8 +57,17 @@ export function getBalanceSheetQueryByUnits(): string {
 	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
-export function getAllAccountBalancesQuery(currency: string): string {
-	return `SELECT account, convert(sum(position), '${currency}') GROUP BY account ORDER BY account`;
+
+export function getIncomeStatementQuery(currency: string): string {
+	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+}
+
+export function getIncomeStatementQueryByCost(): string {
+	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+}
+
+export function getIncomeStatementQueryByUnits(): string {
+	return `SELECT account, units(sum(position)) WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 export function getTransactionsQuery(filters: TransactionFilters, limit: number = 1000): string {
@@ -107,6 +116,14 @@ export function getHistoricalNetWorthDataQuery(interval: 'month' | 'week' = 'mon
 		return `SELECT last(date_add(date_trunc('week', date), 6)) AS week_end, only('${currency}', convert(last(balance), '${currency}', last(date_add(date_trunc('week', date), 6)))) WHERE account ~ '^(Assets|Liabilities)' GROUP BY date_trunc('week', date) ORDER BY week_end`;
 	}
 	return `SELECT year, month, only('${currency}', convert(last(balance), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) WHERE account ~ '^(Assets|Liabilities)' GROUP BY year, month ORDER BY year, month`;
+}
+
+
+export function getHistoricalNetProfitDataQuery(interval: 'month' | 'week' = 'month', currency: string): string {
+	if (interval === 'week') {
+		return `SELECT last(date_add(date_trunc('week', date), 6)) AS week_end, only('${currency}', convert(sum(position), '${currency}', last(date_add(date_trunc('week', date), 6)))) WHERE account ~ '^(Income|Expenses)' GROUP BY date_trunc('week', date) ORDER BY week_end`;
+	}
+	return `SELECT year, month, only('${currency}', convert(sum(position), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth WHERE account ~ '^(Income|Expenses)' GROUP BY year, month ORDER BY year, month`;
 }
 
 // --- Commodities Queries ---
