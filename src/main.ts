@@ -4,7 +4,7 @@ import { Plugin } from 'obsidian';
 import { BeancountSettingTab, type BeancountPluginSettings, DEFAULT_SETTINGS } from './settings';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './ui/views/sidebar/sidebar-view';
 import { UnifiedTransactionModal } from './ui/modals/UnifiedTransactionModal';
-import { runQuery } from './utils/index';
+import { runQuery, type BQLFormat } from './utils/index';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
 import { BQLCodeBlockProcessor } from './ui/markdown/BQLCodeBlockProcessor';
 import { InlineBQLProcessor } from './ui/markdown/InlineBQLProcessor';
@@ -218,10 +218,11 @@ export default class BeancountPlugin extends Plugin {
 	/**
 	 * Public wrapper for running BQL queries (used by views and controllers).
 	 * @param {string} query - The BQL query.
-	 * @returns {Promise<string>} The CSV output.
+	 * @param {BQLFormat} [format='csv'] - Output format (csv, text, html).
+	 * @returns {Promise<string>} The raw output in the requested format.
 	 */
-	public runQuery = (query: string): Promise<string> => {
-		return runQuery(this, query);
+	public runQuery = (query: string, format: BQLFormat = 'csv'): Promise<string> => {
+		return runQuery(this, query, undefined, format);
 	}
 
 	// Helper method to get dashboard refresh callback

@@ -8,16 +8,20 @@ import { getMainLedgerPath } from './structuredLayout';
 import { convertWindowsPathToWsl } from './fileEditor';
 import { Logger } from './logger';
 
+/** Output formats supported by bean-query's `-f` flag. */
+export type BQLFormat = 'csv' | 'text' | 'beancount';
+
 /**
  * Executes a Beancount query (BQL) against the configured ledger file.
  *
  * @param {BeancountPlugin} plugin  - The plugin instance (for settings).
  * @param {string}          query   - The BQL query string.
  * @param {string}         [filepath] - Optional path to a specific file. Defaults to the main ledger.
- * @returns {Promise<string>} The CSV output of the query.
+ * @param {BQLFormat}      [format='csv'] - Output format passed to bean-query via -f flag.
+ * @returns {Promise<string>} The raw output of the query in the requested format.
  * @throws {Error} If the query fails or command / path is not configured.
  */
-export function runQuery(plugin: BeancountPlugin, query: string, filepath?: string): Promise<string> {
+export function runQuery(plugin: BeancountPlugin, query: string, filepath?: string, format: BQLFormat = 'csv'): Promise<string> {
     return new Promise((resolve, reject) => {
         const filePath = filepath || getMainLedgerPath(plugin);
         const commandName = plugin.settings.beancountCommand;
@@ -32,7 +36,7 @@ export function runQuery(plugin: BeancountPlugin, query: string, filepath?: stri
 
         // Escape double-quotes in query for shell execution
         const escapedQuery = query.replace(/"/g, '\\"');
-        const command = `${commandName} -q -f csv "${queryFilePath}" "${escapedQuery}"`;
+        const command = `${commandName} -q -f ${format} "${queryFilePath}" "${escapedQuery}"`;
         Logger.log(`[runQuery] Executing: ${command}`);
 
         // 50 MB buffer – large ledgers can produce significant CSV output
