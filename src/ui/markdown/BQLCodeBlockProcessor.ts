@@ -2,6 +2,7 @@
 
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type BeancountPlugin from '../../main';
+import type { BQLFormat } from '../../utils/queryRunner';
 
 export class BQLCodeBlockProcessor {
 	private plugin: BeancountPlugin;
@@ -80,6 +81,24 @@ export class BQLCodeBlockProcessor {
 			
 			if (showTools) {
 				controls = header.createEl('div', { cls: 'bql-query-controls' });
+
+				// Format selector
+				const formatSelect = controls.createEl('select', { cls: 'bql-format-select', title: 'Output format' }) as HTMLSelectElement;
+				const formatOptions: { value: BQLFormat; label: string }[] = [
+					{ value: 'csv', label: 'Table' },
+					{ value: 'text', label: 'Text' },
+					{ value: 'beancount', label: 'Beancount' },
+				];
+				formatOptions.forEach(opt => {
+					const option = formatSelect.createEl('option', { text: opt.label }) as HTMLOptionElement;
+					option.value = opt.value;
+				});
+				(container as any)._bqlFormat = 'csv' as BQLFormat;
+				formatSelect.value = 'csv';
+				formatSelect.addEventListener('change', () => {
+					(container as any)._bqlFormat = formatSelect.value as BQLFormat;
+					executeQuery();
+				});
 				
 				refreshBtn = controls.createEl('button', { 
 					text: '⟳', 
@@ -96,7 +115,7 @@ export class BQLCodeBlockProcessor {
 				exportBtn = controls.createEl('button', { 
 					text: '📤', 
 					cls: 'bql-export-btn',
-					title: 'Export as CSV'
+					title: 'Export results'
 				});
 			}
 		}
@@ -129,13 +148,14 @@ export class BQLCodeBlockProcessor {
 					loadingEl.textContent = 'Loading...';
 				}
 				
-				// Execute the query
-				const csvResult = await this.plugin.runQuery(query);
+				// Execute the query with the currently selected format
+				const currentFormat: BQLFormat = (container as any)._bqlFormat ?? 'csv';
+				const queryResult = await this.plugin.runQuery(query, currentFormat);
 				
 				// Clear loading and show results
 				resultArea.empty();
 				
-				if (!csvResult || csvResult.trim() === '') {
+				if (!queryResult || queryResult.trim() === '') {
 					resultArea.createEl('div', { 
 						text: 'No results returned', 
 						cls: 'bql-no-results' 
@@ -143,22 +163,25 @@ export class BQLCodeBlockProcessor {
 					return;
 				}
 				
-				// Parse CSV and create table
-				const { table, error } = this.createTableFromCSV(csvResult);
-				
-				if (error) {
-					// Create collapsible error with short summary
-					this.createCollapsibleError(resultArea, 'Error parsing results', error);
-					
-					// Show raw results as fallback
-					const rawEl = resultArea.createEl('pre', { cls: 'bql-raw-result' });
-					rawEl.textContent = csvResult;
-				} else if (table) {
-					resultArea.appendChild(table);
+				if (currentFormat === 'csv') {
+					// Parse CSV and create table
+					const { table, error } = this.createTableFromCSV(queryResult);
+					if (error) {
+						this.createCollapsibleError(resultArea, 'Error parsing results', error);
+						const rawEl = resultArea.createEl('pre', { cls: 'bql-raw-result' });
+						rawEl.textContent = queryResult;
+					} else if (table) {
+						resultArea.appendChild(table);
+					}
+				} else {
+					// text and beancount formats — render as preformatted text
+					const preEl = resultArea.createEl('pre', { cls: 'bql-text-result' });
+					preEl.textContent = queryResult;
 				}
 				
 				// Store result for copy/export functions
-				(container as any)._lastResult = csvResult;
+				(container as any)._lastResult = queryResult;
+				(container as any)._lastFormat = currentFormat;
 				
 			} catch (error) {
 				// Show collapsible error message
@@ -187,8 +210,11 @@ export class BQLCodeBlockProcessor {
 		if (exportBtn) {
 			exportBtn.addEventListener('click', () => {
 				const result = (container as any)._lastResult;
+				const fmt: BQLFormat = (container as any)._lastFormat ?? 'csv';
 				if (result) {
-					this.downloadCSV(result, 'bql-query-result.csv');
+					const ext = fmt === 'csv' ? 'csv' : 'txt';
+					const mimeType = fmt === 'csv' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
+					this.downloadFile(result, `bql-query-result.${ext}`, mimeType);
 					exportBtn.textContent = '✓';
 					setTimeout(() => exportBtn.textContent = '📤', 1000);
 				}
@@ -323,10 +349,9 @@ export class BQLCodeBlockProcessor {
 		return /^[+-]?[\d,]*\.?\d+\s*[A-Z]*$/.test(str.trim());
 	}
 	
-	private downloadCSV(csvContent: string, filename: string) {
-		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+	private downloadFile(content: string, filename: string, mimeType: string) {
+		const blob = new Blob([content], { type: mimeType });
 		const link = document.createElement('a');
-		
 		if (link.download !== undefined) {
 			const url = URL.createObjectURL(blob);
 			link.setAttribute('href', url);

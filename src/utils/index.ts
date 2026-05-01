@@ -13,7 +13,7 @@
 //   journal.ts      – getTransactionEntries, getBalanceEntries, getNoteEntries
 //   directives.ts   – all create/update/delete write operations + generateTransactionText + validateCommodityLocation
 
-export { runQuery } from './queryRunner';
+export { runQuery, type BQLFormat } from './queryRunner';
 export { convertWindowsPathToWsl, convertWslPathToWindows, atomicFileWrite, createBackupFile } from './fileEditor';
 export {
 	parseSingleValue,

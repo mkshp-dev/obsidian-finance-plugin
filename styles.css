@@ -54,6 +54,35 @@
 	opacity: 1;
 }
 
+.bql-format-select {
+	padding: 2px 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 11px;
+	opacity: 0.7;
+	transition: opacity 0.2s ease;
+}
+
+.bql-format-select:hover,
+.bql-format-select:focus {
+	opacity: 1;
+	outline: none;
+}
+
+.bql-text-result {
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	white-space: pre;
+	overflow-x: auto;
+	padding: 8px 0;
+	color: var(--text-normal);
+	background: none;
+	border: none;
+}
+
 .bql-query-details {
 	margin: 0 0 12px 0;
 	border-bottom: none;
