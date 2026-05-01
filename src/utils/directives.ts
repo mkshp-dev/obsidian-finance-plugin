@@ -859,6 +859,64 @@ export async function deleteQueryDirective(
     }
 }
 
+// ─── INDICATOR DIRECTIVE (Budget / Target) ─────────────────────────────────────
+
+export interface IndicatorDirectiveParams {
+    type: 'Budget' | 'Target';
+    name: string;
+    accountQuery: string;
+    cycle: 'Monthly' | 'Weekly';
+    target: number;
+    currency: string;
+    isRollover: boolean;
+    startDate: string; // ISO date string YYYY-MM-DD
+}
+
+/**
+ * Writes an event "Indicator" directive to events.beancount.
+ * Format:
+ *   YYYY-MM-DD event "Indicator" "Budget"
+ *     accountQuery: "..."
+ *     name: "..."
+ *     ...
+ */
+export async function createIndicatorDirective(
+    plugin: BeancountPlugin,
+    params: IndicatorDirectiveParams,
+    createBackup: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const filePath = getTargetFile(plugin, 'event');
+        if (!filePath) return { success: false, error: 'Events file path not set. Please configure the plugin.' };
+
+        const normalizedPath = convertWslPathToWindows(filePath);
+
+        const lines = [
+            `${params.startDate} event "Indicator" "${params.type}"`,
+            `\taccountQuery: "${params.accountQuery}"`,
+            `\tname: "${params.name}"`,
+            `\tcycle: "${params.cycle}"`,
+            `\tisRollover: ${params.isRollover ? 1 : 0}`,
+            `\ttarget: ${params.target.toFixed(2)}`,
+            `\tcurrency: "${params.currency}"`,
+        ];
+        const directiveText = lines.join('\n');
+
+        await createBackupFile(normalizedPath, createBackup, 'createIndicatorDirective');
+        const content = await readFile(normalizedPath, 'utf-8');
+        const newContent = content.endsWith('\n')
+            ? `${content}${directiveText}\n`
+            : `${content}\n${directiveText}\n`;
+        await atomicFileWrite(normalizedPath, newContent);
+
+        Logger.log(`[createIndicatorDirective] Saved ${params.type} indicator "${params.name}"`);
+        return { success: true };
+    } catch (error) {
+        Logger.error('[createIndicatorDirective] Error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
 /**
  * Read all query directives from queries.beancount.
  * Returns a map of name → sql.

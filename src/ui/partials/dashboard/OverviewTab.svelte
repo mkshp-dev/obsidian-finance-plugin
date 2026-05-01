@@ -1,11 +1,15 @@
 <script lang="ts">
 	import CardComponent from '../../common/CardComponent.svelte';
+	import IndicatorsSection from './IndicatorsSection.svelte';
 	import type { OverviewController } from '../../../controllers/OverviewController';
 	import { writable, type Writable } from 'svelte/store'; // Import writable
 	import type { OverviewState } from '../../../controllers/OverviewController'; // Import the State type
+	import { AddBudgetModal } from '../../modals/AddBudgetModal';
+	import { AddTargetModal } from '../../modals/AddTargetModal';
 
 	// --- Receive the controller ---
 	export let controller: OverviewController;
+	export let plugin: any = null;
 
 	// --- THIS IS THE FIX ---
 	// 1. Create a local, placeholder store with default values.
@@ -33,6 +37,16 @@
 		if (controller) {
 			controller.loadData();
 		}
+	}
+
+	function handleAddBudget() {
+		if (!plugin) return;
+		new AddBudgetModal(plugin.app, plugin).open();
+	}
+
+	function handleAddTarget() {
+		if (!plugin) return;
+		new AddTargetModal(plugin.app, plugin).open();
 	}
 	// -----------------------
 </script>
@@ -82,6 +96,12 @@
 			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} comparison="Current month spending" />
 			<CardComponent label="Savings Rate" value={state.savingsRate} comparison="Income minus expenses" />
 		</div>
+
+		<IndicatorsSection
+			{plugin}
+			on:add-budget={handleAddBudget}
+			on:add-target={handleAddTarget}
+		/>
 	{/if}
 </div>
 
