@@ -125,6 +125,30 @@ export function getHistoricalNetProfitDataQuery(interval: 'month' | 'week' = 'mo
 	}
 	return `SELECT year, month, only('${currency}', convert(sum(position), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth WHERE account ~ '^(Income|Expenses)' GROUP BY year, month ORDER BY year, month`;
 }
+// --- List Budget/Target Quries ---	
+export function getBudgetListQuery(): string {
+	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _budgetAmount, meta('currency') AS _currency FROM events WHERE type='Indicator' AND description='Budget'`;
+}
+
+export function getTargetListQuery(): string {
+	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _targetAmount, meta('currency') AS _currency FROM events WHERE type='Indicator' AND description='Target'`;
+}
+
+
+// --- Budget/Target Queries ---
+
+export function getIndicatorStatusQuery(isRollOver: boolean, currency: string, accountString: string, budgetAmount: number, startDate: string, period: string): string {
+	if (isRollOver) {
+		if (period === 'week') {
+			return `SELECT year, date_part('week', date), number(only('${currency}', convert(sum(position), '${currency}'))) AS _expenseThisCycle, ((year(today())-year(${startDate}))*52+(date_part('week', today())-date_part('week',${startDate}))+1)*${budgetAmount}-last(number(only('${currency}',convert(balance, '${currency}')))) AS _remainingThisCycle FROM account ~ '^${accountString}' OPEN ON ${startDate} ORDER BY year DESC, date_part('week', date) DESC LIMIT 1`;
+		}
+		return `SELECT year, month, number(only('${currency}', convert(sum(position), '${currency}'))) AS _expenseThisCycle, ((year(today())-year(${startDate}))*12+(month(today())-month(${startDate}))+1)*${budgetAmount}-last(number(only('${currency}',convert(balance, '${currency}')))) AS _remainingThisCycle FROM account ~ '^${accountString}' OPEN ON ${startDate} ORDER BY year DESC, month DESC LIMIT 1`;
+	} else {
+		return `SELECT date, number(only('${currency}', convert(sum(position), '${currency}'))) AS _expenseThisCycle, ${budgetAmount}-number(only('${currency}', convert(sum(position), '${currency}'))) AS _remainingThisCycle WHERE account ~ '^${accountString}' AND date_trunc('${period}', date)=date_trunc('${period}', today())`;
+	}
+}
+
+
 
 // --- Commodities Queries ---
 
@@ -153,4 +177,8 @@ export function getStaleCommoditiesQuery(daysOld: number, currency: string): str
 
 export function getAllPricesQuery(limit: number = 100): string {
 	return `SELECT date, currency, position FROM #prices ORDER BY date DESC LIMIT ${limit}`;
+}
+
+export function getAllCurrenciesQuery(): string {
+	return `SELECT distinct(currency) AS currency_`;
 }

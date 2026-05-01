@@ -51,7 +51,7 @@
 
     <div class="tab-content">
         {#if activeTab === 'overview'}
-            <OverviewTab controller={overviewController} />
+            <OverviewTab controller={overviewController} {plugin} />
         {:else if activeTab === 'transactions'}
             <TransactionsTab 
                 controller={transactionController}
