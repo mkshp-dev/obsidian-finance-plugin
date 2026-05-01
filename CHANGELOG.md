@@ -5,6 +5,37 @@ All notable changes to Beancount for Obsidian will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-01
+
+### Added ⭐ Financial Indicators
+
+#### **Financial Indicators Section (Overview Tab)**
+- New **Budgets & Targets** section below KPI cards in the Overview tab
+- Full-width indicator cards with progress bar, status pill, and stats row
+- **Rollover budget support**: unspent budget accumulates across cycles; available amount = base target + accumulated rollover
+- Status pills: `On Track`, `Warning`, `Over Budget`, `In Progress`, `Complete`
+- Per-card loading skeletons and user-friendly error states
+- ↺ Refresh button to re-run all indicator queries on demand
+
+#### **Add Budget / Add Target Modals**
+- Forms for creating budget and savings target indicators
+- Account autocomplete filtered to `Expenses:*` (budgets) or `Assets:*` (targets)
+- Currency selector populated live from ledger, pre-filled with Operating Currency
+- Rollover toggle for budgets; Monthly / Weekly period selection
+- Writes `event "Indicator" "Budget|Target"` directive with metadata to `events.beancount`
+
+#### **New BQL Queries**
+- `getBudgetListQuery()` — reads all `Indicator / Budget` events
+- `getTargetListQuery()` — reads all `Indicator / Target` events
+- `getIndicatorStatusQuery()` — 3 branches: rollover+weekly, rollover+monthly, non-rollover
+- `getAllCurrenciesQuery()` — used by modal currency selectors
+
+### Fixed 🐛
+- **bean-query CSV column casing**: `bean-query -f csv` lowercases all column alias characters (e.g. `_startDate` → `_startdate`). Added `col()` helper that looks up columns case-insensitively.
+- **`parseBool()` now handles `'TRUE'`** returned by `bool()` in bean-query CSV output.
+
+---
+
 ## [2.0.0] - 2026-01-22
 
 ### 🚀 **Major Architecture Overhaul**
