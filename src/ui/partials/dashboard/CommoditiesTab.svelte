@@ -373,6 +373,13 @@
 	}
 
 	.empty-state {
+		/* Override Obsidian core's global `.empty-state` rule
+		 * (position:absolute; width:100%; height:100%; top:0) which would
+		 * otherwise turn this placeholder into a full-viewport overlay
+		 * that swallows clicks on every dashboard button. */
+		position: relative;
+		width: auto;
+		height: auto;
 		text-align: center;
 		padding: 60px 20px;
 		color: var(--text-muted);
