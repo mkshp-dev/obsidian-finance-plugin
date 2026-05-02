@@ -8,6 +8,7 @@ import {
     parseCommoditiesListCSV,
     parseCommoditiesPriceDataCSV,
     parseCommodityDetailsCSV,
+    parseCommoditiesHoldingsCSV,
     validatePriceSource,
     validateLogoUrl,
     saveCommodityMetadata
@@ -41,6 +42,14 @@ export interface CommodityInfo {
     isPriceLatest?: boolean;
     /** The date of the last price record. */
     priceDate?: string | null;
+    /** Numeric quantity held in Asset accounts (always non-negative). */
+    holdings?: number;
+    /** Display string for holdings, e.g. "11.80 USD" or "30949 UYU". */
+    holdingsRaw?: string;
+    /** Holdings converted to operating currency, used for sort. */
+    valueInOperatingCurrency?: number;
+    /** True for the operating currency (highlighted and pinned to the top). */
+    isOperatingCurrency?: boolean;
 }
 
 /**
@@ -160,10 +169,11 @@ export class CommoditiesController {
             // Get operating currency from settings
             const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';
 
-            // Execute both queries in parallel
-            const [commoditiesCSV, priceDataCSV] = await Promise.all([
+            // Execute all three queries in parallel
+            const [commoditiesCSV, priceDataCSV, holdingsCSV] = await Promise.all([
                 this.plugin.runQuery(queries.getAllCommoditiesQuery()),
-                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency))
+                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency)),
+                this.plugin.runQuery(queries.getCommoditiesHoldingsQuery(operatingCurrency))
             ]);
 
             console.debug('[CommoditiesController] loadData: received CSV data');
@@ -171,12 +181,20 @@ export class CommoditiesController {
             // Parse CSV results
             const allSymbols = parseCommoditiesListCSV(commoditiesCSV);
             const priceDataMap = parseCommoditiesPriceDataCSV(priceDataCSV);
+            const holdingsMap = parseCommoditiesHoldingsCSV(holdingsCSV);
 
-            console.debug('[CommoditiesController] parsed', allSymbols.length, 'commodities and', priceDataMap.size, 'price entries');
+            console.debug(
+                '[CommoditiesController] parsed',
+                allSymbols.length, 'commodities,',
+                priceDataMap.size, 'price entries,',
+                holdingsMap.size, 'holdings entries'
+            );
 
-            // Merge data: iterate all commodities and enrich with price data
+            // Merge data: iterate all commodities and enrich with price + holdings data
             const commodities: CommodityInfo[] = allSymbols.map(symbol => {
                 const priceData = priceDataMap.get(symbol);
+                const holdingsData = holdingsMap.get(symbol);
+                const isOperatingCurrency = symbol === operatingCurrency;
 
                 return {
                     symbol,
@@ -191,11 +209,24 @@ export class CommoditiesController {
                     currentPrice: priceData?.price ? `${priceData.price} ${operatingCurrency}` : undefined,
                     logoUrl: priceData?.logo || null,
                     priceDate: priceData?.date || null,
-                    isPriceLatest: priceData?.isLatest || false
+                    isPriceLatest: priceData?.isLatest || false,
+                    holdings: holdingsData?.holdings ?? 0,
+                    holdingsRaw: holdingsData?.holdingsRaw || '',
+                    valueInOperatingCurrency: holdingsData?.valueOp ?? 0,
+                    isOperatingCurrency,
                 } as CommodityInfo;
             });
 
-            commodities.sort((a, b) => a.symbol.localeCompare(b.symbol));
+            // Sort: operating currency first, then by value desc, then alphabetical.
+            commodities.sort((a, b) => {
+                if (a.isOperatingCurrency !== b.isOperatingCurrency) {
+                    return a.isOperatingCurrency ? -1 : 1;
+                }
+                const va = a.valueInOperatingCurrency ?? 0;
+                const vb = b.valueInOperatingCurrency ?? 0;
+                if (va !== vb) return vb - va;
+                return a.symbol.localeCompare(b.symbol);
+            });
             this.commodities.set(commodities);
             this.lastUpdated.set(new Date());
 

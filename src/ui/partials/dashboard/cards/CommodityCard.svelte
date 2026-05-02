@@ -79,7 +79,7 @@
 	}
 </script>
 
-<div class="commodity-card-wrapper">
+<div class="commodity-card-wrapper" class:is-operating={commodity?.isOperatingCurrency}>
 	<button
 		class="commodity-card"
 		on:click={handleClick}
@@ -106,6 +106,9 @@
 					<span class="symbol-text"
 						>{commodity?.symbol || `UNKNOWN_${index}`}</span
 					>
+					{#if commodity?.isOperatingCurrency}
+						<span class="operating-badge" title="Operating currency for this ledger">Operating</span>
+					{/if}
 				</div>
 			</div>
 
@@ -138,6 +141,13 @@
 			{:else}
 				<div class="no-price-state">
 					<span class="no-price-text">Price unavailable</span>
+				</div>
+			{/if}
+
+			{#if commodity?.holdingsRaw}
+				<div class="holdings-row">
+					<span class="holdings-label">Holdings</span>
+					<span class="holdings-value">{commodity.holdingsRaw}</span>
 				</div>
 			{/if}
 		</div>
@@ -393,5 +403,51 @@
 
 	.commodity-card:hover .arrow-box {
 		transform: translateX(6px);
+	}
+
+	/* OPERATING-CURRENCY HIGHLIGHT */
+	.commodity-card-wrapper.is-operating {
+		border-color: var(--interactive-accent);
+		box-shadow: 0 0 0 1px var(--interactive-accent),
+			0 4px 14px rgba(0, 0, 0, 0.05);
+	}
+	.commodity-card-wrapper.is-operating::after {
+		opacity: 1;
+	}
+
+	.operating-badge {
+		display: inline-block;
+		margin-left: 8px;
+		padding: 2px 7px;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-on-accent);
+		background: var(--interactive-accent);
+		border-radius: 999px;
+		vertical-align: middle;
+	}
+
+	/* HOLDINGS ROW */
+	.holdings-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		margin-top: 10px;
+		padding-top: 10px;
+		border-top: 1px dashed var(--background-modifier-border);
+		font-size: 12px;
+	}
+	.holdings-label {
+		color: var(--text-faint);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		font-weight: 600;
+	}
+	.holdings-value {
+		color: var(--text-normal);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 </style>

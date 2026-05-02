@@ -124,3 +124,66 @@ export function parseCommodityDetailsCSV(csv: string): {
         return defaultResult;
     }
 }
+
+/**
+ * Parses CSV from getCommoditiesHoldingsQuery into a Map keyed by currency symbol.
+ *
+ * Each row has shape `[currency, units_, valueOp_]` where `units_` is an inventory
+ * string like `"11.80 USD"` or `",30949 UYU"` (sign placement varies by sum sign)
+ * and `valueOp_` is the same holdings converted to the operating currency
+ * (e.g. `"471 UYU"`).
+ *
+ * We extract the absolute numeric magnitude from each (sign is always positive
+ * for asset balances in practice; the sign placement is a beanquery CSV quirk).
+ */
+export function parseCommoditiesHoldingsCSV(
+    csv: string
+): Map<string, { holdings: number; holdingsRaw: string; valueOp: number }> {
+    const map = new Map<string, { holdings: number; holdingsRaw: string; valueOp: number }>();
+
+    const extractNumber = (cell: string | undefined): number => {
+        if (!cell) return 0;
+        // Match the first signed/unsigned numeric value; ignore currency tokens.
+        const m = cell.match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : 0;
+    };
+
+    try {
+        const cleanCsv = csv.replace(/\r/g, '').trim();
+        if (!cleanCsv) return map;
+
+        const records: string[][] = parseCsv(cleanCsv, {
+            columns: false,
+            skip_empty_lines: true,
+            relax_column_count: true,
+        });
+
+        for (let i = 1; i < records.length; i++) {
+            const row = records[i];
+            if (row.length < 3) continue;
+
+            const currency = row[0]?.trim();
+            if (!currency) continue;
+
+            const unitsCell = row[1]?.trim() || '';
+            const valueCell = row[2]?.trim() || '';
+
+            const holdings = Math.abs(extractNumber(unitsCell));
+            const valueOp = Math.abs(extractNumber(valueCell));
+
+            // Display string: pick whichever non-empty side of the inventory string
+            // has the value (e.g. "11.80 USD" or "30949 UYU").
+            const holdingsRaw = unitsCell
+                .split(',')
+                .map(s => s.trim())
+                .find(s => /\d/.test(s)) || '';
+
+            map.set(currency, { holdings, holdingsRaw, valueOp });
+        }
+
+        return map;
+    } catch (e) {
+        console.error('Error parsing commodities holdings CSV:', e, 'CSV:', csv);
+        return map;
+    }
+}

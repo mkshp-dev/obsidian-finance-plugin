@@ -174,6 +174,15 @@ export function getCommoditiesPriceDataQuery(currency: string): string {
 	return `SELECT last(date) AS date_, last(currency) AS currency_, round(getprice(last(currency), '${currency}'),2) AS price_, currency_meta(last(currency), 'logo') AS logo_, bool(today()-1<last(date)) AS islatest_ FROM #prices GROUP BY currency`;
 }
 
+/**
+ * Holdings per commodity in Asset accounts:
+ *   - units_  : raw inventory (e.g. "11.80 USD" or ",30949 UYU"), used for display
+ *   - valueOp_: same holdings converted to the operating currency, used for sort
+ */
+export function getCommoditiesHoldingsQuery(operatingCurrency: string): string {
+	return `SELECT currency, units(sum(position)) AS units_, convert(sum(position), '${operatingCurrency}') AS valueOp_ WHERE account ~ '^Assets' GROUP BY currency`;
+}
+
 
 export function getCommodityDetailsQuery(symbol: string): string {
 	return `SELECT name AS name_, last(meta) AS meta_, currency_meta(last(name),'logo') AS logo_, currency_meta(last(name), 'price') AS pricemetadata_, meta('filename') AS filename_, meta('lineno') AS lineno_ FROM #commodities WHERE name='${symbol}'`;
