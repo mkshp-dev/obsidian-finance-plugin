@@ -45,6 +45,8 @@ export interface IncomeStatementState {
 	chartLoading: boolean;
 	/** The active chart interval granularity. */
 	chartInterval: 'month' | 'week';
+	/** The active trend type shown in the Trends chart. */
+	chartTrendType: 'netprofit' | 'income' | 'expense';
 }
 
 /**
@@ -76,6 +78,7 @@ export class IncomeStatementController {
 			chartError: null,
 			chartLoading: false,
 			chartInterval: 'month' as const,
+			chartTrendType: 'netprofit' as const,
 		});
 	}
 
@@ -196,15 +199,44 @@ export class IncomeStatementController {
 	}
 
 	/**
+	 * Returns the appropriate query for the given interval and trend type.
+	 */
+	private _getChartQuery(interval: 'month' | 'week', trendType: 'netprofit' | 'income' | 'expense', currency: string): string {
+		switch (trendType) {
+			case 'income': return queries.getHistoricalIncomeDataQuery(interval, currency);
+			case 'expense': return queries.getHistoricalExpenseDataQuery(interval, currency);
+			default: return queries.getHistoricalNetProfitDataQuery(interval, currency);
+		}
+	}
+
+	/**
+	 * Changes the trend type and reloads only the chart data.
+	 */
+	async setChartTrendType(trendType: 'netprofit' | 'income' | 'expense') {
+		if (get(this.state).chartTrendType === trendType) return;
+		const { chartInterval } = get(this.state);
+		this.state.update(s => ({ ...s, chartTrendType: trendType, chartConfig: null, chartError: null, chartLoading: true }));
+		const reportingCurrency = this.plugin.settings.operatingCurrency;
+		try {
+			const result = await this.plugin.runQuery(this._getChartQuery(chartInterval, trendType, reportingCurrency));
+			this._processChartData(result, chartInterval, reportingCurrency, trendType);
+		} catch (e) {
+			Logger.error('Error loading income chart data:', e);
+			this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${e.message}` }));
+		}
+	}
+
+	/**
 	 * Changes the chart interval granularity and reloads only the chart data.
 	 */
 	async setChartInterval(interval: 'month' | 'week') {
 		if (get(this.state).chartInterval === interval) return;
+		const { chartTrendType } = get(this.state);
 		this.state.update(s => ({ ...s, chartInterval: interval, chartConfig: null, chartError: null, chartLoading: true }));
 		const reportingCurrency = this.plugin.settings.operatingCurrency;
 		try {
-			const result = await this.plugin.runQuery(queries.getHistoricalNetProfitDataQuery(interval, reportingCurrency));
-			this._processChartData(result, interval, reportingCurrency);
+			const result = await this.plugin.runQuery(this._getChartQuery(interval, chartTrendType, reportingCurrency));
+			this._processChartData(result, interval, reportingCurrency, chartTrendType);
 		} catch (e) {
 			Logger.error('Error loading income chart data:', e);
 			this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${e.message}` }));
@@ -214,9 +246,10 @@ export class IncomeStatementController {
 	/**
 	 * Parses raw BQL result into a bar chart config and updates the store.
 	 * Handles both monthly (3-col) and weekly (2-col) formats.
-	 * Net profit = -(sum of Income+Expenses positions) because income is negative in beancount.
+	 * Net profit = raw sign (negative when profitable). Income is negated (stored negative → show positive).
+	 * Expenses are kept as-is (positive).
 	 */
-	private _processChartData(rawResult: string, interval: 'month' | 'week', reportingCurrency: string) {
+	private _processChartData(rawResult: string, interval: 'month' | 'week', reportingCurrency: string, trendType: 'netprofit' | 'income' | 'expense' = 'netprofit') {
 		try {
 			const clean = rawResult.replace(/\r/g, '').trim();
 			const records: string[][] = parseCsv(clean, { columns: false, skip_empty_lines: true, relax_column_count: true });
@@ -232,9 +265,10 @@ export class IncomeStatementController {
 					if (row.length < 3) continue;
 					const year = parseInt(row[0].trim());
 					const monthNum = parseInt(row[1].trim());
-					// Keep raw sign: sum(Income+Expenses) is negative when profitable in beancount
 					const rawVal = parseAmount(extractConvertedAmount(row[2].trim(), reportingCurrency));
-					dataMap.set(`${year}-${monthNum.toString().padStart(2, '0')}`, rawVal.amount);
+					// Income is stored negative in beancount; negate for positive display
+					const displayVal = trendType === 'income' ? -rawVal.amount : rawVal.amount;
+					dataMap.set(`${year}-${monthNum.toString().padStart(2, '0')}`, displayVal);
 					if (year < minYear || (year === minYear && monthNum < minMonth)) { minYear = year; minMonth = monthNum; }
 					if (year > maxYear || (year === maxYear && monthNum > maxMonth)) { maxYear = year; maxMonth = monthNum; }
 				}
@@ -253,7 +287,9 @@ export class IncomeStatementController {
 					const d = new Date(dateStr + 'T00:00:00');
 					if (isNaN(d.getTime())) continue;
 					const rawVal = parseAmount(extractConvertedAmount(row[1].trim(), reportingCurrency));
-					dataMap.set(dateStr, rawVal.amount);
+					// Income is stored negative in beancount; negate for positive display
+					const displayVal = trendType === 'income' ? -rawVal.amount : rawVal.amount;
+					dataMap.set(dateStr, displayVal);
 					dates.push(d);
 				}
 				if (dates.length === 0) throw new Error('No weekly data.');
@@ -271,7 +307,7 @@ export class IncomeStatementController {
 			const xAxisTitle = interval === 'month' ? 'Month' : 'Week ending (Sunday)';
 			this.state.update(s => ({
 				...s,
-				chartConfig: this._buildBarChartConfig(labels, dataPoints, reportingCurrency, xAxisTitle),
+				chartConfig: this._buildBarChartConfig(labels, dataPoints, reportingCurrency, xAxisTitle, trendType),
 				chartError: null,
 				chartLoading: false,
 			}));
@@ -282,24 +318,30 @@ export class IncomeStatementController {
 	}
 
 	/**
-	 * Builds a Chart.js bar chart configuration for the Net Profit Trend.
+	 * Builds a Chart.js bar chart configuration for the Trends chart.
 	 */
-	private _buildBarChartConfig(labels: string[], dataPoints: (number | null)[], currency: string, xAxisTitle: string): ChartConfiguration {
+	private _buildBarChartConfig(labels: string[], dataPoints: (number | null)[], currency: string, xAxisTitle: string, trendType: 'netprofit' | 'income' | 'expense' = 'netprofit'): ChartConfiguration {
+		const labelMap = { netprofit: 'Net Profit', income: 'Income', expense: 'Expense' };
+		const displayLabel = labelMap[trendType];
+		const bgColor = trendType === 'income'
+			? (v: number | null) => v === null ? 'rgba(180,180,180,0.4)' : 'rgba(75, 192, 130, 0.7)'
+			: trendType === 'expense'
+			? (v: number | null) => v === null ? 'rgba(180,180,180,0.4)' : 'rgba(255, 99, 99, 0.7)'
+			: (v: number | null) => v === null ? 'rgba(180,180,180,0.4)' : v <= 0 ? 'rgba(75, 192, 130, 0.7)' : 'rgba(255, 99, 99, 0.7)';
+		const borderColor = trendType === 'income'
+			? (v: number | null) => v === null ? 'rgba(180,180,180,0.6)' : 'rgba(75, 192, 130, 1)'
+			: trendType === 'expense'
+			? (v: number | null) => v === null ? 'rgba(180,180,180,0.6)' : 'rgba(255, 99, 99, 1)'
+			: (v: number | null) => v === null ? 'rgba(180,180,180,0.6)' : v <= 0 ? 'rgba(75, 192, 130, 1)' : 'rgba(255, 99, 99, 1)';
 		return {
 			type: 'bar',
 			data: {
 				labels,
 				datasets: [{
-					label: `Net Profit (${currency})`,
+					label: `${displayLabel} (${currency})`,
 					data: dataPoints,
-					backgroundColor: dataPoints.map(v =>
-						v === null ? 'rgba(180,180,180,0.4)' :
-					v <= 0 ? 'rgba(75, 192, 130, 0.7)' : 'rgba(255, 99, 99, 0.7)'
-				),
-				borderColor: dataPoints.map(v =>
-					v === null ? 'rgba(180,180,180,0.6)' :
-					v <= 0 ? 'rgba(75, 192, 130, 1)' : 'rgba(255, 99, 99, 1)'
-					),
+					backgroundColor: dataPoints.map(bgColor),
+					borderColor: dataPoints.map(borderColor),
 					borderWidth: 1,
 				}],
 			},
@@ -309,7 +351,7 @@ export class IncomeStatementController {
 				plugins: {
 					title: {
 						display: true,
-						text: `Net Profit Trend (${currency})`,
+						text: `${displayLabel} Trend (${currency})`,
 						font: { size: 16 },
 					},
 					legend: { display: false },
@@ -317,7 +359,7 @@ export class IncomeStatementController {
 						mode: 'index',
 						intersect: false,
 						callbacks: {
-							label: (context: any) => `Net Profit: ${context.parsed.y.toLocaleString()} ${currency}`,
+							label: (context: any) => `${displayLabel}: ${context.parsed.y.toLocaleString()} ${currency}`,
 						},
 					},
 				},
@@ -425,14 +467,15 @@ export class IncomeStatementController {
 				chartError: currentState.chartError,
 				chartLoading: true,
 				chartInterval: currentState.chartInterval,
+				chartTrendType: currentState.chartTrendType,
 			});
 
 			// Load chart data
 			try {
 				const chartResult = await this.plugin.runQuery(
-					queries.getHistoricalNetProfitDataQuery(currentState.chartInterval, reportingCurrency)
+					this._getChartQuery(currentState.chartInterval, currentState.chartTrendType, reportingCurrency)
 				);
-				this._processChartData(chartResult, currentState.chartInterval, reportingCurrency);
+				this._processChartData(chartResult, currentState.chartInterval, reportingCurrency, currentState.chartTrendType);
 			} catch (chartErr) {
 				Logger.error('Error loading income chart data in loadData:', chartErr);
 				this.state.update(s => ({ ...s, chartLoading: false, chartError: `Failed to load chart: ${chartErr.message}` }));

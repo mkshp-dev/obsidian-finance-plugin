@@ -20,6 +20,7 @@
 		totalIncome: 0, totalExpenses: 0, netProfit: 0, currency: 'USD',
 		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert',
 		chartConfig: null, chartError: null, chartLoading: false, chartInterval: 'month',
+		chartTrendType: 'netprofit',
 	});
 	$: stateStore = controller ? controller.state : placeholderState;
 	$: state = $stateStore;
@@ -90,6 +91,12 @@
 		}
 	}
 
+	function handleTrendTypeChange(trendType: 'netprofit' | 'income' | 'expense') {
+		if (controller && state.chartTrendType !== trendType) {
+			controller.setChartTrendType(trendType);
+		}
+	}
+
 	// Net profit sign helper
 	function netProfitClass(val: number): string {
 		return val >= 0 ? 'positive' : 'negative';
@@ -151,7 +158,7 @@
 						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/>
 						</svg>
-						Net Profit Trend
+						Trends
 					</button>
 					<button
 						class="chart-selector-btn"
@@ -169,17 +176,36 @@
 				</div>
 
 				{#if selectedChart === 'trend'}
-					<div class="interval-toggle">
-						<button
-							class:active={state.chartInterval === 'month'}
-							on:click={() => handleIntervalChange('month')}
-							disabled={state.chartLoading}
-						>Monthly</button>
-						<button
-							class:active={state.chartInterval === 'week'}
-							on:click={() => handleIntervalChange('week')}
-							disabled={state.chartLoading}
-						>Weekly</button>
+					<div class="trend-controls">
+						<div class="trend-type-toggle">
+							<button
+								class:active={state.chartTrendType === 'netprofit'}
+								on:click={() => handleTrendTypeChange('netprofit')}
+								disabled={state.chartLoading}
+							>Net Profit</button>
+							<button
+								class:active={state.chartTrendType === 'income'}
+								on:click={() => handleTrendTypeChange('income')}
+								disabled={state.chartLoading}
+							>Income</button>
+							<button
+								class:active={state.chartTrendType === 'expense'}
+								on:click={() => handleTrendTypeChange('expense')}
+								disabled={state.chartLoading}
+							>Expense</button>
+						</div>
+						<div class="interval-toggle">
+							<button
+								class:active={state.chartInterval === 'month'}
+								on:click={() => handleIntervalChange('month')}
+								disabled={state.chartLoading}
+							>Monthly</button>
+							<button
+								class:active={state.chartInterval === 'week'}
+								on:click={() => handleIntervalChange('week')}
+								disabled={state.chartLoading}
+							>Weekly</button>
+						</div>
 					</div>
 				{:else if selectedChart === 'total'}
 					<div class="section-toggle">
@@ -467,6 +493,49 @@
 	.chart-selector-btn.active {
 		background: var(--interactive-accent);
 		color: var(--text-on-accent);
+	}
+
+	.trend-controls {
+		display: flex;
+		gap: var(--size-4-2);
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.trend-type-toggle {
+		display: flex;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		overflow: hidden;
+	}
+
+	.trend-type-toggle button {
+		padding: var(--size-4-1) var(--size-4-3);
+		background: var(--interactive-normal);
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+		transition: background-color 0.15s, color 0.15s;
+	}
+
+	.trend-type-toggle button:not(:last-child) {
+		border-right: 1px solid var(--background-modifier-border);
+	}
+
+	.trend-type-toggle button.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.trend-type-toggle button:hover:not(.active):not(:disabled) {
+		background: var(--interactive-hover);
+		color: var(--text-normal);
+	}
+
+	.trend-type-toggle button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.interval-toggle,
