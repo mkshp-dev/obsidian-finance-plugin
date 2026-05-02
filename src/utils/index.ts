@@ -25,7 +25,7 @@ export {
 	parseMetadataString,
 	debounce,
 } from './formatters';
-export { parseCommoditiesListCSV, parseCommoditiesPriceDataCSV, parseCommodityDetailsCSV } from './csvParsers';
+export { parseCommoditiesListCSV, parseCommoditiesPriceDataCSV, parseCommodityDetailsCSV, parseCommoditiesHoldingsCSV } from './csvParsers';
 export { buildAccountTree, getOpenAccounts, getPayees, getTags, getCommodities } from './accounts';
 export { getTransactionEntries, getBalanceEntries, getNoteEntries } from './journal';
 export {
