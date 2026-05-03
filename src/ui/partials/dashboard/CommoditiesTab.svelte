@@ -8,6 +8,13 @@
 	import CommodityCard from "./cards/CommodityCard.svelte";
 
 	export let controller: CommoditiesController;
+	export let plugin: any = null;
+
+	// Pull display settings (and operating currency) off the plugin instance
+	// so CommodityCard can render conditionally without reading plugin itself.
+	$: showHoldings = plugin?.settings?.showCommodityHoldings ?? true;
+	$: showHoldingsValue = plugin?.settings?.showCommodityHoldingsValue ?? true;
+	$: operatingCurrency = plugin?.settings?.operatingCurrency ?? "";
 
 	const dispatch = createEventDispatcher();
 
@@ -165,6 +172,9 @@
 				<CommodityCard
 					{commodity}
 					{index}
+					{showHoldings}
+					{showHoldingsValue}
+					{operatingCurrency}
 					on:click={handleCommodityClick}
 				/>
 			{/each}

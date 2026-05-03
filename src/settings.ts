@@ -45,6 +45,11 @@ export interface BeancountPluginSettings {
     lastAutoPriceFetch: number;
     /** Bean-price command path (detected automatically). */
     beanPriceCommand: string;
+    // Commodity Display Settings
+    /** Show the holdings amount on commodity cards in the dashboard. */
+    showCommodityHoldings: boolean;
+    /** Also show the equivalent in the operating currency below the holdings amount. */
+    showCommodityHoldingsValue: boolean;
 }
 
 /**
@@ -70,7 +75,10 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     autoPriceFetch: false,
     priceFetchIntervalHours: 24,
     lastAutoPriceFetch: 0,
-    beanPriceCommand: ''
+    beanPriceCommand: '',
+    // Commodity Display Settings
+    showCommodityHoldings: true,
+    showCommodityHoldingsValue: true
 }
 
 /**
@@ -261,6 +269,32 @@ export class BeancountSettingTab extends PluginSettingTab {
                 infoEl.style.opacity = '0.7';
                 infoEl.textContent = `Last automatic fetch: ${timeSince} (${lastFetchDate.toLocaleString()})`;
             }
+        }
+
+        // Commodities Display Settings Section
+        containerEl.createEl('h3', { text: 'Commodities Display' });
+
+        new Setting(containerEl)
+            .setName('Show holdings on commodity cards')
+            .setDesc('Display the holdings amount (e.g. "11.80 USD") below the price on each commodity card.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showCommodityHoldings)
+                .onChange(async (value) => {
+                    this.plugin.settings.showCommodityHoldings = value;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        if (this.plugin.settings.showCommodityHoldings) {
+            new Setting(containerEl)
+                .setName('Show operating-currency equivalent')
+                .setDesc('Below the holdings, also show the equivalent in the operating currency (e.g. "≈ 471 UYU"). Hidden for the operating currency itself.')
+                .addToggle(toggle => toggle
+                    .setValue(this.plugin.settings.showCommodityHoldingsValue)
+                    .onChange(async (value) => {
+                        this.plugin.settings.showCommodityHoldingsValue = value;
+                        await this.plugin.saveSettings();
+                    }));
         }
     }
 
