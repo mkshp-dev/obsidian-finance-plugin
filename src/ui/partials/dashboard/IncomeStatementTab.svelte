@@ -5,6 +5,7 @@
 	import { Logger } from '../../../utils/logger';
 	import SunburstChart from '../../common/SunburstChart.svelte';
 	import ChartComponent from '../../common/ChartComponent.svelte';
+	import { formatCurrencyAmount } from '../../../utils/currency-precision';
 
 	// Chart selector
 	let selectedChart: 'trend' | 'total' = 'trend';
@@ -323,7 +324,7 @@
 					</table>
 					<div class="section-total">
 						<span>Total Income</span>
-						<span class="total-amount">{state.totalIncome.toFixed(2)} {state.currency}</span>
+						<span class="total-amount">{formatCurrencyAmount(state.totalIncome, state.currency)}</span>
 					</div>
 				</div>
 
@@ -365,7 +366,7 @@
 					</table>
 					<div class="section-total">
 						<span>Total Expenses</span>
-						<span class="total-amount">{state.totalExpenses.toFixed(2)} {state.currency}</span>
+						<span class="total-amount">{formatCurrencyAmount(state.totalExpenses, state.currency)}</span>
 					</div>
 				</div>
 			</div>
@@ -374,7 +375,7 @@
 			<div class="net-profit-row">
 				<span class="net-profit-label">Net Profit</span>
 				<span class="net-profit-value {netProfitClass(state.netProfit)}">
-					{state.netProfit.toFixed(2)} {state.currency}
+					{formatCurrencyAmount(state.netProfit, state.currency)}
 				</span>
 			</div>
 		</div>

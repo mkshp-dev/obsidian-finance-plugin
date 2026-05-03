@@ -15,6 +15,7 @@ import {
 } from '../utils/index';
 import { PriceService } from '../services/price.service';
 import { Notice } from 'obsidian';
+import { formatCurrencyAmount, getCurrencyPrecision } from '../utils/currency-precision';
 
 /**
  * Interface representing metadata and state of a single commodity.
@@ -168,11 +169,12 @@ export class CommoditiesController {
         try {
             // Get operating currency from settings
             const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';
+            const priceStorage = getCurrencyPrecision(operatingCurrency).storage;
 
             // Execute all three queries in parallel
             const [commoditiesCSV, priceDataCSV, holdingsCSV] = await Promise.all([
                 this.plugin.runQuery(queries.getAllCommoditiesQuery()),
-                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency)),
+                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency, priceStorage)),
                 this.plugin.runQuery(queries.getCommoditiesHoldingsQuery(operatingCurrency))
             ]);
 
@@ -206,7 +208,9 @@ export class CommoditiesController {
                     metadata: {
                         ...(priceData?.logo ? { logo: priceData.logo } : {}),
                     },
-                    currentPrice: priceData?.price ? `${priceData.price} ${operatingCurrency}` : undefined,
+                    currentPrice: priceData?.price
+                        ? formatCurrencyAmount(parseFloat(priceData.price), operatingCurrency)
+                        : undefined,
                     logoUrl: priceData?.logo || null,
                     priceDate: priceData?.date || null,
                     isPriceLatest: priceData?.isLatest || false,
