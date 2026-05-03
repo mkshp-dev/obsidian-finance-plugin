@@ -5,6 +5,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parseSingleValue } from '../utils/index'; // Import helpers
 import { Logger } from '../utils/logger';
+import { sanitizeEquivalentCurrencies, collectEquivalents } from '../utils/equivalents';
 
 /**
  * Interface representing the state of the Overview dashboard.
@@ -24,6 +25,12 @@ export interface OverviewState {
 	savingsRate: string;
 	/** The reporting currency. */
 	currency: string;
+	/** Net worth, indexed by each enabled equivalent currency. Empty when none configured. */
+	netWorthEquivalents: Record<string, number>;
+	/** Monthly income, indexed by each enabled equivalent currency. */
+	monthlyIncomeEquivalents: Record<string, number>;
+	/** Monthly expenses, indexed by each enabled equivalent currency. */
+	monthlyExpensesEquivalents: Record<string, number>;
 }
 
 /**
@@ -54,6 +61,9 @@ export class OverviewController {
 			monthlyExpenses: '0.00 USD',
 			savingsRate: '0%',
 			currency: plugin.settings.operatingCurrency || 'USD',
+			netWorthEquivalents: {},
+			monthlyIncomeEquivalents: {},
+			monthlyExpensesEquivalents: {},
 		});
 	}
 
@@ -75,11 +85,26 @@ export class OverviewController {
 		}
 
 		try {
-			const [netWorthResult, incomeResult, expensesResult, savingsResult] = await Promise.all([
+			const equivalents = sanitizeEquivalentCurrencies(
+				this.plugin.settings.equivalentCurrencies,
+				reportingCurrency,
+			);
+			const fetchEquivalents = (factory: (c: string, r: number) => string) =>
+				equivalents.length === 0
+					? Promise.resolve({} as Record<string, number>)
+					: collectEquivalents(this.plugin, equivalents, factory);
+
+			const [
+				netWorthResult, incomeResult, expensesResult, savingsResult,
+				netWorthEquivalents, monthlyIncomeEquivalents, monthlyExpensesEquivalents,
+			] = await Promise.all([
 				this.plugin.runQuery(queries.getTotalWorthQuery(reportingCurrency, 2)),
 				this.plugin.runQuery(queries.getThisMonthIncomeQuery(reportingCurrency, 2)),
 				this.plugin.runQuery(queries.getThisMonthExpensesQuery(reportingCurrency, 2)),
 				this.plugin.runQuery(queries.getThisMonthSavingsQuery(reportingCurrency, 2)),
+				fetchEquivalents(queries.getTotalWorthQuery),
+				fetchEquivalents(queries.getThisMonthIncomeQuery),
+				fetchEquivalents(queries.getThisMonthExpensesQuery),
 			]);
 
 			// Process KPI Data
@@ -97,6 +122,9 @@ export class OverviewController {
 				monthlyExpenses: `${expensesAmount.toFixed(2)} ${reportingCurrency}`,
 				savingsRate: incomeAmount > 0 ? `${((savingsNum / incomeAmount) * 100).toFixed(0)}%` : 'N/A',
 				currency: reportingCurrency,
+				netWorthEquivalents,
+				monthlyIncomeEquivalents,
+				monthlyExpensesEquivalents,
 			};
 
 			// Update the store with KPI data

@@ -1,9 +1,17 @@
 <script lang="ts">
+	import EquivalentsRow from '../partials/dashboard/EquivalentsRow.svelte';
+
 	// Props for the card content
 	export let label: string;
 	export let value: string;
 	export let comparison: string | null = null; // Optional comparison text (e.g., "+5% vs last month")
 	export let icon: string | null = null; // Optional icon name (Lucide icon)
+	/**
+	 * Optional equivalents map for the multi-base "show equivalents" feature.
+	 * When non-empty, a sub-row of "≈ N CCY" entries is rendered below the
+	 * primary value. Empty / undefined hides the row entirely.
+	 */
+	export let equivalents: Record<string, number> = {};
 </script>
 
 <div class="kpi-card">
@@ -12,6 +20,7 @@
 	{/if}
 	<div class="kpi-label">{label}</div>
 	<div class="kpi-value">{value}</div>
+	<EquivalentsRow {equivalents} variant="kpi" align="start" />
 	<div class="kpi-comparison">{comparison || '&nbsp;'}</div> </div>
 
 <style>
