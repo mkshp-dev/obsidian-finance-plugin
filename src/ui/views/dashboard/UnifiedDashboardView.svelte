@@ -8,6 +8,7 @@
     import CommoditiesTab from '../../partials/dashboard/CommoditiesTab.svelte';
     import JournalTab from '../../partials/dashboard/JournalTab.svelte';
     import IncomeStatementTab from '../../partials/dashboard/IncomeStatementTab.svelte';
+    import LiabilitiesTab from '../../partials/dashboard/LiabilitiesTab.svelte';
 
     // Types
     import type { OverviewController } from '../../../controllers/OverviewController';
@@ -16,6 +17,7 @@
     import type { CommoditiesController } from '../../../controllers/CommoditiesController';
     import type { IncomeStatementController } from '../../../controllers/IncomeStatementController';
     import type { RecurringController } from '../../../controllers/RecurringController';
+    import type { LiabilitiesController } from '../../../controllers/LiabilitiesController';
 
     // Props
     export let overviewController: OverviewController;
@@ -24,6 +26,7 @@
     export let commoditiesController: CommoditiesController;
     export let incomeStatementController: IncomeStatementController;
     export let recurringController: RecurringController | null = null;
+    export let liabilitiesController: LiabilitiesController | null = null;
     export let journalStore: any;
     export let plugin: any = null; // Add plugin prop
 
@@ -35,6 +38,7 @@
         { id: 'journal', label: 'Journal' },
         { id: 'balancesheet', label: 'Accounts & Balances' },
         { id: 'incomestatement', label: 'Income Statement' },
+        { id: 'liabilities', label: 'Liabilities & Receivables' },
         { id: 'commodities', label: 'Commodities' }
     ];
 </script>
@@ -69,6 +73,10 @@
             <BalanceSheetTab controller={balanceSheetController} />
         {:else if activeTab === 'incomestatement'}
             <IncomeStatementTab controller={incomeStatementController} />
+        {:else if activeTab === 'liabilities'}
+            {#if liabilitiesController}
+                <LiabilitiesTab controller={liabilitiesController} {plugin} />
+            {/if}
         {:else if activeTab === 'commodities'}
             <CommoditiesTab controller={commoditiesController} {plugin} on:openCommodity on:addCommodity />
         {/if}
