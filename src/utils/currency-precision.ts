@@ -1,145 +1,77 @@
 // src/utils/currency-precision.ts
 //
-// Currency-aware number formatting. The dashboard previously rendered
-// every monetary value with a hard-coded 2-decimal toFixed/toLocaleString,
-// which over-rounded crypto (0.012 BTC → "0.01") and added meaningless
-// trailing zeros to currencies that have no fractional unit in real
-// circulation (UYU, JPY).
+// Currency-aware number handling. Two responsibilities:
 //
-// `getCurrencyPrecision` returns the natural decimal places for each
-// currency code. `formatCurrency` formats a number with that precision
-// and an adaptive override for tiny magnitudes so a sub-cent value
-// doesn't collapse to zero on the screen.
+//   1. Choose the BQL `round(N, k)` precision per currency so values
+//      survive the server-side roundtrip without losing real digits.
+//      (Beancount conversions can produce many decimals; we keep
+//      enough to faithfully represent every real currency.)
+//
+//   2. Format numbers for display *as exactly as the data permits*.
+//      No artificial rounding to "natural fiat decimals" — if the
+//      ledger says 15,847.83 UYU, the dashboard shows 15,847.83 UYU.
+//      Trailing zeros are still trimmed so that an exactly-200 USD
+//      value renders as "200 USD", not "200.00 USD".
 //
 // Pure functions only — safe to import from controllers, Svelte
 // components, query factories, or unit tests.
 
 export interface CurrencyPrecision {
-    /** Decimal places to render in the UI for "ordinary" magnitudes (>= 1). */
-    display: number;
-    /**
-     * Minimum decimal places to render — controls trailing-zero behaviour.
-     * Fiat with cents convention (USD, EUR, …) defaults to `display` so
-     * "780.90" stays "780.90" and not "780.9". Crypto and integer fiat
-     * default to 0 so trailing zeros are trimmed. Defaults to 0 if absent.
-     */
-    minDisplay?: number;
     /** Decimal places to round to in BQL `round(..., n)` so we don't lose information server-side. */
     storage: number;
-    /**
-     * Optional cap on the number of decimals when adapting precision
-     * for sub-unit magnitudes (|value| < 1). Defaults to `storage`
-     * (we never show more decimals than we kept around). Currencies
-     * with a true sub-unit (like satoshis on BTC) accept higher caps.
-     */
-    adaptiveMax?: number;
 }
 
+/**
+ * Per-currency BQL storage precision. We default to 8 (matches the
+ * smallest sub-unit of BTC/ETH and is plenty for any fiat). Currencies
+ * with traditionally finer denominations override upward.
+ */
 const PRECISION_TABLE: Record<string, CurrencyPrecision> = {
-    // --- Cryptocurrencies (smallest-unit-defined) ---
-    BTC: { display: 8, storage: 8, adaptiveMax: 8 },
-    ETH: { display: 8, storage: 8, adaptiveMax: 8 },
-    XMR: { display: 8, storage: 8, adaptiveMax: 8 },
-    LTC: { display: 8, storage: 8, adaptiveMax: 8 },
-    BCH: { display: 8, storage: 8, adaptiveMax: 8 },
-    DOGE: { display: 8, storage: 8, adaptiveMax: 8 },
-    SOL: { display: 6, storage: 8, adaptiveMax: 8 },
-    ADA: { display: 6, storage: 8, adaptiveMax: 8 },
-    DOT: { display: 6, storage: 8, adaptiveMax: 8 },
-
-    // --- Tokenised commodities ---
-    PAXG: { display: 4, storage: 6, adaptiveMax: 8 },
-    XAU:  { display: 4, storage: 6, adaptiveMax: 8 },
-    XAG:  { display: 3, storage: 4, adaptiveMax: 6 },
-
-    // --- "Hundredth-of-unit" fiat: enforce 2 decimals so "780.90" doesn't
-    //     collapse to "780.9". minDisplay = display = 2.
-    USD: { display: 2, minDisplay: 2, storage: 2 },
-    EUR: { display: 2, minDisplay: 2, storage: 2 },
-    GBP: { display: 2, minDisplay: 2, storage: 2 },
-    INR: { display: 2, minDisplay: 2, storage: 2 },
-    BRL: { display: 2, minDisplay: 2, storage: 2 },
-    CAD: { display: 2, minDisplay: 2, storage: 2 },
-    AUD: { display: 2, minDisplay: 2, storage: 2 },
-    CHF: { display: 2, minDisplay: 2, storage: 2 },
-    MXN: { display: 2, minDisplay: 2, storage: 2 },
-    ARS: { display: 2, minDisplay: 2, storage: 2 },
-
-    // --- Effectively-integer fiat (centavo / sen / fil exists in law,
-    //     not in daily circulation; rounding to whole units matches
-    //     how amounts are quoted at point of sale). ---
-    UYU: { display: 0, storage: 2, adaptiveMax: 2 },
-    JPY: { display: 0, storage: 0 },
-    KRW: { display: 0, storage: 0 },
-    VND: { display: 0, storage: 0 },
-    IDR: { display: 0, storage: 0 },
-    CLP: { display: 0, storage: 0 },
-    PYG: { display: 0, storage: 0 },
-    HUF: { display: 0, storage: 0 },
-    TWD: { display: 0, storage: 0 },
+    BTC: { storage: 8 },
+    ETH: { storage: 10 },
+    XMR: { storage: 8 },
+    LTC: { storage: 8 },
+    BCH: { storage: 8 },
+    DOGE: { storage: 8 },
+    SOL: { storage: 9 },
+    ADA: { storage: 8 },
+    DOT: { storage: 10 },
+    PAXG: { storage: 8 },
+    XAU:  { storage: 8 },
+    XAG:  { storage: 6 },
 };
 
-const DEFAULT_PRECISION: CurrencyPrecision = { display: 2, minDisplay: 2, storage: 2 };
+const DEFAULT_PRECISION: CurrencyPrecision = { storage: 8 };
 
 /**
- * Resolve the natural precision for a currency code. Unknown codes
- * fall back to the same 2-decimal default that web banking, fintech
- * and most fiat currencies share.
+ * Resolve the BQL storage precision for a currency code. Unknown codes
+ * default to 8 decimals — enough to faithfully represent any modern
+ * fiat (which max out at thousandths) and BTC-like crypto.
  */
 export function getCurrencyPrecision(code: string | null | undefined): CurrencyPrecision {
     if (!code) return DEFAULT_PRECISION;
     return PRECISION_TABLE[code.toUpperCase()] ?? DEFAULT_PRECISION;
 }
 
-/**
- * Pick the number of decimals to show for `value` in `currency`.
- * Logic:
- *   - For |value| >= 1 → use the currency's display precision.
- *   - For 0 < |value| < 1 → step up the precision (toward
- *     adaptiveMax) so the value retains at least one significant digit.
- *   - For 0 → use display precision (typically 0 or 2).
- *
- * This matches the EquivalentsRow algorithm but parametrised by
- * currency (so 0.012 BTC stays "0.012" while 0.01 USD stays "0.01"
- * and 0 UYU stays just "0").
- */
-function pickDecimals(value: number, p: CurrencyPrecision): number {
-    if (!isFinite(value)) return p.display;
-    const abs = Math.abs(value);
-    const cap = p.adaptiveMax ?? p.storage;
-    const display = p.display;
-
-    if (abs === 0) return display;
-    if (abs >= 1) return display;
-
-    // Sub-unit value: bump decimals until at least one significant digit
-    // shows, capped at `cap`.
-    if (cap <= display) return display;
-    if (abs >= 0.1) return Math.max(display, Math.min(2, cap));
-    if (abs >= 0.01) return Math.max(display, Math.min(4, cap));
-    if (abs >= 0.0001) return Math.max(display, Math.min(6, cap));
-    return cap;
-}
+/** Cap on how many decimals we render — large enough for any realistic case, small enough to dodge floating-point noise. */
+const MAX_DISPLAY_DECIMALS = 10;
 
 /**
- * Format `value` for `currency`. Returns the bare number string
- * (no currency suffix). Trailing zeros are stripped because we
- * pass `minimumFractionDigits: 0` — keeping `1234.5` as `"1,234.5"`
- * rather than `"1,234.50"` for crypto-shaped values.
+ * Format `value` exactly: locale-aware thousands separator, trailing
+ * zeros trimmed, but every real digit preserved. The currency arg is
+ * accepted for API symmetry with `formatCurrencyAmount` but does not
+ * change the precision — we trust the data over a per-currency table.
  */
 export function formatCurrency(
     value: number | null | undefined,
-    currency: string | null | undefined,
+    _currency?: string | null,
     opts: { signed?: boolean; minDigits?: number } = {},
 ): string {
     if (value === null || value === undefined || !isFinite(value)) return '—';
-    const p = getCurrencyPrecision(currency);
-    const max = pickDecimals(value, p);
-    const defaultMin = p.minDisplay ?? 0;
-    const min = Math.max(0, Math.min(max, opts.minDigits ?? defaultMin));
+    const min = Math.max(0, Math.min(MAX_DISPLAY_DECIMALS, opts.minDigits ?? 0));
     const formatted = value.toLocaleString(undefined, {
         minimumFractionDigits: min,
-        maximumFractionDigits: max,
+        maximumFractionDigits: MAX_DISPLAY_DECIMALS,
     });
     return opts.signed && value > 0 ? `+${formatted}` : formatted;
 }
