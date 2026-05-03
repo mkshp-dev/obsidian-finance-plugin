@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beanPriceCommand: '',
     // Commodity Display Settings
     showCommodityHoldings: true,
-    showCommodityHoldingsValue: true
+    showCommodityHoldingsValue: true,
     // Recurring Transactions Settings
     recurringFilePath: '',
     recurringLookaheadDays: 30
