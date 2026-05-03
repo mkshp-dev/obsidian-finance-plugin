@@ -5,8 +5,26 @@
 
 	export let commodity: CommodityInfo;
 	export let index: number = 0;
+	export let showHoldings: boolean = true;
+	export let showHoldingsValue: boolean = true;
+	export let operatingCurrency: string = "";
 
 	const dispatch = createEventDispatcher();
+
+	// Format the operating-currency equivalent (e.g. "≈ 471 UYU"). Uses the
+	// user's locale so thousands/decimals match other dashboard widgets.
+	$: equivalentLabel = (() => {
+		if (!showHoldings || !showHoldingsValue) return "";
+		if (commodity?.isOperatingCurrency) return "";
+		if (!operatingCurrency) return "";
+		const value = commodity?.valueInOperatingCurrency;
+		if (typeof value !== "number" || !isFinite(value) || value <= 0) return "";
+		const formatted = value.toLocaleString(undefined, {
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 2,
+		});
+		return `≈ ${formatted} ${operatingCurrency}`;
+	})();
 
 	function handleClick() {
 		dispatch("click", { commodity });
@@ -144,11 +162,16 @@
 				</div>
 			{/if}
 
-			{#if commodity?.holdingsRaw}
+			{#if showHoldings && commodity?.holdingsRaw}
 				<div class="holdings-row">
 					<span class="holdings-label">Holdings</span>
 					<span class="holdings-value">{commodity.holdingsRaw}</span>
 				</div>
+				{#if equivalentLabel}
+					<div class="holdings-equivalent-row">
+						<span class="holdings-equivalent">{equivalentLabel}</span>
+					</div>
+				{/if}
 			{/if}
 		</div>
 
@@ -449,5 +472,17 @@
 		color: var(--text-normal);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.holdings-equivalent-row {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 2px;
+		font-size: 11px;
+	}
+	.holdings-equivalent {
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
 	}
 </style>
