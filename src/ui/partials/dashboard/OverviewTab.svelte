@@ -1,7 +1,9 @@
 <script lang="ts">
 	import CardComponent from '../../common/CardComponent.svelte';
 	import IndicatorsSection from './IndicatorsSection.svelte';
+	import RecurringWidget from './RecurringWidget.svelte';
 	import type { OverviewController } from '../../../controllers/OverviewController';
+	import type { RecurringController } from '../../../controllers/RecurringController';
 	import { writable, type Writable } from 'svelte/store'; // Import writable
 	import type { OverviewState } from '../../../controllers/OverviewController'; // Import the State type
 	import { AddBudgetModal } from '../../modals/AddBudgetModal';
@@ -9,7 +11,10 @@
 
 	// --- Receive the controller ---
 	export let controller: OverviewController;
+	export let recurringController: RecurringController | null = null;
 	export let plugin: any = null;
+
+	$: recurringLookahead = plugin?.settings?.recurringLookaheadDays ?? 30;
 
 	// --- THIS IS THE FIX ---
 	// 1. Create a local, placeholder store with default values.
@@ -102,10 +107,23 @@
 			on:add-budget={handleAddBudget}
 			on:add-target={handleAddTarget}
 		/>
+
+		{#if recurringController}
+			<div class="recurring-section">
+				<RecurringWidget
+					controller={recurringController}
+					lookaheadDays={recurringLookahead}
+				/>
+			</div>
+		{/if}
 	{/if}
 </div>
 
 <style>
+	.recurring-section {
+		margin-top: 18px;
+	}
+
 	/* Styles remain unchanged */
 	.beancount-overview { padding: var(--size-4-4); }
 	
