@@ -1,8 +1,9 @@
 // src/settings.ts
 
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, FuzzySuggestModal, TFile } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
+import RecurringRulesEditor from './ui/partials/settings/RecurringRulesEditor.svelte';
 import { updateOperatingCurrency } from './utils/index';
 
 /**
@@ -327,6 +328,16 @@ export class BeancountSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.recurringFilePath = value.trim();
                     await this.plugin.saveSettings();
+                }))
+            .addExtraButton(btn => btn
+                .setIcon('folder-open')
+                .setTooltip('Browse vault for a .beancount file')
+                .onClick(() => {
+                    new RecurringFilePickerModal(this.app, async (path) => {
+                        this.plugin.settings.recurringFilePath = path;
+                        await this.plugin.saveSettings();
+                        this.display();
+                    }).open();
                 }));
 
         new Setting(containerEl)
@@ -342,6 +353,21 @@ export class BeancountSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }
                 }));
+
+        // Inline rules editor — Svelte component owns its own load/save lifecycle.
+        const editorMount = containerEl.createDiv({ cls: 'beancount-recurring-editor-mount' });
+        const editor = new RecurringRulesEditor({
+            target: editorMount,
+            props: { plugin: this.plugin },
+        });
+        editor.$on('saved', async () => {
+            // Trigger a workspace event that the unified dashboard view
+            // subscribes to (best-effort — if no dashboard is open, the
+            // event is a no-op).
+            try {
+                this.app.workspace.trigger('beancount:recurring-rules-updated');
+            } catch (_) { /* defensive */ }
+        });
     }
 
     /**
@@ -887,5 +913,29 @@ export class BeancountSettingTab extends PluginSettingTab {
             }
         `;
         document.head.appendChild(style);
+    }
+}
+
+/**
+ * Fuzzy file picker for the recurring-file path. Lists every .beancount
+ * file in the vault; selecting one writes its vault-relative path back
+ * via the supplied callback.
+ */
+class RecurringFilePickerModal extends FuzzySuggestModal<TFile> {
+    constructor(app: App, private onPick: (path: string) => void) {
+        super(app);
+        this.setPlaceholder('Pick a .beancount file…');
+    }
+
+    getItems(): TFile[] {
+        return this.app.vault.getFiles().filter(f => f.extension === 'beancount');
+    }
+
+    getItemText(item: TFile): string {
+        return item.path;
+    }
+
+    onChooseItem(item: TFile): void {
+        this.onPick(item.path);
     }
 }
