@@ -187,8 +187,8 @@ export function getAllCommoditiesQuery(): string {
 	return `SELECT name AS name_ FROM #commodities GROUP BY name`;
 }
 
-export function getCommoditiesPriceDataQuery(currency: string): string {
-	return `SELECT last(date) AS date_, last(currency) AS currency_, round(getprice(last(currency), '${currency}'),2) AS price_, currency_meta(last(currency), 'logo') AS logo_, bool(today()-1<last(date)) AS islatest_ FROM #prices GROUP BY currency`;
+export function getCommoditiesPriceDataQuery(currency: string, rounding: number = 8): string {
+	return `SELECT last(date) AS date_, last(currency) AS currency_, round(getprice(last(currency), '${currency}'),${rounding}) AS price_, currency_meta(last(currency), 'logo') AS logo_, bool(today()-1<last(date)) AS islatest_ FROM #prices GROUP BY currency`;
 }
 
 /**
@@ -211,8 +211,8 @@ export function getPriceHistoryQuery(commodity: string): string {
 	return `SELECT date, position, meta('filename') FROM #prices WHERE currency='${commodity}' ORDER BY date DESC`;
 }
 
-export function getStaleCommoditiesQuery(daysOld: number, currency: string): string {
-	return `SELECT currency AS commodity_, last(date) AS lastdate_, round(getprice(last(currency), '${currency}'),2) AS price_ FROM #prices GROUP BY currency HAVING today() - last(date) > ${daysOld}`;
+export function getStaleCommoditiesQuery(daysOld: number, currency: string, rounding: number = 8): string {
+	return `SELECT currency AS commodity_, last(date) AS lastdate_, round(getprice(last(currency), '${currency}'),${rounding}) AS price_ FROM #prices GROUP BY currency HAVING today() - last(date) > ${daysOld}`;
 }
 
 export function getAllPricesQuery(limit: number = 100): string {

@@ -6,6 +6,7 @@
 	import SunburstChart from '../../common/SunburstChart.svelte';
 	import ChartComponent from '../../common/ChartComponent.svelte';
 	import EquivalentsRow from './EquivalentsRow.svelte';
+	import { formatCurrencyAmount } from '../../../utils/currency-precision';
 
 	// Chart selector
 	let selectedChart: 'trend' | 'total' = 'trend';
@@ -326,7 +327,7 @@
 					<div class="section-total">
 						<span>Total Income</span>
 						<div class="total-amount-stack">
-							<span class="total-amount">{state.totalIncome.toFixed(2)} {state.currency}</span>
+							<span class="total-amount">{formatCurrencyAmount(state.totalIncome, state.currency)}</span>
 							<EquivalentsRow equivalents={state.totalIncomeEquivalents} variant="compact" align="end" />
 						</div>
 					</div>
@@ -371,7 +372,7 @@
 					<div class="section-total">
 						<span>Total Expenses</span>
 						<div class="total-amount-stack">
-							<span class="total-amount">{state.totalExpenses.toFixed(2)} {state.currency}</span>
+							<span class="total-amount">{formatCurrencyAmount(state.totalExpenses, state.currency)}</span>
 							<EquivalentsRow equivalents={state.totalExpensesEquivalents} variant="compact" align="end" />
 						</div>
 					</div>
@@ -383,7 +384,7 @@
 				<span class="net-profit-label">Net Profit</span>
 				<div class="net-profit-stack">
 					<span class="net-profit-value {netProfitClass(state.netProfit)}">
-						{state.netProfit.toFixed(2)} {state.currency}
+						{formatCurrencyAmount(state.netProfit, state.currency)}
 					</span>
 					<EquivalentsRow equivalents={state.netProfitEquivalents} variant="compact" align="end" />
 				</div>

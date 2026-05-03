@@ -6,6 +6,7 @@ import * as queries from '../queries/index';
 import { parseSingleValue } from '../utils/index'; // Import helpers
 import { Logger } from '../utils/logger';
 import { sanitizeEquivalentCurrencies, collectEquivalents } from '../utils/equivalents';
+import { formatCurrencyAmount, getCurrencyPrecision } from '../utils/currency-precision';
 
 /**
  * Interface representing the state of the Overview dashboard.
@@ -94,14 +95,18 @@ export class OverviewController {
 					? Promise.resolve({} as Record<string, number>)
 					: collectEquivalents(this.plugin, equivalents, factory);
 
+			// Round in BQL at the currency's natural storage precision so we
+			// don't lose meaningful digits before parsing (e.g. BTC).
+			const storage = getCurrencyPrecision(reportingCurrency).storage;
+
 			const [
 				netWorthResult, incomeResult, expensesResult, savingsResult,
 				netWorthEquivalents, monthlyIncomeEquivalents, monthlyExpensesEquivalents,
 			] = await Promise.all([
-				this.plugin.runQuery(queries.getTotalWorthQuery(reportingCurrency, 2)),
-				this.plugin.runQuery(queries.getThisMonthIncomeQuery(reportingCurrency, 2)),
-				this.plugin.runQuery(queries.getThisMonthExpensesQuery(reportingCurrency, 2)),
-				this.plugin.runQuery(queries.getThisMonthSavingsQuery(reportingCurrency, 2)),
+				this.plugin.runQuery(queries.getTotalWorthQuery(reportingCurrency, storage)),
+				this.plugin.runQuery(queries.getThisMonthIncomeQuery(reportingCurrency, storage)),
+				this.plugin.runQuery(queries.getThisMonthExpensesQuery(reportingCurrency, storage)),
+				this.plugin.runQuery(queries.getThisMonthSavingsQuery(reportingCurrency, storage)),
 				fetchEquivalents(queries.getTotalWorthQuery),
 				fetchEquivalents(queries.getThisMonthIncomeQuery),
 				fetchEquivalents(queries.getThisMonthExpensesQuery),
@@ -117,9 +122,9 @@ export class OverviewController {
 			const savingsNum = parseFloat(parseSingleValue(savingsResult)) || 0;
 
 			const newState: Partial<OverviewState> = {
-				netWorth: `${netWorthNum.toFixed(2)} ${reportingCurrency}`,
-				monthlyIncome: `${incomeAmount.toFixed(2)} ${reportingCurrency}`,
-				monthlyExpenses: `${expensesAmount.toFixed(2)} ${reportingCurrency}`,
+				netWorth: formatCurrencyAmount(netWorthNum, reportingCurrency),
+				monthlyIncome: formatCurrencyAmount(incomeAmount, reportingCurrency),
+				monthlyExpenses: formatCurrencyAmount(expensesAmount, reportingCurrency),
 				savingsRate: incomeAmount > 0 ? `${((savingsNum / incomeAmount) * 100).toFixed(0)}%` : 'N/A',
 				currency: reportingCurrency,
 				netWorthEquivalents,

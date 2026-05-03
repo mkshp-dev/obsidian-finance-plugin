@@ -3,6 +3,7 @@
 	import { createEventDispatcher } from "svelte";
 	import type { CommodityInfo } from "../../../../controllers/CommoditiesController";
 	import EquivalentsRow from "../EquivalentsRow.svelte";
+	import { formatCurrencyAmount } from "../../../../utils/currency-precision";
 
 	export let commodity: CommodityInfo;
 	export let index: number = 0;
@@ -14,19 +15,15 @@
 
 	const dispatch = createEventDispatcher();
 
-	// Format the operating-currency equivalent (e.g. "≈ 471 UYU"). Uses the
-	// user's locale so thousands/decimals match other dashboard widgets.
+	// Format the operating-currency equivalent (e.g. "≈ 471 UYU"). Precision
+	// matches the operating currency's natural decimal places.
 	$: equivalentLabel = (() => {
 		if (!showHoldings || !showHoldingsValue) return "";
 		if (commodity?.isOperatingCurrency) return "";
 		if (!operatingCurrency) return "";
 		const value = commodity?.valueInOperatingCurrency;
 		if (typeof value !== "number" || !isFinite(value) || value <= 0) return "";
-		const formatted = value.toLocaleString(undefined, {
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 2,
-		});
-		return `≈ ${formatted} ${operatingCurrency}`;
+		return `≈ ${formatCurrencyAmount(value, operatingCurrency)}`;
 	})();
 
 	function handleClick() {

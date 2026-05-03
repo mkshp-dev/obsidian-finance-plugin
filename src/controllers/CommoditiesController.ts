@@ -16,6 +16,7 @@ import {
 import { sanitizeEquivalentCurrencies } from '../utils/equivalents';
 import { PriceService } from '../services/price.service';
 import { Notice } from 'obsidian';
+import { formatCurrencyAmount, getCurrencyPrecision } from '../utils/currency-precision';
 
 /**
  * Interface representing metadata and state of a single commodity.
@@ -175,6 +176,7 @@ export class CommoditiesController {
         try {
             // Get operating currency from settings
             const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';
+            const priceStorage = getCurrencyPrecision(operatingCurrency).storage;
 
             // Equivalents: same price query, re-issued per equivalent currency. Failures
             // for one equivalent are swallowed so a missing price chain doesn't break
@@ -187,10 +189,10 @@ export class CommoditiesController {
             // Execute all three queries in parallel
             const [commoditiesCSV, priceDataCSV, holdingsCSV, ...equivalentCSVs] = await Promise.all([
                 this.plugin.runQuery(queries.getAllCommoditiesQuery()),
-                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency)),
+                this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency, priceStorage)),
                 this.plugin.runQuery(queries.getCommoditiesHoldingsQuery(operatingCurrency)),
                 ...equivalents.map(eq =>
-                    this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(eq))
+                    this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(eq, getCurrencyPrecision(eq).storage))
                         .catch(err => {
                             console.warn(`[CommoditiesController] equivalent '${eq}' failed:`, err);
                             return '';
@@ -260,7 +262,9 @@ export class CommoditiesController {
                     metadata: {
                         ...(priceData?.logo ? { logo: priceData.logo } : {}),
                     },
-                    currentPrice: priceData?.price ? `${priceData.price} ${operatingCurrency}` : undefined,
+                    currentPrice: priceData?.price
+                        ? formatCurrencyAmount(parseFloat(priceData.price), operatingCurrency)
+                        : undefined,
                     logoUrl: priceData?.logo || null,
                     priceDate: priceData?.date || null,
                     isPriceLatest: priceData?.isLatest || false,
