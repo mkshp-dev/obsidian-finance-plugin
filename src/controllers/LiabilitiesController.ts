@@ -14,6 +14,7 @@ import {
     type LoanAccount,
 } from '../services/liabilities.service';
 import { Logger } from '../utils/logger';
+import { formatCurrencyAmount } from '../utils/currency-precision';
 
 export interface LoanRow extends LoanAccount {
     /** Live balance from the ledger, in the account's currency. Null if no movements yet. */
@@ -61,9 +62,7 @@ function parseBalanceCell(raw: string): { amount: number | null; currency: strin
 }
 
 function formatBalance(amount: number | null, currency: string | null): string {
-    if (amount === null) return '—';
-    const ccy = currency || '';
-    return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`.trim();
+    return formatCurrencyAmount(amount, currency);
 }
 
 export class LiabilitiesController {
