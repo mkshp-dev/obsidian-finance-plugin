@@ -3,8 +3,16 @@
 	import { writable, type Writable } from 'svelte/store';
 	import { MarkdownView } from 'obsidian';
 	import type { LiabilitiesController, LiabilitiesState, LoanRow } from '../../../controllers/LiabilitiesController';
-	import { nextDueDate, daysBetween, payoffFraction } from '../../../services/liabilities.service';
+	import {
+		nextDueDate,
+		daysBetween,
+		payoffFraction,
+		monthsRemaining,
+		type LoanFormDraft,
+	} from '../../../services/liabilities.service';
 	import { formatCurrency, formatCurrencyAmount } from '../../../utils/currency-precision';
+	import { LoanEditModal } from '../../modals/LoanEditModal';
+	import { RecordPaymentModal } from '../../modals/RecordPaymentModal';
 
 	export let controller: LiabilitiesController;
 	export let plugin: any = null;
@@ -18,6 +26,71 @@
 	$: state = $stateStore;
 
 	let searchTerm = '';
+
+	function rowToDraft(row: LoanRow): LoanFormDraft {
+		return {
+			account: row.account,
+			currency: row.currency,
+			openDate: row.openDate,
+			loanType: row.loanType,
+			counterparty: row.counterparty,
+			principal: row.principal,
+			interestRate: row.interestRate,
+			monthlyPayment: row.monthlyPayment,
+			dueDay: row.dueDay,
+			fundingAccount: row.fundingAccount,
+		};
+	}
+
+	function newDraftDefault(role: 'liability' | 'receivable' = 'liability'): LoanFormDraft {
+		const today = new Date().toISOString().slice(0, 10);
+		return {
+			account: role === 'liability' ? 'Liabilities:' : 'Assets:Receivables:',
+			currency: plugin?.settings?.operatingCurrency ?? 'USD',
+			openDate: today,
+			loanType: role === 'receivable' ? 'receivable' : 'credit-card',
+			counterparty: null,
+			principal: null,
+			interestRate: null,
+			monthlyPayment: null,
+			dueDay: null,
+			fundingAccount: null,
+		};
+	}
+
+	function openAddModal(role: 'liability' | 'receivable' = 'liability') {
+		if (!plugin) return;
+		new LoanEditModal(plugin.app, plugin, {
+			mode: 'add',
+			initial: newDraftDefault(role),
+			onSaved: () => controller?.refresh(),
+		}).open();
+	}
+
+	function openEditModal(row: LoanRow) {
+		if (!plugin) return;
+		new LoanEditModal(plugin.app, plugin, {
+			mode: 'edit',
+			initial: rowToDraft(row),
+			onSaved: () => controller?.refresh(),
+		}).open();
+	}
+
+	function openPaymentModal(row: LoanRow) {
+		if (!plugin) return;
+		new RecordPaymentModal(plugin.app, plugin, {
+			loan: row,
+			onSaved: () => controller?.refresh(),
+		}).open();
+	}
+
+	function formatMonths(n: number | null): string {
+		if (n === null) return '';
+		if (n < 1) return '< 1 mo';
+		if (n < 24) return `${Math.round(n)} mo`;
+		const years = n / 12;
+		return `${years.toFixed(years < 10 ? 1 : 0)} yr`;
+	}
 
 	function formatPercent(n: number | null): string {
 		if (n === null) return '—';
@@ -151,6 +224,9 @@
 <div class="liabilities-tab">
 	<div class="header">
 		<h3>Liabilities &amp; Receivables</h3>
+		<div class="header-actions">
+			<button class="add-button" on:click={() => openAddModal('liability')} disabled={!plugin} title="Add a new Liabilities:* account">+ Liability</button>
+			<button class="add-button" on:click={() => openAddModal('receivable')} disabled={!plugin} title="Add a new Assets:Receivables:* account">+ Receivable</button>
 		<button
 			class="refresh-button"
 			on:click={handleRefresh}
@@ -172,6 +248,7 @@
 				Refresh
 			{/if}
 		</button>
+		</div>
 	</div>
 
 	{#if state.error}
@@ -218,7 +295,7 @@
 			<div class="loan-empty-state">
 				<p class="empty-title">No loan-shaped accounts found.</p>
 				<p class="muted">
-					Add metadata to <code>open</code> directives in
+					Click <strong>+ Liability</strong> or <strong>+ Receivable</strong> above to create the first one — or add metadata directly to an <code>open</code> directive in
 					<code>{state.sourcePath || 'accounts.beancount'}</code> like:
 				</p>
 				<pre><code>2026-01-01 open Liabilities:Credit:Visa  USD
@@ -264,17 +341,22 @@
 								{@const pct = payoffPct(row)}
 								{@const above = isAboveBudget(row)}
 								{@const abovePct = aboveBudgetPct(row)}
+								{@const months = monthsRemaining(row.currentBalance, row.monthlyPayment)}
 								<article class="loan-card {urgencyClass(row.dueDay)}" class:above-principal={above}>
 									<header class="loan-card-header">
 										<div class="account">
-											<div class="account-name-row">
-												<span class="account-name" title={row.account}>{row.account}</span>
-												{#if plugin && row.sourceLine}
+											<span class="account-name" title={row.account}>{row.account}</span>
+											{#if row.loanType}<span class="badge">{row.loanType}</span>{/if}
+										</div>
+										{#if plugin}
+											<div class="card-actions">
+												<button class="ghost small-btn" on:click={() => openPaymentModal(row)} title="Record a payment to this account">$</button>
+												<button class="ghost small-btn" on:click={() => openEditModal(row)} title="Edit metadata in accounts.beancount">✎</button>
+												{#if row.sourceLine}
 													<button class="ghost small-btn" on:click={() => openSource(row)} title="Open accounts file at line {row.sourceLine}">↗</button>
 												{/if}
 											</div>
-											{#if row.loanType}<span class="badge">{row.loanType}</span>{/if}
-										</div>
+										{/if}
 									</header>
 
 									<div class="balance-block">
@@ -316,6 +398,12 @@
 											{/if}
 										</div>
 									{/if}
+
+									{#if months !== null}
+										<div class="projection muted small" title="Naive ETA: |balance| / |monthly|. Doesn't account for interest.">
+											{row.role === 'receivable' ? 'Recover in' : 'Payoff in'} ≈ {formatMonths(months)}
+										</div>
+									{/if}
 								</article>
 							{/each}
 						</div>
@@ -342,6 +430,25 @@
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
 	.header h3 { margin: 0; font-size: var(--font-ui-larger); }
+
+	.header-actions {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.add-button {
+		padding: var(--size-4-1) var(--size-4-3);
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		border: 1px solid var(--interactive-accent);
+		border-radius: var(--radius-s);
+		cursor: pointer;
+		font-size: var(--font-ui-small);
+	}
+	.add-button:hover:not(:disabled) {
+		filter: brightness(1.05);
+	}
+	.add-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.refresh-button {
 		display: flex;
@@ -501,20 +608,19 @@
 		min-width: 0;
 		flex: 1;
 	}
-	.account-name-row {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		min-width: 0;
-	}
 	.account-name {
 		font-weight: 600;
 		font-size: var(--font-ui-small);
-		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		display: block;
+	}
+	.card-actions {
+		display: flex;
+		gap: 2px;
+		flex-shrink: 0;
 	}
 	.badge {
 		display: inline-block;
@@ -586,6 +692,11 @@
 		white-space: nowrap;
 	}
 	.payoff-label.warn { color: var(--color-red); font-weight: 600; }
+
+	.projection {
+		font-style: italic;
+		opacity: 0.85;
+	}
 
 	.ghost {
 		background: transparent;
