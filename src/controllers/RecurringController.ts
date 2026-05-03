@@ -12,6 +12,10 @@ import {
     type RecurringRule,
     type RecurringOccurrence,
 } from '../services/recurring.service';
+import {
+    parseLoanAccounts,
+    synthesizeRecurringFromLoans,
+} from '../services/liabilities.service';
 
 export class RecurringController {
     private plugin: BeancountPlugin;
@@ -42,20 +46,55 @@ export class RecurringController {
         return `${folder}/recurring.beancount`;
     }
 
+    private resolveAccountsPath(): string {
+        const folder = this.plugin.settings.structuredFolderName?.trim() || 'Finances';
+        return `${folder}/accounts.beancount`;
+    }
+
     async loadData(): Promise<void> {
         this.loading.set(true);
         this.error.set(null);
         try {
-            const vaultPath = this.resolveVaultPath();
             const adapter = this.plugin.app.vault.adapter;
-            if (!(await adapter.exists(vaultPath))) {
-                this.rules.set([]);
-                this.lastLoaded.set(new Date());
-                return;
+
+            // 1. Explicit rules from recurring.beancount.
+            const recurringPath = this.resolveVaultPath();
+            const explicit = (await adapter.exists(recurringPath))
+                ? parseRecurringFile(await adapter.read(recurringPath))
+                : [];
+
+            // 2. Synthetic rules derived from loan-shaped accounts in
+            //    accounts.beancount (γ integration). An explicit rule
+            //    with the same nickname always wins, so the user can
+            //    override the auto-generated schedule by authoring a
+            //    `custom "recurring"` line with nickname `loan:<acct>`.
+            const accountsPath = this.resolveAccountsPath();
+            let synthetic: RecurringRule[] = [];
+            if (await adapter.exists(accountsPath)) {
+                try {
+                    const accountsContent = await adapter.read(accountsPath);
+                    const loans = parseLoanAccounts(accountsContent);
+                    const generated = synthesizeRecurringFromLoans(loans);
+                    const explicitNicknames = new Set(explicit.map(r => r.nickname));
+                    synthetic = generated
+                        .filter(g => !explicitNicknames.has(g.nickname))
+                        .map(g => ({
+                            nickname: g.nickname,
+                            cadence: g.cadence,
+                            expenseAccount: g.expenseAccount,
+                            fundingAccount: g.fundingAccount,
+                            amount: g.amount,
+                            currency: g.currency,
+                            startDate: g.startDate,
+                            synthetic: true,
+                            fromLoanAccount: g.fromLoanAccount,
+                        }));
+                } catch (_) {
+                    // Soft-fail: synthetic merge is best-effort.
+                }
             }
-            const content = await adapter.read(vaultPath);
-            const rules = parseRecurringFile(content);
-            this.rules.set(rules);
+
+            this.rules.set([...explicit, ...synthetic]);
             this.lastLoaded.set(new Date());
         } catch (e) {
             this.error.set(e instanceof Error ? e.message : String(e));
