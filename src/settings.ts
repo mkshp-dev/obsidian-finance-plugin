@@ -45,6 +45,11 @@ export interface BeancountPluginSettings {
     lastAutoPriceFetch: number;
     /** Bean-price command path (detected automatically). */
     beanPriceCommand: string;
+    // Recurring Transactions Settings
+    /** Vault-relative path to the recurring directives file. Defaults to `<structuredFolder>/recurring.beancount`. */
+    recurringFilePath: string;
+    /** Number of days to look ahead when listing upcoming occurrences. */
+    recurringLookaheadDays: number;
 }
 
 /**
@@ -70,7 +75,10 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     autoPriceFetch: false,
     priceFetchIntervalHours: 24,
     lastAutoPriceFetch: 0,
-    beanPriceCommand: ''
+    beanPriceCommand: '',
+    // Recurring Transactions Settings
+    recurringFilePath: '',
+    recurringLookaheadDays: 30
 }
 
 /**
@@ -262,6 +270,45 @@ export class BeancountSettingTab extends PluginSettingTab {
                 infoEl.textContent = `Last automatic fetch: ${timeSince} (${lastFetchDate.toLocaleString()})`;
             }
         }
+
+        // Recurring Transactions Settings Section
+        containerEl.createEl('h3', { text: 'Recurring Transactions' });
+
+        const recurringInfo = containerEl.createDiv({ cls: 'setting-item-description' });
+        recurringInfo.style.marginBottom = '12px';
+        recurringInfo.innerHTML = `
+            <p>Define a <code>recurring.beancount</code> file with <code>custom "recurring"</code>
+            directives. The dashboard will surface upcoming occurrences in the Overview tab.</p>
+            <p>Format:
+            <code>2024-01-01 custom "recurring" "rent-monthly" "monthly" "Expenses:Housing:Rent" "Assets:Bank:Checking" 1500 USD</code></p>
+            <p>Cadences: <code>daily</code>, <code>weekly</code>, <code>biweekly</code>,
+            <code>monthly</code>, <code>quarterly</code>, <code>semiannual</code>, <code>yearly</code>.</p>
+        `;
+
+        new Setting(containerEl)
+            .setName('Recurring file path')
+            .setDesc('Vault-relative path. Leave blank to use <structured folder>/recurring.beancount.')
+            .addText(text => text
+                .setPlaceholder('Finances/recurring.beancount')
+                .setValue(this.plugin.settings.recurringFilePath)
+                .onChange(async (value) => {
+                    this.plugin.settings.recurringFilePath = value.trim();
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Look-ahead days')
+            .setDesc('How far ahead to list upcoming occurrences (1–365).')
+            .addText(text => text
+                .setPlaceholder('30')
+                .setValue(String(this.plugin.settings.recurringLookaheadDays))
+                .onChange(async (value) => {
+                    const n = parseInt(value, 10);
+                    if (!isNaN(n) && n >= 1 && n <= 365) {
+                        this.plugin.settings.recurringLookaheadDays = n;
+                        await this.plugin.saveSettings();
+                    }
+                }));
     }
 
     /**

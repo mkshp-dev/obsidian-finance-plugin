@@ -12,6 +12,7 @@ import { TransactionController } from '../../../controllers/TransactionControlle
 import { BalanceSheetController } from '../../../controllers/BalanceSheetController';
 import { CommoditiesController } from '../../../controllers/CommoditiesController';
 import { IncomeStatementController } from '../../../controllers/IncomeStatementController';
+import { RecurringController } from '../../../controllers/RecurringController';
 // JournalController is replaced by plugin.journalStore
 // -----------------------------
 
@@ -27,6 +28,7 @@ export class UnifiedDashboardView extends ItemView {
 	balanceSheetController: BalanceSheetController;
 	commoditiesController: CommoditiesController;
 	incomeStatementController: IncomeStatementController;
+	recurringController: RecurringController;
 
 	constructor(leaf: WorkspaceLeaf, plugin: BeancountPlugin) {
 		super(leaf);
@@ -37,6 +39,7 @@ export class UnifiedDashboardView extends ItemView {
 		this.balanceSheetController = new BalanceSheetController(this.plugin);
 		this.commoditiesController = new CommoditiesController(this.plugin);
 		this.incomeStatementController = new IncomeStatementController(this.plugin);
+		this.recurringController = new RecurringController(this.plugin);
 	}
 
 	getViewType(): string { return UNIFIED_DASHBOARD_VIEW_TYPE; }
@@ -52,6 +55,7 @@ export class UnifiedDashboardView extends ItemView {
 				this.balanceSheetController.loadData(),
 				this.incomeStatementController.loadData(),
 				this.commoditiesController.loadData(),
+				this.recurringController.loadData(),
 				this.plugin.journalStore.refresh() // Use new store
 			]);
 		} catch (error) {
@@ -72,6 +76,7 @@ export class UnifiedDashboardView extends ItemView {
 				balanceSheetController: this.balanceSheetController,
 				incomeStatementController: this.incomeStatementController,
 				commoditiesController: this.commoditiesController,
+				recurringController: this.recurringController,
 				journalStore: this.plugin.journalStore, // Pass store instead of controller
 				plugin: this.plugin // Pass plugin instance
 			}
