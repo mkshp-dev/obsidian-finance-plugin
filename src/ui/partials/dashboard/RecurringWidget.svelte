@@ -74,7 +74,12 @@
                         <span class="recurring-due">{dueLabel(occ.date)}</span>
                     </div>
                     <div class="recurring-what">
-                        <span class="recurring-nickname">{occ.rule.nickname}</span>
+                        <span class="recurring-nickname">
+                            {occ.rule.nickname}
+                            {#if occ.rule.synthetic}
+                                <span class="auto-badge" title="Auto-generated from {occ.rule.fromLoanAccount} (loan-type metadata)">auto</span>
+                            {/if}
+                        </span>
                         <span class="recurring-account">{occ.rule.expenseAccount}</span>
                     </div>
                     <div class="recurring-amount">
@@ -204,5 +209,19 @@
         color: var(--text-accent);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+    }
+
+    .auto-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 0 6px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-on-accent);
+        background: var(--text-faint);
+        border-radius: 999px;
+        vertical-align: middle;
     }
 </style>

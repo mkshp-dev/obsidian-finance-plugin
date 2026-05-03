@@ -42,6 +42,15 @@ export interface RecurringRule {
     startDate: string;
     /** 1-based source line number for "open file at rule" jumps. */
     sourceLine?: number;
+    /**
+     * True for rules synthesised from `open` directive metadata
+     * (loan accounts) rather than authored as `custom "recurring"`
+     * directives. The widget can badge them differently and the
+     * editor should treat them as read-only.
+     */
+    synthetic?: boolean;
+    /** For synthetic rules: account that produced this rule. */
+    fromLoanAccount?: string;
 }
 
 export interface RecurringOccurrence {
