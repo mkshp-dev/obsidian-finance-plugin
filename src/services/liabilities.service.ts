@@ -57,7 +57,7 @@ export interface LoanAccount {
     monthlyPayment: number | null;
     /** Day-of-month the payment is due (1–31). */
     dueDay: number | null;
-    /** Optional override for the funding account used by synthetic recurring rules (γ integration). */
+    /** Optional funding/destination account override read from the `funding-account` meta. */
     fundingAccount: string | null;
     /** 1-based source line number of the open directive (for "open file at rule" jumps). */
     sourceLine?: number;
@@ -221,28 +221,165 @@ export function payoffFraction(currentBalance: number | null, principal: number 
 }
 
 /**
+ * Naive months-to-payoff estimate: |balance| / |monthlyPayment|.
+ * Doesn't compound interest — back-of-envelope ETA only. Returns null
+ * when either input is missing or zero.
+ */
+export function monthsRemaining(currentBalance: number | null, monthlyPayment: number | null): number | null {
+    if (currentBalance === null || monthlyPayment === null || monthlyPayment === 0) return null;
+    const months = Math.abs(currentBalance) / Math.abs(monthlyPayment);
+    if (!isFinite(months) || months <= 0) return null;
+    return months;
+}
+
+// --- Write-back helpers (used by the in-tab Add/Edit loan modal) ---
+
+/**
+ * Editable shape used by the loan modal. `account` is required (the
+ * unique key) and `currency` is required (drives the open-directive
+ * declaration). All other fields are optional metadata.
+ */
+export interface LoanFormDraft {
+    account: string;
+    currency: string;
+    openDate: string; // YYYY-MM-DD
+    loanType: string | null;
+    counterparty: string | null;
+    principal: number | null;
+    interestRate: number | null;
+    monthlyPayment: number | null;
+    dueDay: number | null;
+    fundingAccount: string | null;
+}
+
+const META_KEY_ORDER: Array<keyof LoanFormDraft> = [
+    'loanType', 'counterparty', 'principal', 'interestRate', 'monthlyPayment', 'dueDay', 'fundingAccount',
+];
+
+const META_KEY_TO_BEANCOUNT: Record<string, string> = {
+    loanType: 'loan-type',
+    counterparty: 'counterparty',
+    principal: 'principal',
+    interestRate: 'interest-rate',
+    monthlyPayment: 'monthly-payment',
+    dueDay: 'due-day',
+    fundingAccount: 'funding-account',
+};
+
+const STRING_META_KEYS: ReadonlySet<string> = new Set(['loanType', 'counterparty', 'fundingAccount']);
+
+/**
+ * Format a single open-directive block from a draft, e.g.:
+ *
+ *   2026-01-15 open Liabilities:Credit:Visa  USD
+ *     loan-type: "credit-card"
+ *     principal: 5000
+ *     ...
+ */
+export function formatLoanOpenDirective(draft: LoanFormDraft): string {
+    const lines: string[] = [];
+    const head = `${draft.openDate} open ${draft.account}` + (draft.currency ? `  ${draft.currency}` : '');
+    lines.push(head);
+
+    for (const key of META_KEY_ORDER) {
+        const raw = draft[key];
+        if (raw === null || raw === undefined || raw === '') continue;
+        const beancountKey = META_KEY_TO_BEANCOUNT[key];
+        if (!beancountKey) continue;
+        const value = STRING_META_KEYS.has(key as string)
+            ? `"${String(raw).replace(/"/g, '\\"')}"`
+            : String(raw);
+        lines.push(`  ${beancountKey}: ${value}`);
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Surgical rewrite of an accounts.beancount file: replace, insert, or
+ * delete loan-account blocks while leaving every other line exactly
+ * where the user wrote it.
+ *
+ *   - `edits` is keyed by the original account path. Each entry is the
+ *     desired new state, or `null` to remove the block.
+ *   - `additions` is the list of brand-new loan accounts to append at
+ *     the bottom (separated by a blank line for breathing room).
+ *
+ * A "loan-account block" is the open-directive line plus the indented
+ * metadata lines that immediately follow it.
+ */
+export function applyLoanEdits(
+    originalContent: string,
+    edits: Record<string, LoanFormDraft | null>,
+    additions: LoanFormDraft[] = [],
+): string {
+    const lines = originalContent.split(/\r?\n/);
+    const trailingNewline = originalContent.endsWith('\n');
+    const accounts = parseLoanAccounts(originalContent);
+
+    const blockRanges = new Map<string, [number, number]>();
+    for (const acc of accounts) {
+        const start = (acc.sourceLine ?? 1) - 1;
+        let end = start;
+        for (let i = start + 1; i < lines.length; i++) {
+            if ((lines[i].startsWith(' ') || lines[i].startsWith('\t')) && META_LINE.test(lines[i])) {
+                end = i;
+                continue;
+            }
+            break;
+        }
+        blockRanges.set(acc.account, [start, end]);
+    }
+
+    const accountByStart = new Map<number, string>();
+    for (const [account, [start]] of blockRanges) {
+        accountByStart.set(start, account);
+    }
+
+    const out: string[] = [];
+    let i = 0;
+    while (i < lines.length) {
+        const account = accountByStart.get(i);
+        if (account && account in edits) {
+            const desired = edits[account];
+            const [, end] = blockRanges.get(account)!;
+            if (desired === null) {
+                i = end + 1;
+                if (out.length > 0 && out[out.length - 1].trim() === '' &&
+                    i < lines.length && lines[i].trim() === '') {
+                    i += 1;
+                }
+                continue;
+            }
+            out.push(formatLoanOpenDirective(desired));
+            i = end + 1;
+            continue;
+        }
+        out.push(lines[i]);
+        i += 1;
+    }
+
+    if (additions.length > 0) {
+        if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+        for (let k = 0; k < additions.length; k++) {
+            if (k > 0) out.push('');
+            out.push(formatLoanOpenDirective(additions[k]));
+        }
+    }
+
+    let result = out.join('\n');
+    if (trailingNewline && !result.endsWith('\n')) result += '\n';
+    return result;
+}
+
+// --- Synthetic recurring rules from loan metadata (γ integration) ---
+
+/**
  * Synthesize Beancount-shaped recurring rules from loan account
  * metadata. Only accounts with both `monthly-payment` and `due-day`
- * yield a rule (other accounts have no payment schedule to replay).
- *
- * Convention:
- *   - Liabilities: each payment is "destination = liability account
- *     (paid down), funding = a placeholder Assets account". We don't
- *     know which Asset account funds the payment without further
- *     metadata, so we use the account's open-currency Assets:* if a
- *     `funding-account` meta is present, otherwise the synthetic rule
- *     is emitted with `Assets:Banking` as a generic placeholder. The
- *     user can override at any time by adding `funding-account: "…"`
- *     to the open directive.
- *   - Receivables: destination = Assets:Receivables account, funding =
- *     Income:Repayment by default (or the configured funding-account).
- *
- * The result feeds the same RecurringRule shape as `parseRecurringFile`
- * so the dashboard widget renders synthetic and explicit rules in one
- * unified list. Synthetic rules have no `sourceLine` (the open
- * directive is in a different file) and a stable nickname like
- * `loan:<account>` so explicit rules can override by sharing the
- * nickname.
+ * yield a rule. The result feeds RecurringController so the recurring
+ * widget can render synthetic + explicit rules together. An explicit
+ * rule with the same nickname (`loan:<account>`) wins.
  */
 export interface SyntheticRecurringRule {
     nickname: string;
@@ -252,9 +389,7 @@ export interface SyntheticRecurringRule {
     amount: number;
     currency: string;
     startDate: string;
-    /** Originating loan account, for traceability. */
     fromLoanAccount: string;
-    /** True for synthetic rules so the UI can badge them. */
     synthetic: true;
 }
 
