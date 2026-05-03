@@ -1,5 +1,7 @@
 <!-- src/ui/partials/dashboard/EquivalentsRow.svelte -->
 <script lang="ts">
+	import { formatCurrency } from '../../../utils/currency-precision';
+
 	export let equivalents: Record<string, number> = {};
 	/**
 	 * Visual variant. `kpi` matches the Overview KPI card type scale (slightly
@@ -13,20 +15,11 @@
 	$: entries = Object.entries(equivalents ?? {})
 		.filter(([, value]) => typeof value === 'number' && isFinite(value));
 
-	// Pick decimal precision by magnitude so a 1,000 USD figure shows as
-	// "≈ 1,000" but a 0.012 BTC figure keeps enough significant digits.
-	function format(value: number): string {
-		const abs = Math.abs(value);
-		let max: number;
-		if (abs >= 1000) max = 0;
-		else if (abs >= 1) max = 2;
-		else if (abs >= 0.01) max = 4;
-		else if (abs >= 0.0001) max = 6;
-		else max = 8;
-		return value.toLocaleString(undefined, {
-			minimumFractionDigits: 0,
-			maximumFractionDigits: max,
-		});
+	// Delegated to the currency-precision helper so each equivalent
+	// gets the natural decimal places for its currency (USD enforces
+	// 2 trailing zeros, UYU/JPY drop them, BTC adapts up to 8).
+	function format(value: number, currency: string): string {
+		return formatCurrency(value, currency);
 	}
 </script>
 
@@ -39,7 +32,7 @@
 		class:align-start={align === 'start'}
 	>
 		{#each entries as [currency, value], i}
-			<span class="equivalent">≈ {format(value)} {currency}</span>
+			<span class="equivalent">≈ {format(value, currency)} {currency}</span>
 			{#if i < entries.length - 1}
 				<span class="separator" aria-hidden="true">·</span>
 			{/if}

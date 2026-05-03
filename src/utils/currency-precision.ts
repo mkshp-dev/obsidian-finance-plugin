@@ -17,6 +17,13 @@
 export interface CurrencyPrecision {
     /** Decimal places to render in the UI for "ordinary" magnitudes (>= 1). */
     display: number;
+    /**
+     * Minimum decimal places to render — controls trailing-zero behaviour.
+     * Fiat with cents convention (USD, EUR, …) defaults to `display` so
+     * "780.90" stays "780.90" and not "780.9". Crypto and integer fiat
+     * default to 0 so trailing zeros are trimmed. Defaults to 0 if absent.
+     */
+    minDisplay?: number;
     /** Decimal places to round to in BQL `round(..., n)` so we don't lose information server-side. */
     storage: number;
     /**
@@ -45,17 +52,18 @@ const PRECISION_TABLE: Record<string, CurrencyPrecision> = {
     XAU:  { display: 4, storage: 6, adaptiveMax: 8 },
     XAG:  { display: 3, storage: 4, adaptiveMax: 6 },
 
-    // --- "Hundredth-of-unit" fiat ---
-    USD: { display: 2, storage: 2 },
-    EUR: { display: 2, storage: 2 },
-    GBP: { display: 2, storage: 2 },
-    INR: { display: 2, storage: 2 },
-    BRL: { display: 2, storage: 2 },
-    CAD: { display: 2, storage: 2 },
-    AUD: { display: 2, storage: 2 },
-    CHF: { display: 2, storage: 2 },
-    MXN: { display: 2, storage: 2 },
-    ARS: { display: 2, storage: 2 },
+    // --- "Hundredth-of-unit" fiat: enforce 2 decimals so "780.90" doesn't
+    //     collapse to "780.9". minDisplay = display = 2.
+    USD: { display: 2, minDisplay: 2, storage: 2 },
+    EUR: { display: 2, minDisplay: 2, storage: 2 },
+    GBP: { display: 2, minDisplay: 2, storage: 2 },
+    INR: { display: 2, minDisplay: 2, storage: 2 },
+    BRL: { display: 2, minDisplay: 2, storage: 2 },
+    CAD: { display: 2, minDisplay: 2, storage: 2 },
+    AUD: { display: 2, minDisplay: 2, storage: 2 },
+    CHF: { display: 2, minDisplay: 2, storage: 2 },
+    MXN: { display: 2, minDisplay: 2, storage: 2 },
+    ARS: { display: 2, minDisplay: 2, storage: 2 },
 
     // --- Effectively-integer fiat (centavo / sen / fil exists in law,
     //     not in daily circulation; rounding to whole units matches
@@ -71,7 +79,7 @@ const PRECISION_TABLE: Record<string, CurrencyPrecision> = {
     TWD: { display: 0, storage: 0 },
 };
 
-const DEFAULT_PRECISION: CurrencyPrecision = { display: 2, storage: 2 };
+const DEFAULT_PRECISION: CurrencyPrecision = { display: 2, minDisplay: 2, storage: 2 };
 
 /**
  * Resolve the natural precision for a currency code. Unknown codes
@@ -127,7 +135,8 @@ export function formatCurrency(
     if (value === null || value === undefined || !isFinite(value)) return '—';
     const p = getCurrencyPrecision(currency);
     const max = pickDecimals(value, p);
-    const min = Math.max(0, Math.min(max, opts.minDigits ?? 0));
+    const defaultMin = p.minDisplay ?? 0;
+    const min = Math.max(0, Math.min(max, opts.minDigits ?? defaultMin));
     const formatted = value.toLocaleString(undefined, {
         minimumFractionDigits: min,
         maximumFractionDigits: max,
