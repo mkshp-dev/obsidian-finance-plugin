@@ -7,6 +7,7 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
+import { sanitizeEquivalentCurrencies, collectEquivalents } from '../utils/equivalents';
 // Re-export AccountItem so IncomeStatementTab can import from here
 export type { AccountItem } from './BalanceSheetController';
 import type { AccountItem } from './BalanceSheetController';
@@ -47,6 +48,12 @@ export interface IncomeStatementState {
 	chartInterval: 'month' | 'week';
 	/** The active trend type shown in the Trends chart. */
 	chartTrendType: 'netprofit' | 'income' | 'expense';
+	/** Total income converted to each enabled equivalent currency (raw beancount sign — negative). */
+	totalIncomeEquivalents: Record<string, number>;
+	/** Total expenses converted to each enabled equivalent currency. */
+	totalExpensesEquivalents: Record<string, number>;
+	/** Net profit converted to each enabled equivalent currency (positive when income > expenses). */
+	netProfitEquivalents: Record<string, number>;
 }
 
 /**
@@ -79,6 +86,9 @@ export class IncomeStatementController {
 			chartLoading: false,
 			chartInterval: 'month' as const,
 			chartTrendType: 'netprofit' as const,
+			totalIncomeEquivalents: {},
+			totalExpensesEquivalents: {},
+			netProfitEquivalents: {},
 		});
 	}
 
@@ -444,6 +454,17 @@ export class IncomeStatementController {
 			// totalIncome is negative in beancount (credit accounts); compute conventional profit
 			const netProfit = -(totalIncome + totalExpenses);
 
+			// Equivalents are only meaningful for the 'convert' valuation method —
+			// cost/units don't have a single base, so equivalents would be misleading.
+			const equivalents = valuationMethod === 'convert'
+				? sanitizeEquivalentCurrencies(this.plugin.settings.equivalentCurrencies, reportingCurrency)
+				: [];
+			const [totalIncomeEquivalents, totalExpensesEquivalents, netProfitEquivalents] = await Promise.all([
+				collectEquivalents(this.plugin, equivalents, queries.getTotalIncomeQuery),
+				collectEquivalents(this.plugin, equivalents, queries.getTotalExpensesQuery),
+				collectEquivalents(this.plugin, equivalents, queries.getNetProfitQuery),
+			]);
+
 			let unconvertedWarning: string | null = null;
 			if (hasUnconvertedCommodities) {
 				unconvertedWarning = `Multi-currency accounts detected. ${reportingCurrency} amounts are shown in the first column, other currencies are displayed separately. Only ${reportingCurrency} amounts are included in totals.`;
@@ -468,6 +489,9 @@ export class IncomeStatementController {
 				chartLoading: true,
 				chartInterval: currentState.chartInterval,
 				chartTrendType: currentState.chartTrendType,
+				totalIncomeEquivalents,
+				totalExpensesEquivalents,
+				netProfitEquivalents,
 			});
 
 			// Load chart data
