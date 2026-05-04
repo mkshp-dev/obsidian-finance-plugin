@@ -373,8 +373,15 @@
 									</header>
 
 									<div class="balance-block">
-										<span class="balance-label">Balance</span>
-										<span class="balance">{row.currentBalanceDisplay}</span>
+										<span class="balance-label">
+											Balance
+											{#if row.balanceSource === 'principal'}
+												<span class="balance-source" title="No postings yet — showing the principal from the open-directive metadata">expected, from principal</span>
+											{:else if row.balanceSource === 'unknown'}
+												<span class="balance-source warn" title="Balance query failed — could not read postings">balance unavailable</span>
+											{/if}
+										</span>
+										<span class="balance" class:expected={row.balanceSource === 'principal'}>{row.currentBalanceDisplay}</span>
 									</div>
 
 									<dl class="meta">
@@ -680,6 +687,28 @@
 	.balance-label {
 		font-size: var(--font-ui-smaller);
 		color: var(--text-muted);
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+	}
+	.balance-source {
+		font-style: italic;
+		font-size: 10px;
+		padding: 1px 8px;
+		border-radius: 999px;
+		background: var(--background-modifier-hover);
+		color: var(--text-muted);
+		text-transform: lowercase;
+		letter-spacing: 0.02em;
+	}
+	.balance-source.warn {
+		color: var(--color-orange, var(--text-warning));
+		background: color-mix(in srgb, var(--color-orange, var(--text-warning)), transparent 88%);
+	}
+	.balance.expected {
+		font-style: italic;
+		opacity: 0.92;
 	}
 	.balance {
 		font-size: 1.4em;
