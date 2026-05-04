@@ -10,7 +10,7 @@
 		type RecurringRule,
 		type RecurringCadence,
 	} from '../../../services/recurring.service';
-	import { getOpenAccounts } from '../../../utils/accounts';
+	import { getOpenAccounts, getCommodities } from '../../../utils/accounts';
 	import { getAllCurrenciesQuery } from '../../../queries/index';
 	import { parse as parseCsv } from 'csv-parse/sync';
 	import { Logger } from '../../../utils/logger';
@@ -70,18 +70,38 @@
 
 	async function loadAutocompleteSources() {
 		try {
-			const [accs, csv] = await Promise.all([
+			// Two sources, unioned: `#commodities` covers every declared
+			// commodity (canonical list); `distinct(currency)` from postings
+			// catches anything actually transacted.
+			const [accs, declaredCommodities, postingsCsv] = await Promise.all([
 				getOpenAccounts(plugin),
+				getCommodities(plugin).catch(() => [] as Array<{ name: string }>),
 				plugin.runQuery(getAllCurrenciesQuery()).catch(() => ''),
 			]);
 			accounts = accs ?? [];
-			if (csv) {
-				const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as any[];
-				const fetched = rows.map((r: any) => r['currency_']).filter(Boolean) as string[];
-				if (fetched.length > 0) currencies = Array.from(new Set(fetched));
+
+			const merged = new Set<string>();
+			for (const c of declaredCommodities ?? []) {
+				if (c?.name) merged.add(c.name);
+			}
+			if (postingsCsv) {
+				const rows = parseCsv(postingsCsv, { columns: true, skip_empty_lines: true, trim: true }) as any[];
+				for (const r of rows) {
+					const code = (r['currency_'] ?? '').trim();
+					if (code) merged.add(code);
+				}
 			}
 			const op = plugin.settings.operatingCurrency;
-			if (op && !currencies.includes(op)) currencies.unshift(op);
+			if (op) merged.add(op);
+
+			const sorted = Array.from(merged).sort((a, b) => {
+				if (op) {
+					if (a === op) return -1;
+					if (b === op) return 1;
+				}
+				return a.localeCompare(b);
+			});
+			if (sorted.length > 0) currencies = sorted;
 		} catch (e) {
 			Logger.log('[RecurringRulesEditor] failed to load autocomplete sources', e);
 		}
