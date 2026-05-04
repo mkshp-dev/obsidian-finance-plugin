@@ -21,6 +21,16 @@ export interface LoanRow extends LoanAccount {
     currentBalance: number | null;
     /** Display string for the live balance (e.g. "-12,500.00 UYU"). */
     currentBalanceDisplay: string;
+    /**
+     * Where the displayed balance came from:
+     *   'posted'     – `sum(position)` returned a real number for this account
+     *   'principal'  – no postings yet, but the open directive carries a
+     *                  `principal` meta we surface as the implicit balance
+     *   'zero'       – BQL ran successfully and the account has no postings
+     *                  and no principal — genuinely 0
+     *   'unknown'    – BQL failed; we couldn't determine the balance
+     */
+    balanceSource: 'posted' | 'principal' | 'zero' | 'unknown';
 }
 
 export interface LiabilitiesState {
@@ -99,6 +109,7 @@ export class LiabilitiesController {
 
             // Pull live balances. Treat BQL failure as soft: we still show metadata.
             let balanceMap = new Map<string, { amount: number | null; currency: string | null }>();
+            let bqlSucceeded = false;
             try {
                 const csv = await this.plugin.runQuery(queries.getLoanBalancesQuery());
                 const cleaned = csv.replace(/\r/g, '').trim();
@@ -109,18 +120,55 @@ export class LiabilitiesController {
                     if (row.length < 2) continue;
                     balanceMap.set(row[0], parseBalanceCell(row[1]));
                 }
+                bqlSucceeded = true;
             } catch (e) {
                 Logger.log('[LiabilitiesController] balance query failed (continuing with metadata only):', e);
             }
 
             const enriched: LoanRow[] = accounts.map(acc => {
                 const bal = balanceMap.get(acc.account);
-                const amount = bal?.amount ?? null;
-                const currency = bal?.currency ?? acc.currency;
+                const hasPosted = !!bal && bal.amount !== null;
+
+                // Derive the displayed balance with this priority:
+                //   1. real posted balance (BQL `sum(position)`)
+                //   2. the `principal` meta — the contract face-value, which
+                //      is the user's mental model of "what's owed" when no
+                //      postings have been recorded yet
+                //   3. genuine zero when BQL succeeded with no postings AND
+                //      no principal (account just exists)
+                //   4. unknown ("—") when BQL itself failed
+                let amount: number | null;
+                let currency: string;
+                let source: LoanRow['balanceSource'];
+
+                if (hasPosted) {
+                    amount = bal!.amount;
+                    currency = bal!.currency ?? acc.currency;
+                    source = 'posted';
+                } else if (acc.principal !== null && acc.principal !== 0) {
+                    // For liabilities the user owes the principal (negative in
+                    // beancount sign); for receivables the user is owed it
+                    // (positive). Display value matches the absolute amount —
+                    // we let the role badge convey the direction.
+                    const sign = acc.role === 'liability' ? -1 : 1;
+                    amount = sign * Math.abs(acc.principal);
+                    currency = acc.currency;
+                    source = 'principal';
+                } else if (bqlSucceeded) {
+                    amount = 0;
+                    currency = acc.currency;
+                    source = 'zero';
+                } else {
+                    amount = null;
+                    currency = acc.currency;
+                    source = 'unknown';
+                }
+
                 return {
                     ...acc,
                     currentBalance: amount,
                     currentBalanceDisplay: formatBalance(amount, currency),
+                    balanceSource: source,
                 };
             });
 
