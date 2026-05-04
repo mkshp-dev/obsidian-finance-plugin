@@ -440,7 +440,14 @@
 	<div class="row">
 		<label class="field">
 			<span>Open date <em>*</em></span>
-			<input type="date" bind:value={draft.openDate} class:error={errors.openDate} />
+			<input
+				type="text"
+				inputmode="numeric"
+				placeholder="YYYY-MM-DD"
+				pattern="\d{4}-\d{2}-\d{2}"
+				bind:value={draft.openDate}
+				class:error={errors.openDate}
+			/>
 			{#if errors.openDate}<span class="error-msg">{errors.openDate}</span>{/if}
 		</label>
 
@@ -510,7 +517,14 @@
 		<div class="row">
 			<label class="field">
 				<span>Payoff date</span>
-				<input type="date" bind:value={draft.payoffDate} class:error={errors.payoffDate} />
+				<input
+					type="text"
+					inputmode="numeric"
+					placeholder="YYYY-MM-DD"
+					pattern="\d{4}-\d{2}-\d{2}"
+					bind:value={draft.payoffDate}
+					class:error={errors.payoffDate}
+				/>
 				{#if errors.payoffDate}<span class="error-msg">{errors.payoffDate}</span>{/if}
 			</label>
 

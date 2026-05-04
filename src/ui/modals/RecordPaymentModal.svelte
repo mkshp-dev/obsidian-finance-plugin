@@ -66,7 +66,10 @@
 		<label class="field narrow">
 			<span>Date <em>*</em></span>
 			<input
-				type="date"
+				type="text"
+				inputmode="numeric"
+				placeholder="YYYY-MM-DD"
+				pattern="\d{4}-\d{2}-\d{2}"
 				bind:value={date}
 				class:error={errors.date}
 			/>
