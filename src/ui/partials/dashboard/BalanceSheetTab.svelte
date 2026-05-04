@@ -13,6 +13,7 @@
 	let selectedBalanceSection: 'assets' | 'liabilities' | 'equity' = 'assets';
 
 	// --- Receive the controller ---
+	export let plugin: any = null;
 	export let controller: BalanceSheetController;
 
 	// --- Set up a placeholder and subscribe to the store ---
@@ -49,22 +50,71 @@
 		(hasOtherCurrencies(state.assets) || hasOtherCurrencies(state.liabilities) || hasOtherCurrencies(state.equity) ||
 			(!!state.receivables && hasOtherCurrencies(state.receivables)));
 
-	// Handle valuation method change
-	async function handleValuationMethodChange(event: Event) {
-		const target = event.target as HTMLSelectElement;
-		const method = target.value as 'convert' | 'cost' | 'units';
-		if (controller) {
-			await controller.setValuationMethod(method);
-		}
+	// "Show in" combines valuation method + convert target into a flat
+	// list. Each entry maps to a (method, target?) pair the controller
+	// already knows how to consume.
+	type ShowInOption =
+		| { kind: 'native' }
+		| { kind: 'cost' }
+		| { kind: 'convert'; currency: string };
+
+	// Read settings from whichever object is wired up; fall back from
+	// the explicit `plugin` prop to the controller's reference so the
+	// picker still populates if the parent forgets to forward `plugin`.
+	$: settingsSource = (plugin ?? (controller as any)?.plugin) as any;
+	$: operatingCurrency = (settingsSource?.settings?.operatingCurrency ?? '').toUpperCase();
+	$: equivalentCurrencies = (settingsSource?.settings?.equivalentCurrencies ?? []) as string[];
+
+	$: showInOptions = (() => {
+		const opts: ShowInOption[] = [
+			{ kind: 'native' },
+			{ kind: 'cost' },
+		];
+		const seen = new Set<string>();
+		const pushCcy = (raw: string) => {
+			const c = (raw ?? '').trim().toUpperCase();
+			if (!c) return;
+			if (seen.has(c)) return;
+			seen.add(c);
+			opts.push({ kind: 'convert', currency: c });
+		};
+		pushCcy(operatingCurrency);
+		pushCcy('EUR');
+		for (const c of equivalentCurrencies) pushCcy(c);
+		return opts;
+	})();
+
+	function optionKey(opt: ShowInOption): string {
+		if (opt.kind === 'native') return 'native';
+		if (opt.kind === 'cost') return 'cost';
+		return `convert:${opt.currency}`;
+	}
+	function optionLabel(opt: ShowInOption): string {
+		if (opt.kind === 'native') return 'Native (per-account currency)';
+		if (opt.kind === 'cost') return 'At cost';
+		return `Convert → ${opt.currency}`;
 	}
 
-	// Get display label for the current valuation method
-	function getValuationMethodLabel(method: string): string {
-		switch (method) {
-			case 'convert': return 'Market Value';
-			case 'cost': return 'At Cost';
-			case 'units': return 'Units';
-			default: return 'Market Value';
+	// Default to Native unless the controller has already loaded with a
+	// different mode (e.g. after a refresh).
+	let selectedShowInKey: string = 'native';
+	$: if (state && state.valuationMethod) {
+		if (state.valuationMethod === 'units') selectedShowInKey = 'native';
+		else if (state.valuationMethod === 'cost') selectedShowInKey = 'cost';
+		else if (state.valuationMethod === 'convert') selectedShowInKey = `convert:${(state.currency ?? '').toUpperCase()}`;
+	}
+
+	async function handleShowInChange(event: Event) {
+		const select = event.target as HTMLSelectElement;
+		selectedShowInKey = select.value;
+		if (!controller) return;
+		if (selectedShowInKey === 'native') {
+			await controller.setValuationMethod('units');
+		} else if (selectedShowInKey === 'cost') {
+			await controller.setValuationMethod('cost');
+		} else if (selectedShowInKey.startsWith('convert:')) {
+			const ccy = selectedShowInKey.slice('convert:'.length);
+			await controller.setValuationMethod('convert', ccy);
 		}
 	}
 
@@ -318,15 +368,15 @@
 			<div class="balance-sheet-section-header">
 				<h3>Balance Sheet</h3>
 				<div class="valuation-method-selector">
-					<label for="valuation-method">Valuation:</label>
+					<label for="valuation-method">Show in:</label>
 					<select
 						id="valuation-method"
-						value={state.valuationMethod || 'convert'}
-						on:change={handleValuationMethodChange}
+						value={selectedShowInKey}
+						on:change={handleShowInChange}
 					>
-						<option value="convert">Market Value (Convert to {state.currency})</option>
-						<option value="cost">At Cost</option>
-						<option value="units">Units</option>
+						{#each showInOptions as opt}
+							<option value={optionKey(opt)}>{optionLabel(opt)}</option>
+						{/each}
 					</select>
 				</div>
 			</div>
