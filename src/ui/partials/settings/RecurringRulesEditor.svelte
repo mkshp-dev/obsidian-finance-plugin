@@ -342,18 +342,17 @@
 
 					<label class="field currency">
 						<span>Currency</span>
-						<input
-							type="text"
-							list="recurring-currencies-{rule._localId}"
-							placeholder="USD"
+						<select
 							bind:value={rule.currency}
-							on:input={markDirty}
-						/>
-						<datalist id="recurring-currencies-{rule._localId}">
+							on:change={markDirty}
+						>
+							{#if rule.currency && !currencies.includes(rule.currency)}
+								<option value={rule.currency}>{rule.currency}</option>
+							{/if}
 							{#each currencies as c}
-								<option value={c} />
+								<option value={c}>{c}</option>
 							{/each}
-						</datalist>
+						</select>
 					</label>
 
 					<label class="field date">
