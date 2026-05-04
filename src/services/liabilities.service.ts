@@ -55,10 +55,21 @@ export interface LoanAccount {
     interestRate: number | null;
     /** Monthly payment amount in the account currency. */
     monthlyPayment: number | null;
-    /** Day-of-month the payment is due (1–31). */
+    /** Day-of-month the payment is due (1–31). For recurring loans only. */
     dueDay: number | null;
     /** Optional funding/destination account override read from the `funding-account` meta. */
     fundingAccount: string | null;
+    /**
+     * Payment schedule. `'recurring'` = pay back monthly via
+     * `monthly-payment` + `due-day`. `'one-time'` = single lump-sum
+     * by `payoff-date` for `payoff-amount`. Inferred from which
+     * metadata keys are present (one-time wins if both sets exist).
+     */
+    paymentMode: 'recurring' | 'one-time';
+    /** ISO YYYY-MM-DD payoff date for one-time loans. Read from the `payoff-date` meta. */
+    payoffDate: string | null;
+    /** Total amount to pay on payoff-date. Read from the `payoff-amount` meta. */
+    payoffAmount: number | null;
     /** 1-based source line number of the open directive (for "open file at rule" jumps). */
     sourceLine?: number;
 }
@@ -118,6 +129,15 @@ export function parseLoanAccounts(content: string): LoanAccount[] {
             account.startsWith('Assets:Receivables');
         if (isLoanShaped) {
             const dueDay = meta['due-day'] ? toNumber(meta['due-day']) : null;
+            const payoffDateRaw = meta['payoff-date'] ? unquote(meta['payoff-date']).trim() : '';
+            const payoffDate = /^\d{4}-\d{2}-\d{2}$/.test(payoffDateRaw) ? payoffDateRaw : null;
+            const payoffAmount = meta['payoff-amount'] ? toNumber(meta['payoff-amount']) : null;
+            const monthlyPayment = meta['monthly-payment'] ? toNumber(meta['monthly-payment']) : null;
+            // Mode inference: explicit payoff metadata always wins; otherwise
+            // the presence of monthly-payment / due-day implies recurring.
+            const paymentMode: 'recurring' | 'one-time' = (payoffDate !== null || payoffAmount !== null)
+                ? 'one-time'
+                : 'recurring';
             out.push({
                 account,
                 currency,
@@ -127,9 +147,12 @@ export function parseLoanAccounts(content: string): LoanAccount[] {
                 counterparty: meta['counterparty'] ? unquote(meta['counterparty']) : null,
                 principal: meta['principal'] ? toNumber(meta['principal']) : null,
                 interestRate: meta['interest-rate'] ? toNumber(meta['interest-rate']) : null,
-                monthlyPayment: meta['monthly-payment'] ? toNumber(meta['monthly-payment']) : null,
+                monthlyPayment,
                 dueDay: dueDay !== null && dueDay >= 1 && dueDay <= 31 ? Math.round(dueDay) : null,
                 fundingAccount: meta['funding-account'] ? unquote(meta['funding-account']) : null,
+                paymentMode,
+                payoffDate,
+                payoffAmount,
                 sourceLine: startLine,
             });
         }
@@ -250,10 +273,18 @@ export interface LoanFormDraft {
     monthlyPayment: number | null;
     dueDay: number | null;
     fundingAccount: string | null;
+    paymentMode: 'recurring' | 'one-time';
+    payoffDate: string | null;
+    payoffAmount: number | null;
 }
 
+// Order matters for the on-disk layout; payment-schedule fields cluster
+// just below the "what is this loan" identity fields.
 const META_KEY_ORDER: Array<keyof LoanFormDraft> = [
-    'loanType', 'counterparty', 'principal', 'interestRate', 'monthlyPayment', 'dueDay', 'fundingAccount',
+    'loanType', 'counterparty', 'principal', 'interestRate',
+    'monthlyPayment', 'dueDay',
+    'payoffDate', 'payoffAmount',
+    'fundingAccount',
 ];
 
 const META_KEY_TO_BEANCOUNT: Record<string, string> = {
@@ -263,10 +294,24 @@ const META_KEY_TO_BEANCOUNT: Record<string, string> = {
     interestRate: 'interest-rate',
     monthlyPayment: 'monthly-payment',
     dueDay: 'due-day',
+    payoffDate: 'payoff-date',
+    payoffAmount: 'payoff-amount',
     fundingAccount: 'funding-account',
 };
 
-const STRING_META_KEYS: ReadonlySet<string> = new Set(['loanType', 'counterparty', 'fundingAccount']);
+const STRING_META_KEYS: ReadonlySet<string> = new Set(['loanType', 'counterparty', 'fundingAccount', 'payoffDate']);
+
+/**
+ * Strip fields that don't apply to the chosen payment mode so they
+ * don't accidentally land in the on-disk metadata. Used by the modal
+ * before calling formatLoanOpenDirective / applyLoanEdits.
+ */
+export function pruneDraftForMode(draft: LoanFormDraft): LoanFormDraft {
+    if (draft.paymentMode === 'recurring') {
+        return { ...draft, payoffDate: null, payoffAmount: null };
+    }
+    return { ...draft, monthlyPayment: null, dueDay: null };
+}
 
 /**
  * Format a single open-directive block from a draft, e.g.:
