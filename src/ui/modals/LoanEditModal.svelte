@@ -104,12 +104,12 @@
 	let comboboxIndex: Record<ComboboxField, number> = { path: -1, funding: -1 };
 
 	function openCombobox(which: ComboboxField) {
-		comboboxOpen[which] = true;
-		comboboxIndex[which] = -1;
+		comboboxOpen = { ...comboboxOpen, [which]: true };
+		comboboxIndex = { ...comboboxIndex, [which]: -1 };
 	}
 	function closeCombobox(which: ComboboxField) {
-		comboboxOpen[which] = false;
-		comboboxIndex[which] = -1;
+		comboboxOpen = { ...comboboxOpen, [which]: false };
+		comboboxIndex = { ...comboboxIndex, [which]: -1 };
 	}
 	function suggestionsFor(which: ComboboxField): string[] {
 		const pool = which === 'path' ? pathPool : fundingPool;
@@ -143,12 +143,12 @@
 		const max = sugg.length + creatable - 1;
 		if (event.key === 'ArrowDown') {
 			event.preventDefault();
-			openCombobox(which);
-			comboboxIndex[which] = Math.min(comboboxIndex[which] + 1, max);
+			comboboxOpen = { ...comboboxOpen, [which]: true };
+			comboboxIndex = { ...comboboxIndex, [which]: Math.min(comboboxIndex[which] + 1, max) };
 		} else if (event.key === 'ArrowUp') {
 			event.preventDefault();
-			openCombobox(which);
-			comboboxIndex[which] = Math.max(comboboxIndex[which] - 1, -1);
+			comboboxOpen = { ...comboboxOpen, [which]: true };
+			comboboxIndex = { ...comboboxIndex, [which]: Math.max(comboboxIndex[which] - 1, -1) };
 		} else if (event.key === 'Enter') {
 			if (!comboboxOpen[which]) return;
 			const idx = comboboxIndex[which];
@@ -186,23 +186,33 @@
 			{#if comboboxOpen.path}
 				{@const sugg = suggestionsFor('path')}
 				{@const creatable = isCreatable('path', sugg)}
-				{#if sugg.length > 0 || creatable}
-					<ul class="combobox-list">
-						{#each sugg as s, i}
-							<li
-								class:active={comboboxIndex.path === i}
-								on:mousedown|preventDefault={() => pickSuggestion('path', s)}
-							>{s}</li>
-						{/each}
-						{#if creatable}
-							<li
-								class="combobox-create"
-								class:active={comboboxIndex.path === sugg.length}
-								on:mousedown|preventDefault={() => closeCombobox('path')}
-							>+ Create new account: <code>{draft.account}</code></li>
-						{/if}
-					</ul>
-				{/if}
+				{@const typed = (draft.account ?? '').trim()}
+				<ul class="combobox-list">
+					{#each sugg as s, i}
+						<li
+							class:active={comboboxIndex.path === i}
+							on:mousedown|preventDefault={() => pickSuggestion('path', s)}
+						>{s}</li>
+					{/each}
+					{#if creatable}
+						<li
+							class="combobox-create"
+							class:active={comboboxIndex.path === sugg.length}
+							on:mousedown|preventDefault={() => closeCombobox('path')}
+						>+ Create new account: <code>{draft.account}</code></li>
+					{/if}
+					{#if sugg.length === 0 && !creatable}
+						<li class="combobox-empty">
+							{#if typed.endsWith(':')}
+								Add a leaf segment to create a new account (e.g. <code>{typed}Visa</code>).
+							{:else if typed && !/^[A-Z][A-Za-z0-9:_-]*(:[A-Za-z0-9_-]+)+$/.test(typed)}
+								Path needs at least 2 segments — e.g. <code>Liabilities:Visa</code>.
+							{:else}
+								No matching accounts. Type a colon-separated path or pick a suggestion.
+							{/if}
+						</li>
+					{/if}
+				</ul>
 			{/if}
 			{#if errors.account}<span class="error-msg">{errors.account}</span>{/if}
 		</div>
@@ -331,23 +341,24 @@
 			{#if comboboxOpen.funding}
 				{@const sugg = suggestionsFor('funding')}
 				{@const creatable = isCreatable('funding', sugg)}
-				{#if sugg.length > 0 || creatable}
-					<ul class="combobox-list">
-						{#each sugg as s, i}
-							<li
-								class:active={comboboxIndex.funding === i}
-								on:mousedown|preventDefault={() => pickSuggestion('funding', s)}
-							>{s}</li>
-						{/each}
-						{#if creatable}
-							<li
-								class="combobox-create"
-								class:active={comboboxIndex.funding === sugg.length}
-								on:mousedown|preventDefault={() => closeCombobox('funding')}
-							>+ Use new account: <code>{draft.fundingAccount}</code></li>
-						{/if}
-					</ul>
-				{/if}
+				<ul class="combobox-list">
+					{#each sugg as s, i}
+						<li
+							class:active={comboboxIndex.funding === i}
+							on:mousedown|preventDefault={() => pickSuggestion('funding', s)}
+						>{s}</li>
+					{/each}
+					{#if creatable}
+						<li
+							class="combobox-create"
+							class:active={comboboxIndex.funding === sugg.length}
+							on:mousedown|preventDefault={() => closeCombobox('funding')}
+						>+ Use new account: <code>{draft.fundingAccount}</code></li>
+					{/if}
+					{#if sugg.length === 0 && !creatable}
+						<li class="combobox-empty">No matching accounts. Type a path or pick a suggestion.</li>
+					{/if}
+				</ul>
 			{/if}
 		</div>
 	</div>
@@ -449,6 +460,23 @@
 		padding-top: 8px;
 		margin-top: 4px;
 		font-style: italic;
+	}
+	.combobox-list .combobox-empty {
+		font-family: var(--font-interface);
+		color: var(--text-muted);
+		font-style: italic;
+		cursor: default;
+	}
+	.combobox-list .combobox-empty:hover {
+		background: transparent;
+	}
+	.combobox-list .combobox-empty code {
+		font-style: normal;
+		font-family: var(--font-monospace);
+		color: var(--text-normal);
+		background: var(--background-secondary);
+		padding: 1px 6px;
+		border-radius: 4px;
 	}
 	.combobox-list .combobox-create code {
 		font-style: normal;
