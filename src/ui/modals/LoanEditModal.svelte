@@ -101,16 +101,17 @@
 
 		<label class="field narrow">
 			<span>Currency <em>*</em></span>
-			<input
-				type="text"
-				list="loan-currencies"
-				placeholder="USD"
+			<select
 				bind:value={draft.currency}
 				class:error={errors.currency}
-			/>
-			<datalist id="loan-currencies">
-				{#each currencies as c}<option value={c} />{/each}
-			</datalist>
+			>
+				{#if draft.currency && !currencies.includes(draft.currency)}
+					<option value={draft.currency}>{draft.currency}</option>
+				{/if}
+				{#each currencies as c}
+					<option value={c}>{c}</option>
+				{/each}
+			</select>
 			{#if errors.currency}<span class="error-msg">{errors.currency}</span>{/if}
 		</label>
 	</div>
