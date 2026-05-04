@@ -1,6 +1,6 @@
 <!-- src/ui/modals/LoanEditModal.svelte -->
 <script lang="ts">
-	import { createEventDispatcher, tick } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import type { LoanFormDraft } from '../../services/liabilities.service';
 	import { pruneDraftForMode } from '../../services/liabilities.service';
 
@@ -16,6 +16,19 @@
 		'student-loan', 'line-of-credit', 'receivable', 'other',
 	];
 
+	// Pre-baked sub-paths per loan-type. Empty when the role prefix
+	// already covers everything (e.g. receivables → Assets:Receivables:LEAF).
+	const PATH_TEMPLATES: Record<string, string[]> = {
+		'credit-card': ['Credit'],
+		'mortgage': ['Loan', 'Mortgage'],
+		'personal-loan': ['Loan', 'Personal'],
+		'auto-loan': ['Loan', 'Auto'],
+		'student-loan': ['Loan', 'Student'],
+		'line-of-credit': ['Credit', 'Line'],
+		'receivable': [],
+		'other': [],
+	};
+
 	let draft: LoanFormDraft = {
 		...initial,
 		loanType: initial.loanType ?? 'credit-card',
@@ -26,7 +39,185 @@
 	$: assetAccounts = accounts.filter(a => a.startsWith('Assets'));
 	$: incomeAccounts = accounts.filter(a => a.startsWith('Income'));
 	$: fundingPool = [...assetAccounts, ...incomeAccounts];
-	$: pathPool = accounts.filter(a => a.startsWith('Liabilities') || a.startsWith('Assets:Receivables'));
+
+	// --- Account-path segment builder state ---
+	// The role decides the locked top-level prefix that stays read-only
+	// in the UI; all editable segments live below it.
+	let prefix = 'Liabilities';
+	let segments: string[] = [];
+
+	function detectPrefix(path: string): string {
+		if (path.startsWith('Assets:Receivables:') || path === 'Assets:Receivables') return 'Assets:Receivables';
+		if (path.startsWith('Liabilities:') || path === 'Liabilities') return 'Liabilities';
+		// Fallback for free-form paths (edit mode of an arbitrary account).
+		const top = path.split(':')[0];
+		return top || 'Liabilities';
+	}
+
+	function pathToSegments(path: string, p: string): string[] {
+		if (!path || path === p) return [];
+		if (path.startsWith(p + ':')) return path.slice(p.length + 1).split(':');
+		// path doesn't sit under the prefix — surface every segment
+		return path.split(':');
+	}
+
+	onMount(() => {
+		const initialPath = (initial.account ?? '').trim();
+		prefix = detectPrefix(initialPath);
+		segments = pathToSegments(initialPath, prefix).filter(s => s.length > 0);
+		// In add mode, prefill the segments from the loan-type template
+		// when the user has nothing meaningful yet. An empty leaf gives
+		// them a place to type immediately.
+		if (mode === 'add' && segments.length === 0) {
+			const tpl = PATH_TEMPLATES[draft.loanType ?? 'other'] ?? [];
+			segments = [...tpl, ''];
+		} else if (segments.length === 0) {
+			segments = [''];
+		}
+	});
+
+	$: fullPath = [prefix, ...segments.map(s => s.trim()).filter(Boolean)].join(':');
+	$: draft.account = fullPath;
+
+	function addSegment() {
+		segments = [...segments, ''];
+	}
+
+	function removeSegment(idx: number) {
+		segments = segments.filter((_, i) => i !== idx);
+		if (segments.length === 0) segments = [''];
+	}
+
+	function setSegment(idx: number, value: string) {
+		segments = segments.map((s, i) => (i === idx ? value : s));
+	}
+
+	/**
+	 * Siblings at a given depth — the existing accounts that share the
+	 * path up to (but not including) this segment. Used to surface
+	 * "you've used these names before" chips beneath each segment input.
+	 */
+	function siblingsForSegment(idx: number): string[] {
+		const parentPath = [prefix, ...segments.slice(0, idx).map(s => s.trim()).filter(Boolean)].join(':');
+		const search = parentPath + ':';
+		const matches = accounts.filter(a => a.startsWith(search));
+		const names = matches
+			.map(a => a.slice(search.length).split(':')[0])
+			.filter(Boolean);
+		const own = (segments[idx] ?? '').trim().toLowerCase();
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const n of names) {
+			const key = n.toLowerCase();
+			if (seen.has(key)) continue;
+			if (key === own) continue; // hide the chip that matches the current value
+			seen.add(key);
+			out.push(n);
+		}
+		return out.sort().slice(0, 8);
+	}
+
+	function applyTemplate() {
+		const tpl = PATH_TEMPLATES[draft.loanType ?? 'other'] ?? [];
+		segments = [...tpl, ''];
+	}
+
+	function onLoanTypeChange() {
+		// Auto-apply the template only when the segments are all empty
+		// or match the previous template's leading entries — never clobber
+		// what the user actually typed.
+		if (mode !== 'add') return;
+		const allEmpty = segments.every(s => !s.trim());
+		if (allEmpty) {
+			const tpl = PATH_TEMPLATES[draft.loanType ?? 'other'] ?? [];
+			segments = [...tpl, ''];
+		}
+	}
+
+	const PREFIX_OPTIONS = ['Liabilities', 'Assets:Receivables'];
+	function changePrefix(value: string) {
+		prefix = value;
+	}
+
+	// --- Funding-account segment builder (same shape as the path one,
+	// but with a free top-level chosen from the user's existing accounts). ---
+
+	let fundingPrefix = 'Assets';
+	let fundingSegments: string[] = [];
+
+	$: fundingPrefixOptions = (() => {
+		const top = new Set<string>();
+		for (const a of accounts) {
+			const t = a.split(':')[0];
+			if (t) top.add(t);
+		}
+		// Always offer the conventional ones even if the vault has none yet.
+		top.add('Assets');
+		top.add('Income');
+		const arr = Array.from(top);
+		arr.sort();
+		return arr;
+	})();
+
+	function fundingPathToSegments(path: string, p: string): string[] {
+		if (!path) return [];
+		if (path.startsWith(p + ':')) return path.slice(p.length + 1).split(':');
+		if (path === p) return [];
+		// Path has a different top-level — surface every segment.
+		const parts = path.split(':');
+		fundingPrefix = parts[0];
+		return parts.slice(1);
+	}
+
+	onMount(() => {
+		const f = (initial.fundingAccount ?? '').trim();
+		if (f) {
+			fundingPrefix = f.split(':')[0];
+			fundingSegments = fundingPathToSegments(f, fundingPrefix);
+		} else {
+			fundingPrefix = 'Assets';
+			fundingSegments = [''];
+		}
+	});
+
+	$: fullFundingPath = (() => {
+		const segs = fundingSegments.map(s => s.trim()).filter(Boolean);
+		if (segs.length === 0) return '';
+		return [fundingPrefix, ...segs].join(':');
+	})();
+	$: draft.fundingAccount = fullFundingPath || null;
+
+	function addFundingSegment() {
+		fundingSegments = [...fundingSegments, ''];
+	}
+	function removeFundingSegment(idx: number) {
+		fundingSegments = fundingSegments.filter((_, i) => i !== idx);
+		if (fundingSegments.length === 0) fundingSegments = [''];
+	}
+	function setFundingSegment(idx: number, value: string) {
+		fundingSegments = fundingSegments.map((s, i) => (i === idx ? value : s));
+	}
+	function changeFundingPrefix(value: string) {
+		fundingPrefix = value;
+	}
+	function siblingsForFunding(idx: number): string[] {
+		const parentPath = [fundingPrefix, ...fundingSegments.slice(0, idx).map(s => s.trim()).filter(Boolean)].join(':');
+		const search = parentPath + ':';
+		const matches = accounts.filter(a => a.startsWith(search));
+		const names = matches
+			.map(a => a.slice(search.length).split(':')[0])
+			.filter(Boolean);
+		const own = (fundingSegments[idx] ?? '').trim().toLowerCase();
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const n of names) {
+			const key = n.toLowerCase();
+			if (seen.has(key) || key === own) continue;
+			seen.add(key);
+			out.push(n);
+		}
+		return out.sort().slice(0, 8);
+	}
 
 	function validate(): boolean {
 		errors = {};
@@ -167,53 +358,64 @@
 </script>
 
 <div class="loan-modal">
-	<!-- Account path + currency -->
+	<!-- Account path (segment builder) + currency -->
 	<div class="row">
-		<div class="field grow combobox-field">
-			<label for="loan-modal-account">Account path <em>*</em></label>
-			<input
-				id="loan-modal-account"
-				type="text"
-				placeholder="Liabilities:Credit:Visa"
-				autocomplete="off"
-				bind:value={draft.account}
-				on:focus={() => openCombobox('path')}
-				on:input={() => openCombobox('path')}
-				on:keydown={(e) => handleComboboxKey('path', e)}
-				on:blur={() => setTimeout(() => closeCombobox('path'), 120)}
-				class:error={errors.account}
-			/>
-			{#if comboboxOpen.path}
-				{@const sugg = suggestionsFor('path')}
-				{@const creatable = isCreatable('path', sugg)}
-				{@const typed = (draft.account ?? '').trim()}
-				<ul class="combobox-list">
-					{#each sugg as s, i}
-						<li
-							class:active={comboboxIndex.path === i}
-							on:mousedown|preventDefault={() => pickSuggestion('path', s)}
-						>{s}</li>
+		<div class="field grow path-builder-field">
+			<label class="field-label">Account path <em>*</em></label>
+			<div class="segments-row" role="group" aria-label="Account path segments">
+				<select
+					class="prefix-select"
+					value={prefix}
+					on:change={(e) => changePrefix(e.currentTarget.value)}
+					title="Top-level role of this account"
+				>
+					{#if !PREFIX_OPTIONS.includes(prefix)}
+						<option value={prefix}>{prefix}</option>
+					{/if}
+					{#each PREFIX_OPTIONS as p}
+						<option value={p}>{p}</option>
 					{/each}
-					{#if creatable}
-						<li
-							class="combobox-create"
-							class:active={comboboxIndex.path === sugg.length}
-							on:mousedown|preventDefault={() => closeCombobox('path')}
-						>+ Create new account: <code>{draft.account}</code></li>
-					{/if}
-					{#if sugg.length === 0 && !creatable}
-						<li class="combobox-empty">
-							{#if typed.endsWith(':')}
-								Add a leaf segment to create a new account (e.g. <code>{typed}Visa</code>).
-							{:else if typed && !/^[A-Z][A-Za-z0-9:_-]*(:[A-Za-z0-9_-]+)+$/.test(typed)}
-								Path needs at least 2 segments — e.g. <code>Liabilities:Visa</code>.
-							{:else}
-								No matching accounts. Type a colon-separated path or pick a suggestion.
-							{/if}
-						</li>
-					{/if}
-				</ul>
-			{/if}
+				</select>
+				{#each segments as seg, idx}
+					<span class="segment-sep">:</span>
+					<div class="segment">
+						<input
+							type="text"
+							class="segment-input"
+							placeholder={idx === 0 ? 'Credit' : (idx === segments.length - 1 ? 'Visa' : 'segment')}
+							value={seg}
+							on:input={(e) => setSegment(idx, e.currentTarget.value)}
+						/>
+						{#if segments.length > 1}
+							<button class="segment-remove" type="button" on:click={() => removeSegment(idx)} title="Remove this segment">×</button>
+						{/if}
+					</div>
+				{/each}
+				<button class="segment-add" type="button" on:click={addSegment} title="Add another segment">+</button>
+			</div>
+
+			<!-- Sibling chips: existing names at each depth that the user can pick with one click. -->
+			{#each segments as seg, idx}
+				{@const sib = siblingsForSegment(idx)}
+				{#if sib.length > 0}
+					<div class="sibling-chips">
+						<span class="chips-label">depth {idx + 1}:</span>
+						{#each sib as s}
+							<button class="chip" type="button" on:click={() => setSegment(idx, s)}>{s}</button>
+						{/each}
+					</div>
+				{/if}
+			{/each}
+
+			<!-- Live full-path preview + advanced edit-as-text toggle. -->
+			<div class="path-preview">
+				<span class="preview-label">Full path:</span>
+				<code class:error={!!errors.account}>{fullPath || '—'}</code>
+				{#if mode === 'add' && draft.loanType && (PATH_TEMPLATES[draft.loanType]?.length ?? 0) > 0}
+					<button class="link-btn" type="button" on:click={applyTemplate} title="Reset segments to the loan-type's template">↻ template</button>
+				{/if}
+			</div>
+
 			{#if errors.account}<span class="error-msg">{errors.account}</span>{/if}
 		</div>
 
@@ -244,7 +446,7 @@
 
 		<label class="field">
 			<span>Loan type</span>
-			<select bind:value={draft.loanType}>
+			<select bind:value={draft.loanType} on:change={onLoanTypeChange}>
 				{#each LOAN_TYPES as t}<option value={t}>{t}</option>{/each}
 			</select>
 		</label>
@@ -320,46 +522,61 @@
 		</div>
 	{/if}
 
-	<!-- Funding account -->
+	<!-- Funding account (segment builder) -->
 	<div class="row">
-		<div class="field grow combobox-field">
-			<label for="loan-modal-funding">
+		<div class="field grow path-builder-field">
+			<label class="field-label">
 				Funding account
 				<span class="muted small">— used by the recurring widget when synthesising payment rules</span>
 			</label>
-			<input
-				id="loan-modal-funding"
-				type="text"
-				placeholder="Assets:Banking:… or Income:Repayment"
-				autocomplete="off"
-				bind:value={draft.fundingAccount}
-				on:focus={() => openCombobox('funding')}
-				on:input={() => openCombobox('funding')}
-				on:keydown={(e) => handleComboboxKey('funding', e)}
-				on:blur={() => setTimeout(() => closeCombobox('funding'), 120)}
-			/>
-			{#if comboboxOpen.funding}
-				{@const sugg = suggestionsFor('funding')}
-				{@const creatable = isCreatable('funding', sugg)}
-				<ul class="combobox-list">
-					{#each sugg as s, i}
-						<li
-							class:active={comboboxIndex.funding === i}
-							on:mousedown|preventDefault={() => pickSuggestion('funding', s)}
-						>{s}</li>
+			<div class="segments-row" role="group" aria-label="Funding account segments">
+				<select
+					class="prefix-select"
+					value={fundingPrefix}
+					on:change={(e) => changeFundingPrefix(e.currentTarget.value)}
+					title="Top-level role of the funding account"
+				>
+					{#if !fundingPrefixOptions.includes(fundingPrefix)}
+						<option value={fundingPrefix}>{fundingPrefix}</option>
+					{/if}
+					{#each fundingPrefixOptions as p}
+						<option value={p}>{p}</option>
 					{/each}
-					{#if creatable}
-						<li
-							class="combobox-create"
-							class:active={comboboxIndex.funding === sugg.length}
-							on:mousedown|preventDefault={() => closeCombobox('funding')}
-						>+ Use new account: <code>{draft.fundingAccount}</code></li>
-					{/if}
-					{#if sugg.length === 0 && !creatable}
-						<li class="combobox-empty">No matching accounts. Type a path or pick a suggestion.</li>
-					{/if}
-				</ul>
-			{/if}
+				</select>
+				{#each fundingSegments as seg, idx}
+					<span class="segment-sep">:</span>
+					<div class="segment">
+						<input
+							type="text"
+							class="segment-input"
+							placeholder={idx === 0 ? 'Banking' : (idx === fundingSegments.length - 1 ? 'leaf' : 'segment')}
+							value={seg}
+							on:input={(e) => setFundingSegment(idx, e.currentTarget.value)}
+						/>
+						{#if fundingSegments.length > 1}
+							<button class="segment-remove" type="button" on:click={() => removeFundingSegment(idx)} title="Remove this segment">×</button>
+						{/if}
+					</div>
+				{/each}
+				<button class="segment-add" type="button" on:click={addFundingSegment} title="Add another segment">+</button>
+			</div>
+
+			{#each fundingSegments as seg, idx}
+				{@const sib = siblingsForFunding(idx)}
+				{#if sib.length > 0}
+					<div class="sibling-chips">
+						<span class="chips-label">depth {idx + 1}:</span>
+						{#each sib as s}
+							<button class="chip" type="button" on:click={() => setFundingSegment(idx, s)}>{s}</button>
+						{/each}
+					</div>
+				{/if}
+			{/each}
+
+			<div class="path-preview">
+				<span class="preview-label">Full path:</span>
+				<code>{fullFundingPath || '(none)'}</code>
+			</div>
 		</div>
 	</div>
 
@@ -422,7 +639,149 @@
 		font-size: var(--font-ui-smaller);
 	}
 
-	/* Combobox: wraps an input + an absolutely-positioned suggestion list. */
+	/* Account-path / funding segment builder */
+	.path-builder-field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.field-label {
+		font-size: var(--font-ui-small);
+		color: var(--text-muted);
+	}
+	.segments-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 6px;
+		background: var(--background-secondary);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+	}
+	.prefix-select {
+		padding: 4px 6px;
+		border-radius: var(--radius-s);
+		border: 1px solid var(--background-modifier-border);
+		background: var(--background-primary);
+		color: var(--text-accent);
+		font-family: var(--font-monospace);
+		font-size: var(--font-ui-small);
+		font-weight: 600;
+	}
+	.segment-sep {
+		color: var(--text-muted);
+		font-family: var(--font-monospace);
+		font-weight: 600;
+		padding: 0 2px;
+	}
+	.segment {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		background: var(--background-primary);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		padding: 0 4px;
+		flex: 0 1 auto;
+	}
+	.segment-input {
+		border: none !important;
+		padding: 4px 6px !important;
+		min-width: 80px;
+		max-width: 160px;
+		font-family: var(--font-monospace);
+		background: transparent;
+	}
+	.segment-input:focus {
+		outline: none;
+	}
+	.segment-remove,
+	.segment-add {
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		padding: 2px 6px;
+		border-radius: 4px;
+		font-size: var(--font-ui-small);
+		font-weight: 600;
+		line-height: 1;
+	}
+	.segment-remove:hover {
+		color: var(--color-red);
+		background: color-mix(in srgb, var(--color-red), transparent 90%);
+	}
+	.segment-add {
+		padding: 4px 10px;
+		border: 1px dashed var(--background-modifier-border-hover);
+		color: var(--text-muted);
+	}
+	.segment-add:hover {
+		border-color: var(--interactive-accent);
+		color: var(--interactive-accent);
+	}
+
+	.sibling-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		align-items: center;
+		font-size: var(--font-ui-smaller);
+	}
+	.chips-label {
+		color: var(--text-muted);
+		font-family: var(--font-monospace);
+		margin-right: 4px;
+	}
+	.chip {
+		padding: 2px 8px;
+		border-radius: 999px;
+		border: 1px solid var(--background-modifier-border);
+		background: var(--background-primary);
+		color: var(--text-normal);
+		cursor: pointer;
+		font-family: var(--font-monospace);
+		font-size: 11px;
+	}
+	.chip:hover {
+		border-color: var(--interactive-accent);
+		color: var(--interactive-accent);
+	}
+
+	.path-preview {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+		font-size: var(--font-ui-smaller);
+	}
+	.preview-label {
+		color: var(--text-muted);
+	}
+	.path-preview code {
+		font-family: var(--font-monospace);
+		color: var(--text-normal);
+		background: var(--background-secondary);
+		padding: 2px 8px;
+		border-radius: 4px;
+	}
+	.path-preview code.error {
+		color: var(--color-red);
+	}
+	.link-btn {
+		background: transparent;
+		border: none;
+		color: var(--interactive-accent);
+		cursor: pointer;
+		font-size: var(--font-ui-smaller);
+		padding: 0;
+	}
+	.link-btn:hover {
+		text-decoration: underline;
+	}
+
+	/* Legacy combobox styles (kept for fallback / not used by current template). */
 	.combobox-field {
 		position: relative;
 	}
