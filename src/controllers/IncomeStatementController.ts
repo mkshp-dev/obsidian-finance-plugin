@@ -5,6 +5,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
+import { getOpenAccounts } from '../utils/accounts';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
 import { sanitizeEquivalentCurrencies, collectEquivalents } from '../utils/equivalents';
@@ -429,10 +430,12 @@ export class IncomeStatementController {
 			let tempExpenses: [string, string][] = [];
 			let hasUnconvertedCommodities = false;
 			const unconvertedAccounts: string[] = [];
+			const seenAccounts = new Set<string>();
 
 			for (const row of rows) {
 				if (row.length < 2) continue;
 				const [account, amountStr] = row;
+				seenAccounts.add(account);
 
 				if (valuationMethod === 'convert' && amountStr.includes(',')) {
 					hasUnconvertedCommodities = true;
@@ -444,6 +447,20 @@ export class IncomeStatementController {
 				} else if (account.startsWith('Expenses')) {
 					tempExpenses.push([account, amountStr]);
 				}
+			}
+
+			// Backfill opened-but-unused Income/Expenses accounts so the
+			// chart of accounts is the source of truth, not the postings.
+			try {
+				const openAccounts = await getOpenAccounts(this.plugin);
+				const zeroAmount = `0.00 ${reportingCurrency}`;
+				for (const acc of openAccounts) {
+					if (seenAccounts.has(acc)) continue;
+					if (acc.startsWith('Income')) tempIncome.push([acc, zeroAmount]);
+					else if (acc.startsWith('Expenses')) tempExpenses.push([acc, zeroAmount]);
+				}
+			} catch (e) {
+				Logger.log('[IncomeStatementController] could not load open accounts list:', e);
 			}
 
 			const incomeHierarchy = this.buildAccountHierarchy(tempIncome, 'Income', valuationMethod);
