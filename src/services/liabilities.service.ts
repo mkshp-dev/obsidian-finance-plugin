@@ -447,6 +447,8 @@ export function synthesizeRecurringFromLoans(
 ): SyntheticRecurringRule[] {
     const out: SyntheticRecurringRule[] = [];
     for (const acc of accounts) {
+        // Skip one-time loans — they have no monthly cadence to replay.
+        if (acc.paymentMode === 'one-time') continue;
         if (acc.monthlyPayment === null || acc.dueDay === null) continue;
         const due = nextDueDate(acc.dueDay, today);
         if (!due) continue;
