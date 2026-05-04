@@ -15,6 +15,23 @@ import { Logger } from '../../utils/logger';
 
 type Mode = 'add' | 'edit';
 
+function escapeRegExp(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isoNextDay(iso: string): string {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+}
+
+async function appendToFile(adapter: any, path: string, block: string): Promise<void> {
+    const exists = await adapter.exists(path);
+    const original = exists ? await adapter.read(path) : '';
+    const sep = !original ? '' : (original.endsWith('\n') ? '' : '\n');
+    await adapter.write(path, original + sep + block);
+}
+
 export class LoanEditModal extends Modal {
     plugin: BeancountPlugin;
     private component: any;
@@ -139,6 +156,13 @@ export class LoanEditModal extends Modal {
             }
             const next = applyLoanEdits(original, {}, [draft]);
             await adapter.write(path, next);
+            // Mirror the contractual principal as a real opening posting
+            // so the Balance Sheet (which reads sum(position)) lines up
+            // with the Liabilities & Receivables card (which falls back
+            // to the principal meta).
+            if (draft.principal !== null && draft.principal !== 0) {
+                await this.writeOpeningPostings(draft);
+            }
             return;
         }
 
@@ -147,6 +171,50 @@ export class LoanEditModal extends Modal {
         // since we key by `originalAccount`.
         const next = applyLoanEdits(original, { [originalAccount]: draft }, []);
         await adapter.write(path, next);
+    }
+
+    /**
+     * Append a `pad` + `balance` pair so a freshly-opened loan account
+     * starts with a real posting that matches its contractual principal.
+     * Idempotent: if the account already has a `pad` directive in
+     * pads.beancount we skip silently — the user's hand-written
+     * postings are the source of truth from then on.
+     *
+     * Sign convention:
+     *   - Liabilities  → balance is `-principal` (the user owes it)
+     *   - Receivables  → balance is `+principal` (the user is owed)
+     *
+     * Offsetting account: `Equity:OpeningBalances`. We don't try to
+     * create the offset account — we assume the structured-layout
+     * scaffolding already provided it (the plugin's onboarding does).
+     */
+    private async writeOpeningPostings(draft: LoanFormDraft): Promise<void> {
+        const folder = this.plugin.settings.structuredFolderName?.trim() || 'Finances';
+        const padsPath = `${folder}/pads.beancount`;
+        const balancesPath = `${folder}/balances.beancount`;
+        const adapter = this.plugin.app.vault.adapter;
+
+        // Skip if a pad for this account already exists (user-authored
+        // or earlier auto-write — either way, don't double up).
+        const padsContent = (await adapter.exists(padsPath)) ? await adapter.read(padsPath) : '';
+        const padPattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}\\s+pad\\s+${escapeRegExp(draft.account)}\\b`, 'm');
+        if (padPattern.test(padsContent)) {
+            Logger.log('[LoanEditModal] pad already exists for', draft.account, '— skipping auto-postings');
+            return;
+        }
+
+        const isReceivable = draft.account.startsWith('Assets:Receivables');
+        const sign = isReceivable ? '' : '-';
+        const padDate = draft.openDate;
+        const balDate = isoNextDay(padDate);
+        const principal = Math.abs(draft.principal!);
+        const offset = 'Equity:OpeningBalances';
+
+        const padBlock = `\n${padDate} pad ${draft.account}    ${offset}\n`;
+        const balBlock = `\n${balDate} balance ${draft.account}    ${sign}${principal} ${draft.currency}\n`;
+
+        await appendToFile(adapter, padsPath, padBlock);
+        await appendToFile(adapter, balancesPath, balBlock);
     }
 
     private async persistDelete(originalAccount: string): Promise<void> {
