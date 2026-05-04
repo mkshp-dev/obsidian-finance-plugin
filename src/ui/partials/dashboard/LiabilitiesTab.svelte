@@ -39,6 +39,9 @@
 			monthlyPayment: row.monthlyPayment,
 			dueDay: row.dueDay,
 			fundingAccount: row.fundingAccount,
+			paymentMode: row.paymentMode,
+			payoffDate: row.payoffDate,
+			payoffAmount: row.payoffAmount,
 		};
 	}
 
@@ -55,6 +58,9 @@
 			monthlyPayment: null,
 			dueDay: null,
 			fundingAccount: null,
+			paymentMode: 'recurring',
+			payoffDate: null,
+			payoffAmount: null,
 		};
 	}
 
@@ -104,25 +110,28 @@
 		return new Date().toISOString().slice(0, 10);
 	}
 
-	function relativeDue(dueDay: number | null): string {
-		if (dueDay === null) return '';
-		const next = nextDueDate(dueDay, todayIso());
-		if (!next) return '';
-		const days = daysBetween(todayIso(), next);
+	/**
+	 * The "next event" for a loan card depends on its payment mode:
+	 *   - recurring → the next monthly due-day occurrence.
+	 *   - one-time → the configured payoff date.
+	 * Returns ISO YYYY-MM-DD or null when the loan has no schedule.
+	 */
+	function nextEventDate(row: LoanRow): string | null {
+		if (row.paymentMode === 'one-time') return row.payoffDate;
+		return nextDueDate(row.dueDay, todayIso());
+	}
+
+	function relativeDate(iso: string | null): string {
+		if (!iso) return '';
+		const days = daysBetween(todayIso(), iso);
 		if (days === 0) return 'today';
 		if (days === 1) return 'tomorrow';
 		if (days < 0) return `${Math.abs(days)}d ago`;
 		return `in ${days}d`;
 	}
 
-	function nextDueLabel(dueDay: number | null): string {
-		const next = nextDueDate(dueDay, todayIso());
-		return next ?? '—';
-	}
-
-	function urgencyClass(dueDay: number | null): string {
-		if (dueDay === null) return '';
-		const next = nextDueDate(dueDay, todayIso());
+	function urgencyClassForRow(row: LoanRow): string {
+		const next = nextEventDate(row);
 		if (!next) return '';
 		const days = daysBetween(todayIso(), next);
 		if (days < 0) return 'urgency-overdue';
@@ -146,11 +155,10 @@
 		return (ratio - 1) * 100;
 	}
 
-	// Sort key: next-due ascending (overdue first), accounts without
-	// dueDay sort to the end. Stable on account name.
+	// Sort key: next-event ascending (overdue first), accounts without
+	// any schedule sort to the end. Stable on account name.
 	function sortKey(row: LoanRow): number {
-		if (row.dueDay === null) return Number.POSITIVE_INFINITY;
-		const next = nextDueDate(row.dueDay, todayIso());
+		const next = nextEventDate(row);
 		if (!next) return Number.POSITIVE_INFINITY;
 		return daysBetween(todayIso(), next);
 	}
@@ -342,11 +350,16 @@
 								{@const above = isAboveBudget(row)}
 								{@const abovePct = aboveBudgetPct(row)}
 								{@const months = monthsRemaining(row.currentBalance, row.monthlyPayment)}
-								<article class="loan-card {urgencyClass(row.dueDay)}" class:above-principal={above}>
+								{@const isOneTime = row.paymentMode === 'one-time'}
+								{@const eventDate = nextEventDate(row)}
+								<article class="loan-card {urgencyClassForRow(row)}" class:above-principal={above} class:one-time={isOneTime}>
 									<header class="loan-card-header">
 										<div class="account">
 											<span class="account-name" title={row.account}>{row.account}</span>
-											{#if row.loanType}<span class="badge">{row.loanType}</span>{/if}
+											<div class="badges">
+												{#if row.loanType}<span class="badge">{row.loanType}</span>{/if}
+												{#if isOneTime}<span class="badge schedule-badge">one-time</span>{/if}
+											</div>
 										</div>
 										{#if plugin}
 											<div class="card-actions">
@@ -374,15 +387,28 @@
 										{#if row.interestRate !== null}
 											<dt>Interest</dt><dd>{formatPercent(row.interestRate)} APR</dd>
 										{/if}
-										{#if row.monthlyPayment !== null}
-											<dt>Monthly</dt><dd>{formatCurrencyAmount(row.monthlyPayment, row.currency)}</dd>
-										{/if}
-										{#if row.dueDay !== null}
-											<dt>Next due</dt>
-											<dd>
-												{nextDueLabel(row.dueDay)}
-												<span class="due-rel">({relativeDue(row.dueDay)})</span>
-											</dd>
+										{#if isOneTime}
+											{#if row.payoffAmount !== null}
+												<dt>Payoff total</dt><dd>{formatCurrencyAmount(row.payoffAmount, row.currency)}</dd>
+											{/if}
+											{#if row.payoffDate}
+												<dt>Pay off by</dt>
+												<dd>
+													{row.payoffDate}
+													<span class="due-rel">({relativeDate(row.payoffDate)})</span>
+												</dd>
+											{/if}
+										{:else}
+											{#if row.monthlyPayment !== null}
+												<dt>Monthly</dt><dd>{formatCurrencyAmount(row.monthlyPayment, row.currency)}</dd>
+											{/if}
+											{#if eventDate}
+												<dt>Next due</dt>
+												<dd>
+													{eventDate}
+													<span class="due-rel">({relativeDate(eventDate)})</span>
+												</dd>
+											{/if}
 										{/if}
 									</dl>
 
@@ -399,7 +425,7 @@
 										</div>
 									{/if}
 
-									{#if months !== null}
+									{#if !isOneTime && months !== null}
 										<div class="projection muted small" title="Naive ETA: |balance| / |monthly|. Doesn't account for interest.">
 											{row.role === 'receivable' ? 'Recover in' : 'Payoff in'} ≈ {formatMonths(months)}
 										</div>
@@ -622,6 +648,11 @@
 		gap: 2px;
 		flex-shrink: 0;
 	}
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
 	.badge {
 		display: inline-block;
 		padding: 2px 8px;
@@ -633,6 +664,13 @@
 		background: var(--background-modifier-hover);
 		color: var(--text-muted);
 		width: fit-content;
+	}
+	.schedule-badge {
+		background: color-mix(in srgb, var(--interactive-accent), transparent 80%);
+		color: var(--interactive-accent);
+	}
+	.loan-card.one-time .balance {
+		font-style: italic;
 	}
 
 	.balance-block {
