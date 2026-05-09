@@ -17,8 +17,8 @@
 
 	// --- Set up a placeholder and subscribe to the store ---
 	const placeholderState: Writable<BalanceSheetState> = writable({
-		isLoading: true, error: null, assets: [], liabilities: [], equity: [],
-		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, currency: 'INR',
+		isLoading: true, error: null, assets: [], liabilities: [], equity: [], receivables: [],
+		totalAssets: 0, totalLiabilities: 0, totalEquity: 0, totalReceivables: 0, currency: 'INR',
 		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert',
 		chartConfig: null, chartError: null, chartLoading: false, chartInterval: 'month'
 	});
@@ -45,8 +45,9 @@
 	}
 
 	// Always show other currencies column for all valuation methods if any section has them
-	$: showOtherCurrenciesColumn = state.assets && state.liabilities && state.equity && 
-		(hasOtherCurrencies(state.assets) || hasOtherCurrencies(state.liabilities) || hasOtherCurrencies(state.equity));
+	$: showOtherCurrenciesColumn = !!state.assets && !!state.liabilities && !!state.equity &&
+		(hasOtherCurrencies(state.assets) || hasOtherCurrencies(state.liabilities) || hasOtherCurrencies(state.equity) ||
+			(!!state.receivables && hasOtherCurrencies(state.receivables)));
 
 	// Handle valuation method change
 	async function handleValuationMethodChange(event: Event) {
@@ -108,6 +109,7 @@
 	$: visibleAssets = state.assets ? state.assets.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 	$: visibleLiabilities = state.liabilities ? state.liabilities.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 	$: visibleEquity = state.equity ? state.equity.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
+	$: visibleReceivables = state.receivables ? state.receivables.filter(item => shouldShowRow(item, collapsedAccounts)) : [];
 
 	// Account management functions
 	function handleOpenAccount() {
@@ -345,8 +347,8 @@
 				<tbody>
 					{#each visibleAssets as item}
 						<tr class={getAccountClass(item)}>
-							<td class="account-name" 
-								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+							<td class="account-name"
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)}
 								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
 								{#if item.isCategory}
 									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
@@ -367,6 +369,45 @@
 				</table>
 			</div>
 
+			{#if visibleReceivables.length > 0}
+				<div class="column">
+					<h4>Receivables</h4>
+					<table class="beancount-table">
+						<thead>
+							<tr class="header-row">
+								<th class="account-header">Account</th>
+								<th class="amount-header">{state.currency}</th>
+								{#if showOtherCurrenciesColumn}
+									<th class="other-currencies-header">Other Currencies</th>
+								{/if}
+							</tr>
+						</thead>
+					<tbody>
+						{#each visibleReceivables as item}
+							<tr class={getAccountClass(item)}>
+								<td class="account-name"
+									on:click={(e) => item.isCategory && toggleCollapse(item.account, e)}
+									style="cursor: {item.isCategory ? 'pointer' : 'default'};">
+									{#if item.isCategory}
+										<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
+									{/if}
+									{getIndentation(item.level)}{item.displayName}
+								</td>
+									<td class="align-right amount-cell" class:category-amount={item.isCategory}>
+										{item.amount}
+									</td>
+									{#if showOtherCurrenciesColumn}
+										<td class="align-right other-currencies-cell">
+											{item.otherCurrencies || ''}
+										</td>
+									{/if}
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+
 			<div class="column">
 				<h4>Liabilities</h4>
 				<table class="beancount-table">
@@ -382,8 +423,8 @@
 				<tbody>
 					{#each visibleLiabilities as item}
 						<tr class={getAccountClass(item)}>
-							<td class="account-name" 
-								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+							<td class="account-name"
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)}
 								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
 								{#if item.isCategory}
 									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
@@ -419,8 +460,8 @@
 				<tbody>
 					{#each visibleEquity as item}
 						<tr class={getAccountClass(item)}>
-							<td class="account-name" 
-								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)} 
+							<td class="account-name"
+								on:click={(e) => item.isCategory && toggleCollapse(item.account, e)}
 								style="cursor: {item.isCategory ? 'pointer' : 'default'};">
 								{#if item.isCategory}
 									<span class="collapse-icon">{isCollapsed(item.account) ? '▶' : '▼'}</span>
