@@ -13,6 +13,7 @@ import {
     validateLogoUrl,
     saveCommodityMetadata
 } from '../utils/index';
+import { sanitizeEquivalentCurrencies } from '../utils/equivalents';
 import { PriceService } from '../services/price.service';
 import { Notice } from 'obsidian';
 
@@ -50,6 +51,12 @@ export interface CommodityInfo {
     valueInOperatingCurrency?: number;
     /** True for the operating currency (highlighted and pinned to the top). */
     isOperatingCurrency?: boolean;
+    /**
+     * Price of this commodity in each enabled equivalent currency (settings.equivalentCurrencies).
+     * Keyed by currency code, value is the converted price; empty when no equivalents are configured
+     * or when the commodity is itself the operating currency.
+     */
+    equivalents?: Record<string, number>;
 }
 
 /**
@@ -169,11 +176,26 @@ export class CommoditiesController {
             // Get operating currency from settings
             const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';
 
+            // Equivalents: same price query, re-issued per equivalent currency. Failures
+            // for one equivalent are swallowed so a missing price chain doesn't break
+            // the whole tab.
+            const equivalents = sanitizeEquivalentCurrencies(
+                this.plugin.settings.equivalentCurrencies,
+                operatingCurrency,
+            );
+
             // Execute all three queries in parallel
-            const [commoditiesCSV, priceDataCSV, holdingsCSV] = await Promise.all([
+            const [commoditiesCSV, priceDataCSV, holdingsCSV, ...equivalentCSVs] = await Promise.all([
                 this.plugin.runQuery(queries.getAllCommoditiesQuery()),
                 this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(operatingCurrency)),
-                this.plugin.runQuery(queries.getCommoditiesHoldingsQuery(operatingCurrency))
+                this.plugin.runQuery(queries.getCommoditiesHoldingsQuery(operatingCurrency)),
+                ...equivalents.map(eq =>
+                    this.plugin.runQuery(queries.getCommoditiesPriceDataQuery(eq))
+                        .catch(err => {
+                            console.warn(`[CommoditiesController] equivalent '${eq}' failed:`, err);
+                            return '';
+                        })
+                ),
             ]);
 
             console.debug('[CommoditiesController] loadData: received CSV data');
@@ -182,6 +204,23 @@ export class CommoditiesController {
             const allSymbols = parseCommoditiesListCSV(commoditiesCSV);
             const priceDataMap = parseCommoditiesPriceDataCSV(priceDataCSV);
             const holdingsMap = parseCommoditiesHoldingsCSV(holdingsCSV);
+
+            // Build per-equivalent price maps: { 'USD' => Map(symbol => price), ... }
+            const equivalentPriceMaps = new Map<string, Map<string, number>>();
+            equivalents.forEach((eq, idx) => {
+                const csv = equivalentCSVs[idx];
+                if (!csv) {
+                    equivalentPriceMaps.set(eq, new Map());
+                    return;
+                }
+                const parsed = parseCommoditiesPriceDataCSV(csv);
+                const priceOnly = new Map<string, number>();
+                parsed.forEach((entry, symbol) => {
+                    const num = parseFloat(entry.price ?? '');
+                    if (isFinite(num)) priceOnly.set(symbol, num);
+                });
+                equivalentPriceMaps.set(eq, priceOnly);
+            });
 
             console.debug(
                 '[CommoditiesController] parsed',
@@ -195,6 +234,21 @@ export class CommoditiesController {
                 const priceData = priceDataMap.get(symbol);
                 const holdingsData = holdingsMap.get(symbol);
                 const isOperatingCurrency = symbol === operatingCurrency;
+
+                // Per-commodity equivalents: price of this symbol in each equivalent currency.
+                // Skipped for the operating-currency card (its self-price is meaningless).
+                const equivalentsMap: Record<string, number> = {};
+                if (!isOperatingCurrency) {
+                    for (const eq of equivalents) {
+                        const price = equivalentPriceMaps.get(eq)?.get(symbol);
+                        // A returned 0 here means BQL's getprice() found no chain to the
+                        // target currency — treat that as "no equivalent" rather than
+                        // rendering a misleading "≈ 0 CCY" line.
+                        if (typeof price === 'number' && isFinite(price) && price !== 0) {
+                            equivalentsMap[eq] = price;
+                        }
+                    }
+                }
 
                 return {
                     symbol,
@@ -214,6 +268,7 @@ export class CommoditiesController {
                     holdingsRaw: holdingsData?.holdingsRaw || '',
                     valueInOperatingCurrency: holdingsData?.valueOp ?? 0,
                     isOperatingCurrency,
+                    equivalents: equivalentsMap,
                 } as CommodityInfo;
             });
 
