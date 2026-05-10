@@ -222,3 +222,13 @@ export function getAllPricesQuery(limit: number = 100): string {
 export function getAllCurrenciesQuery(): string {
 	return `SELECT distinct(currency) AS currency_`;
 }
+
+/**
+ * Current balance per account in the Liabilities and Assets:Receivables
+ * sub-trees, returned as a position (with currency). Used by the
+ * Liabilities & Receivables tab to show the live balance alongside
+ * the contractual metadata read from the accounts file.
+ */
+export function getLoanBalancesQuery(): string {
+	return `SELECT account, sum(position) WHERE account ~ '^(Liabilities|Assets:Receivables)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+}
