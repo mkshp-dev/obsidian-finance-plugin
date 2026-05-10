@@ -57,6 +57,8 @@ export interface LoanAccount {
     monthlyPayment: number | null;
     /** Day-of-month the payment is due (1–31). */
     dueDay: number | null;
+    /** Optional override for the funding account used by synthetic recurring rules (γ integration). */
+    fundingAccount: string | null;
     /** 1-based source line number of the open directive (for "open file at rule" jumps). */
     sourceLine?: number;
 }
@@ -127,6 +129,7 @@ export function parseLoanAccounts(content: string): LoanAccount[] {
                 interestRate: meta['interest-rate'] ? toNumber(meta['interest-rate']) : null,
                 monthlyPayment: meta['monthly-payment'] ? toNumber(meta['monthly-payment']) : null,
                 dueDay: dueDay !== null && dueDay >= 1 && dueDay <= 31 ? Math.round(dueDay) : null,
+                fundingAccount: meta['funding-account'] ? unquote(meta['funding-account']) : null,
                 sourceLine: startLine,
             });
         }
@@ -215,4 +218,73 @@ export function payoffFraction(currentBalance: number | null, principal: number 
     if (principal === null || principal === 0 || currentBalance === null) return null;
     const remaining = Math.abs(currentBalance) / Math.abs(principal);
     return Math.max(0, Math.min(1, 1 - remaining));
+}
+
+/**
+ * Synthesize Beancount-shaped recurring rules from loan account
+ * metadata. Only accounts with both `monthly-payment` and `due-day`
+ * yield a rule (other accounts have no payment schedule to replay).
+ *
+ * Convention:
+ *   - Liabilities: each payment is "destination = liability account
+ *     (paid down), funding = a placeholder Assets account". We don't
+ *     know which Asset account funds the payment without further
+ *     metadata, so we use the account's open-currency Assets:* if a
+ *     `funding-account` meta is present, otherwise the synthetic rule
+ *     is emitted with `Assets:Banking` as a generic placeholder. The
+ *     user can override at any time by adding `funding-account: "…"`
+ *     to the open directive.
+ *   - Receivables: destination = Assets:Receivables account, funding =
+ *     Income:Repayment by default (or the configured funding-account).
+ *
+ * The result feeds the same RecurringRule shape as `parseRecurringFile`
+ * so the dashboard widget renders synthetic and explicit rules in one
+ * unified list. Synthetic rules have no `sourceLine` (the open
+ * directive is in a different file) and a stable nickname like
+ * `loan:<account>` so explicit rules can override by sharing the
+ * nickname.
+ */
+export interface SyntheticRecurringRule {
+    nickname: string;
+    cadence: 'monthly';
+    expenseAccount: string;
+    fundingAccount: string;
+    amount: number;
+    currency: string;
+    startDate: string;
+    /** Originating loan account, for traceability. */
+    fromLoanAccount: string;
+    /** True for synthetic rules so the UI can badge them. */
+    synthetic: true;
+}
+
+const DEFAULT_LIABILITY_FUNDING = 'Assets:Banking';
+const DEFAULT_RECEIVABLE_FUNDING = 'Income:Repayment';
+
+export function synthesizeRecurringFromLoans(
+    accounts: LoanAccount[],
+    today: string = new Date().toISOString().slice(0, 10),
+): SyntheticRecurringRule[] {
+    const out: SyntheticRecurringRule[] = [];
+    for (const acc of accounts) {
+        if (acc.monthlyPayment === null || acc.dueDay === null) continue;
+        const due = nextDueDate(acc.dueDay, today);
+        if (!due) continue;
+
+        const funding = acc.fundingAccount
+            || (acc.role === 'liability' ? DEFAULT_LIABILITY_FUNDING : DEFAULT_RECEIVABLE_FUNDING);
+
+        out.push({
+            nickname: `loan:${acc.account}`,
+            cadence: 'monthly',
+            expenseAccount: acc.account,
+            fundingAccount: funding,
+            amount: Math.abs(acc.monthlyPayment),
+            currency: acc.currency || 'USD',
+            startDate: due,
+            fromLoanAccount: acc.account,
+            synthetic: true,
+        });
+    }
+    return out;
 }
