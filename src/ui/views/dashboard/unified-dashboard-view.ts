@@ -111,6 +111,13 @@ export class UnifiedDashboardView extends ItemView {
 		this.balanceSheetController.loadData();
 		this.incomeStatementController.loadData();
 		this.liabilitiesController.loadData();
+
+		// --- Listen for cross-component refresh signals ---
+		this.registerEvent(
+			(this.app.workspace as any).on('beancount:recurring-rules-updated', () => {
+				this.recurringController.refresh().catch(() => { /* widget may not yet be wired */ });
+			})
+		);
 	}
 
 	async onClose() {

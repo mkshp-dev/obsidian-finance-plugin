@@ -2,12 +2,15 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
 	import type { CommodityInfo } from "../../../../controllers/CommoditiesController";
+	import EquivalentsRow from "../EquivalentsRow.svelte";
 
 	export let commodity: CommodityInfo;
 	export let index: number = 0;
 	export let showHoldings: boolean = true;
 	export let showHoldingsValue: boolean = true;
 	export let operatingCurrency: string = "";
+
+	$: priceEquivalents = commodity?.equivalents ?? {};
 
 	const dispatch = createEventDispatcher();
 
@@ -156,6 +159,7 @@
 						>{commodity.currentPrice.split(" ")[1] || ""}</span
 					>
 				</div>
+				<EquivalentsRow equivalents={priceEquivalents} variant="compact" align="start" />
 			{:else}
 				<div class="no-price-state">
 					<span class="no-price-text">Price unavailable</span>

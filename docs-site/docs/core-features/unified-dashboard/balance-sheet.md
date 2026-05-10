@@ -35,6 +35,20 @@ Toggle between three views to see different perspectives:
 - All values update when new transactions are recorded
 - Account expansion/collapse saves your preferences
 
+### Interactive Data Visualizations
+
+#### Sunburst Charts
+Each account group (Assets, Liabilities, Equity) has an interactive **Sunburst Chart**:
+- Proportional slices represent each account's share of the total
+- Hover over a segment to see the account name and exact balance
+- Parent segments aggregate their children for an at-a-glance composition view
+
+#### Trend Charts
+A time-series chart shows how each account group's balance has evolved:
+- Plotted by **month** (default) or **week**
+- Hover to inspect exact values at a point in time
+- Useful for spotting trends in asset growth or liability reduction
+
 ---
 
 ## 🔍 Behind the Scenes: BQL Queries

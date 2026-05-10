@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
             'core-features/unified-dashboard/transactions',
             'core-features/unified-dashboard/journal',
             'core-features/unified-dashboard/balance-sheet',
+            'core-features/unified-dashboard/income-statement',
             'core-features/unified-dashboard/commodities',
           ],
         },

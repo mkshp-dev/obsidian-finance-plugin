@@ -178,6 +178,122 @@ export function occurrencesInWindow(
 }
 
 /**
+ * Format a single rule as a Beancount `custom "recurring"` line.
+ * Round-trip with `parseRecurringFile` is exact for valid rules.
+ */
+export function formatRecurringRule(rule: RecurringRule): string {
+    const amountStr = Number.isInteger(rule.amount)
+        ? rule.amount.toString()
+        : rule.amount.toString();
+    return `${rule.startDate} custom "recurring" "${rule.nickname}" "${rule.cadence}" ` +
+        `"${rule.expenseAccount}" "${rule.fundingAccount}" ${amountStr} ${rule.currency}`;
+}
+
+/**
+ * Take an original file's content plus a desired list of rules and
+ * produce the new file content. Lines whose 1-based number matches a
+ * rule's `sourceLine` are replaced in-place with the new line; lines
+ * that are no longer represented (deleted rule) are dropped; new rules
+ * (no sourceLine, or sourceLine larger than the original line count)
+ * are appended at the end with a leading blank line for breathing room.
+ *
+ * Comments, blank lines and any other directives stay exactly where
+ * they were — this is a surgical edit, not a full re-emit.
+ */
+export function applyRecurringEdits(
+    originalContent: string,
+    rules: RecurringRule[],
+): string {
+    const originalLines = originalContent.split(/\r?\n/);
+    const trailingNewline = originalContent.endsWith('\n');
+
+    // Find the original recurring lines by re-parsing — gives us the set
+    // of line indices that are eligible for rewrite or removal.
+    const originalRules = parseRecurringFile(originalContent);
+    const originalLineIndices = new Set(
+        originalRules.map(r => (r.sourceLine ?? 0) - 1).filter(i => i >= 0),
+    );
+
+    // Map from original 1-based source line → desired rule (or undefined = delete).
+    const byLine = new Map<number, RecurringRule | undefined>();
+    for (const r of rules) {
+        if (typeof r.sourceLine === 'number' && r.sourceLine >= 1 && originalLineIndices.has(r.sourceLine - 1)) {
+            byLine.set(r.sourceLine, r);
+        }
+    }
+    // Lines originally containing a rule but not in `rules` => delete.
+    for (const idx of originalLineIndices) {
+        if (!byLine.has(idx + 1)) byLine.set(idx + 1, undefined);
+    }
+
+    // Walk lines, applying edits.
+    const out: string[] = [];
+    for (let i = 0; i < originalLines.length; i++) {
+        if (byLine.has(i + 1)) {
+            const desired = byLine.get(i + 1);
+            if (desired) out.push(formatRecurringRule(desired));
+            // else: deleted, skip the line entirely
+        } else {
+            out.push(originalLines[i]);
+        }
+    }
+
+    // Append new rules (those without a known sourceLine).
+    const appended = rules.filter(r =>
+        typeof r.sourceLine !== 'number' || !originalLineIndices.has((r.sourceLine ?? 0) - 1)
+    );
+    if (appended.length > 0) {
+        if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+        for (const r of appended) {
+            out.push(formatRecurringRule(r));
+        }
+    }
+
+    let result = out.join('\n');
+    if (trailingNewline && !result.endsWith('\n')) result += '\n';
+    return result;
+}
+
+/**
+ * Returns parser diagnostics for a file: which lines look like they
+ * intend to be `custom "recurring"` directives but failed validation,
+ * and why. A line is flagged when it contains the word `"recurring"`
+ * but doesn't match the full directive regex or has an unknown cadence.
+ */
+export interface RecurringValidationIssue {
+    line: number;
+    text: string;
+    reason: string;
+}
+
+export function validateRecurringFile(content: string): RecurringValidationIssue[] {
+    const issues: RecurringValidationIssue[] = [];
+    const lines = content.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const trimmed = raw.trim();
+        if (!trimmed || trimmed.startsWith(';')) continue;
+        if (!/custom\s+"recurring"/.test(trimmed)) continue;
+
+        const m = RECURRING_DIRECTIVE.exec(trimmed);
+        if (!m) {
+            issues.push({ line: i + 1, text: trimmed, reason: 'directive shape does not match expected format' });
+            continue;
+        }
+        const cadence = m[3];
+        if (!CADENCES.has(cadence as RecurringCadence)) {
+            issues.push({ line: i + 1, text: trimmed, reason: `unknown cadence "${cadence}" (expected one of: ${Array.from(CADENCES).join(', ')})` });
+            continue;
+        }
+        const amount = parseFloat(m[6]);
+        if (!isFinite(amount)) {
+            issues.push({ line: i + 1, text: trimmed, reason: `amount "${m[6]}" is not a finite number` });
+        }
+    }
+    return issues;
+}
+
+/**
  * Flat, date-sorted list of occurrences across all rules within
  * `lookaheadDays` from `today` (inclusive). The default `today` is
  * the local date in YYYY-MM-DD; callers can override for testing.

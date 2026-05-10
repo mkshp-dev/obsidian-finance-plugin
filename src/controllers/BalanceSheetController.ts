@@ -5,6 +5,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
+import { getOpenAccounts } from '../utils/accounts';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
 
@@ -38,18 +39,22 @@ export interface BalanceSheetState {
 	isLoading: boolean;
 	/** Error message if loading failed. */
 	error: string | null;
-	/** Tree of Asset accounts. */
+	/** Tree of Asset accounts (excluding Assets:Receivables which split out). */
 	assets: AccountItem[];
 	/** Tree of Liability accounts. */
 	liabilities: AccountItem[];
 	/** Tree of Equity accounts. */
 	equity: AccountItem[];
-	/** Total numeric value of Assets. */
+	/** Tree of Assets:Receivables accounts (money owed to the user). */
+	receivables: AccountItem[];
+	/** Total numeric value of Assets (excluding Receivables). */
 	totalAssets: number;
 	/** Total numeric value of Liabilities. */
 	totalLiabilities: number;
 	/** Total numeric value of Equity. */
 	totalEquity: number;
+	/** Total numeric value of Receivables. */
+	totalReceivables: number;
 	/** The reporting currency used. */
 	currency: string;
 	/** Whether multi-currency entries were detected. */
@@ -91,9 +96,11 @@ export class BalanceSheetController {
 			assets: [],
 			liabilities: [],
 			equity: [],
+			receivables: [],
 			totalAssets: 0,
 			totalLiabilities: 0,
 			totalEquity: 0,
+			totalReceivables: 0,
 			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
@@ -409,14 +416,17 @@ export class BalanceSheetController {
 			const rows = firstRowIsHeader ? records.slice(1) : records;
 
 			let tempAssets: [string, string][] = [];
+			let tempReceivables: [string, string][] = [];
 			let tempLiab: [string, string][] = [];
 			let tempEquity: [string, string][] = [];
 			let hasUnconvertedCommodities = false;
 			const unconvertedAccounts: string[] = [];
+			const seenAccounts = new Set<string>();
 
 			for (const row of rows) {
 				if (row.length < 2) continue;
 				const [account, amountStr] = row;
+				seenAccounts.add(account);
 
 				// Check for multi-currency results (only relevant for convert method)
 				if (valuationMethod === 'convert' && amountStr.includes(',')) {
@@ -424,7 +434,12 @@ export class BalanceSheetController {
 					unconvertedAccounts.push(account);
 				}
 
-				if (account.startsWith('Assets')) {
+				// Receivables (money owed *to* the user) split out of the
+				// regular Assets column so the Balance Sheet doesn't fold
+				// loan-shaped accounts into the bank/cash totals.
+				if (account.startsWith('Assets:Receivables')) {
+					tempReceivables.push([account, amountStr]);
+				} else if (account.startsWith('Assets')) {
 					tempAssets.push([account, amountStr]);
 				} else if (account.startsWith('Liabilities')) {
 					tempLiab.push([account, amountStr]);
@@ -433,13 +448,34 @@ export class BalanceSheetController {
 				}
 			}
 
+			// `sum(position)` only returns accounts with at least one
+			// posting — so a freshly-opened Liabilities:Treasury (or any
+			// asset/equity account) silently disappears from the balance
+			// sheet until its first transaction. Backfill the gaps from
+			// the chart-of-accounts so opened accounts always show, even
+			// at zero balance.
+			try {
+				const openAccounts = await getOpenAccounts(this.plugin);
+				const zeroAmount = `0.00 ${reportingCurrency}`;
+				for (const acc of openAccounts) {
+					if (seenAccounts.has(acc)) continue;
+					if (acc.startsWith('Assets')) tempAssets.push([acc, zeroAmount]);
+					else if (acc.startsWith('Liabilities')) tempLiab.push([acc, zeroAmount]);
+					else if (acc.startsWith('Equity')) tempEquity.push([acc, zeroAmount]);
+				}
+			} catch (e) {
+				Logger.log('[BalanceSheetController] could not load open accounts list:', e);
+			}
+
 			// Build hierarchical structures
 			const assetsHierarchy = this.buildAccountHierarchy(tempAssets, 'Assets', valuationMethod);
+			const receivablesHierarchy = this.buildAccountHierarchy(tempReceivables, 'Assets', valuationMethod);
 			const liabilitiesHierarchy = this.buildAccountHierarchy(tempLiab, 'Liabilities', valuationMethod);
 			const equityHierarchy = this.buildAccountHierarchy(tempEquity, 'Equity', valuationMethod);
 
 			// Calculate totals - always use reporting currency
 			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, reportingCurrency);
+			const totalReceivables = this.calculateCategoryTotals(receivablesHierarchy, reportingCurrency);
 			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, reportingCurrency);
 			const totalEquity = this.calculateCategoryTotals(equityHierarchy, reportingCurrency);
 
@@ -456,9 +492,11 @@ export class BalanceSheetController {
 				isLoading: false,
 				error: null,
 				assets: this.flattenHierarchy(assetsHierarchy),
+				receivables: this.flattenHierarchy(receivablesHierarchy),
 				liabilities: this.flattenHierarchy(liabilitiesHierarchy),
 				equity: this.flattenHierarchy(equityHierarchy),
 				totalAssets,
+				totalReceivables,
 				totalLiabilities,
 				totalEquity,
 				currency: reportingCurrency,

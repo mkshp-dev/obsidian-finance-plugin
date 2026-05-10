@@ -5,6 +5,7 @@
 	import { Logger } from '../../../utils/logger';
 	import SunburstChart from '../../common/SunburstChart.svelte';
 	import ChartComponent from '../../common/ChartComponent.svelte';
+	import EquivalentsRow from './EquivalentsRow.svelte';
 
 	// Chart selector
 	let selectedChart: 'trend' | 'total' = 'trend';
@@ -21,6 +22,7 @@
 		hasUnconvertedCommodities: false, unconvertedWarning: null, valuationMethod: 'convert',
 		chartConfig: null, chartError: null, chartLoading: false, chartInterval: 'month',
 		chartTrendType: 'netprofit',
+		totalIncomeEquivalents: {}, totalExpensesEquivalents: {}, netProfitEquivalents: {},
 	});
 	$: stateStore = controller ? controller.state : placeholderState;
 	$: state = $stateStore;
@@ -323,7 +325,10 @@
 					</table>
 					<div class="section-total">
 						<span>Total Income</span>
-						<span class="total-amount">{state.totalIncome.toFixed(2)} {state.currency}</span>
+						<div class="total-amount-stack">
+							<span class="total-amount">{state.totalIncome.toFixed(2)} {state.currency}</span>
+							<EquivalentsRow equivalents={state.totalIncomeEquivalents} variant="compact" align="end" />
+						</div>
 					</div>
 				</div>
 
@@ -365,7 +370,10 @@
 					</table>
 					<div class="section-total">
 						<span>Total Expenses</span>
-						<span class="total-amount">{state.totalExpenses.toFixed(2)} {state.currency}</span>
+						<div class="total-amount-stack">
+							<span class="total-amount">{state.totalExpenses.toFixed(2)} {state.currency}</span>
+							<EquivalentsRow equivalents={state.totalExpensesEquivalents} variant="compact" align="end" />
+						</div>
 					</div>
 				</div>
 			</div>
@@ -373,9 +381,12 @@
 			<!-- Net Profit Summary -->
 			<div class="net-profit-row">
 				<span class="net-profit-label">Net Profit</span>
-				<span class="net-profit-value {netProfitClass(state.netProfit)}">
-					{state.netProfit.toFixed(2)} {state.currency}
-				</span>
+				<div class="net-profit-stack">
+					<span class="net-profit-value {netProfitClass(state.netProfit)}">
+						{state.netProfit.toFixed(2)} {state.currency}
+					</span>
+					<EquivalentsRow equivalents={state.netProfitEquivalents} variant="compact" align="end" />
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -820,6 +831,15 @@
 
 	.total-amount.positive {
 		color: var(--color-green);
+	}
+
+	/* Stack the primary total above the optional equivalents sub-row. */
+	.total-amount-stack,
+	.net-profit-stack {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
 	}
 
 	/* Net profit row */

@@ -1,8 +1,9 @@
 // src/settings.ts
 
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, FuzzySuggestModal, TFile } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
+import RecurringRulesEditor from './ui/partials/settings/RecurringRulesEditor.svelte';
 import { updateOperatingCurrency } from './utils/index';
 
 /**
@@ -15,6 +16,13 @@ export interface BeancountPluginSettings {
     beancountCommand: string;
     /** The primary currency for reporting and defaults. */
     operatingCurrency: string;
+    /**
+     * Additional currencies to display as equivalents beneath primary monetary
+     * values on the dashboard (e.g. ["USD", "BTC"] under each KPI). The primary
+     * base remains canonical for hierarchies, charts, modals and the ledger
+     * header — this list only affects the small "≈ N CCY" sub-row.
+     */
+    equivalentCurrencies: string[];
     /** Max transactions to fetch in the dashboard. */
     maxTransactionResults: number;
     /** Max entries to fetch in the journal. */
@@ -64,6 +72,7 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     beancountFilePath: '',
     beancountCommand: '',
     operatingCurrency: 'USD',
+    equivalentCurrencies: [],
     maxTransactionResults: 2000,
     maxJournalResults: 1000,
     // BQL Code Block Settings
@@ -222,6 +231,8 @@ export class BeancountSettingTab extends PluginSettingTab {
                 })
             );
 
+        this.renderEquivalentCurrenciesEditor(containerEl);
+
         new Setting(containerEl)
             .setName('Debug mode')
             .setDesc('Enable debug logging to the console.')
@@ -327,6 +338,16 @@ export class BeancountSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.recurringFilePath = value.trim();
                     await this.plugin.saveSettings();
+                }))
+            .addExtraButton(btn => btn
+                .setIcon('folder-open')
+                .setTooltip('Browse vault for a .beancount file')
+                .onClick(() => {
+                    new RecurringFilePickerModal(this.app, async (path) => {
+                        this.plugin.settings.recurringFilePath = path;
+                        await this.plugin.saveSettings();
+                        this.display();
+                    }).open();
                 }));
 
         new Setting(containerEl)
@@ -342,6 +363,116 @@ export class BeancountSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }
                 }));
+
+        // Inline rules editor — Svelte component owns its own load/save lifecycle.
+        const editorMount = containerEl.createDiv({ cls: 'beancount-recurring-editor-mount' });
+        const editor = new RecurringRulesEditor({
+            target: editorMount,
+            props: { plugin: this.plugin },
+        });
+        editor.$on('saved', async () => {
+            // Trigger a workspace event that the unified dashboard view
+            // subscribes to (best-effort — if no dashboard is open, the
+            // event is a no-op).
+            try {
+                this.app.workspace.trigger('beancount:recurring-rules-updated');
+            } catch (_) { /* defensive */ }
+        });
+    }
+
+    /**
+     * Renders the multi-base "equivalent currencies" list editor in the
+     * General tab. Each entry adds a small "≈ N CCY" sub-row beneath
+     * primary monetary values on the dashboard. Defaults to an empty
+     * list, in which case no equivalents are shown anywhere.
+     */
+    private renderEquivalentCurrenciesEditor(containerEl: HTMLElement): void {
+        const list = this.plugin.settings.equivalentCurrencies ?? [];
+
+        const wrapper = containerEl.createDiv({ cls: 'beancount-equivalents-editor' });
+
+        new Setting(wrapper)
+            .setName('Equivalent currencies')
+            .setDesc(
+                'Show each primary value (KPI cards, income/expense totals, commodity prices) ' +
+                'with one extra line per entry, converted via the price table. ' +
+                'Leave empty to disable. Operating currency is excluded automatically.'
+            )
+            .addButton(button => button
+                .setButtonText('Add equivalent')
+                .setCta()
+                .onClick(async () => {
+                    const next = [...list, ''];
+                    this.plugin.settings.equivalentCurrencies = next;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        list.forEach((entry, index) => {
+            const setting = new Setting(wrapper);
+            const validationEl = this.createValidationElement(wrapper);
+
+            setting
+                .setName(`Equivalent #${index + 1}`)
+                .addText(text => {
+                    text
+                        .setPlaceholder('USD')
+                        .setValue(entry)
+                        .onChange(async (value) => {
+                            const normalized = value.trim().toUpperCase();
+                            const current = this.plugin.settings.equivalentCurrencies ?? [];
+                            current[index] = normalized;
+                            this.plugin.settings.equivalentCurrencies = current;
+                            await this.plugin.saveSettings();
+
+                            if (!normalized) {
+                                validationEl.textContent = '';
+                                return;
+                            }
+                            const validation = this.validateEquivalentEntry(normalized, index);
+                            this.updateValidationDisplay(validationEl, validation);
+                        });
+
+                    if (entry) {
+                        const initial = this.validateEquivalentEntry(entry, index);
+                        this.updateValidationDisplay(validationEl, initial);
+                    }
+                    return text;
+                })
+                .addExtraButton(button => button
+                    .setIcon('trash-2')
+                    .setTooltip('Remove this equivalent')
+                    .onClick(async () => {
+                        const next = (this.plugin.settings.equivalentCurrencies ?? [])
+                            .filter((_, i) => i !== index);
+                        this.plugin.settings.equivalentCurrencies = next;
+                        await this.plugin.saveSettings();
+                        this.display();
+                    }));
+        });
+    }
+
+    /**
+     * Validates a single equivalent-currencies entry. Reuses the operating
+     * currency's format check, then layers list-specific rules: must not
+     * equal the operating currency, must be unique within the list.
+     */
+    private validateEquivalentEntry(currency: string, atIndex: number): { isValid: boolean; message: string } {
+        const formatCheck = this.validateCurrency(currency);
+        if (!formatCheck.isValid) return formatCheck;
+
+        const operating = (this.plugin.settings.operatingCurrency || '').toUpperCase();
+        if (operating && currency.toUpperCase() === operating) {
+            return { isValid: false, message: 'Already the operating currency — no equivalent needed.' };
+        }
+
+        const list = this.plugin.settings.equivalentCurrencies ?? [];
+        const seenAt = list.findIndex((e, i) => i !== atIndex && e.toUpperCase() === currency.toUpperCase());
+        if (seenAt >= 0) {
+            return { isValid: false, message: `Duplicate of entry #${seenAt + 1}.` };
+        }
+
+        return { isValid: true, message: '✅ Will be shown as an equivalent.' };
     }
 
     /**
@@ -887,5 +1018,29 @@ export class BeancountSettingTab extends PluginSettingTab {
             }
         `;
         document.head.appendChild(style);
+    }
+}
+
+/**
+ * Fuzzy file picker for the recurring-file path. Lists every .beancount
+ * file in the vault; selecting one writes its vault-relative path back
+ * via the supplied callback.
+ */
+class RecurringFilePickerModal extends FuzzySuggestModal<TFile> {
+    constructor(app: App, private onPick: (path: string) => void) {
+        super(app);
+        this.setPlaceholder('Pick a .beancount file…');
+    }
+
+    getItems(): TFile[] {
+        return this.app.vault.getFiles().filter(f => f.extension === 'beancount');
+    }
+
+    getItemText(item: TFile): string {
+        return item.path;
+    }
+
+    onChooseItem(item: TFile): void {
+        this.onPick(item.path);
     }
 }

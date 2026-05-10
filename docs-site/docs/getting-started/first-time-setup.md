@@ -164,7 +164,7 @@ After setup completes, you'll see a success screen with:
 ### Next Steps Provided
 
 1. Open the Finance Dashboard
-2. Explore the 5 tabs (Overview, Transactions, Journal, Balance Sheet, Commodities)
+2. Explore the 6 tabs (Overview, Transactions, Journal, Balance Sheet, Income Statement, Commodities)
 3. Try BQL queries in markdown notes
 4. Customize settings
 

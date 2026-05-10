@@ -62,6 +62,23 @@ export function getIncomeStatementQuery(currency: string): string {
 	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
+// All-time totals as a single number — used to fetch equivalents-row values
+// without re-running the full per-account hierarchy query for each currency.
+// Sign convention matches IncomeStatementState exactly: totalIncome keeps the
+// raw beancount sign (negative for credit accounts), totalExpenses is positive
+// (debit), netProfit is positive when income exceeds expenses.
+export function getTotalIncomeQuery(currency: string, rounding: number = 2): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalIncome WHERE account ~ '^Income' AND NOT close_date(account)`;
+}
+
+export function getTotalExpensesQuery(currency: string, rounding: number = 2): string {
+	return `SELECT round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding}) AS _totalExpenses WHERE account ~ '^Expenses' AND NOT close_date(account)`;
+}
+
+export function getNetProfitQuery(currency: string, rounding: number = 2): string {
+	return `SELECT neg(round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding})) AS _netProfit WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account)`;
+}
+
 export function getIncomeStatementQueryByCost(): string {
 	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }

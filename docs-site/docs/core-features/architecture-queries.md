@@ -140,7 +140,11 @@ SELECT date, payee, narration, position, balance WHERE account ~ '^Expenses:Food
 
 ## 📋 Journal Tab Queries
 
-The Journal tab combines three types of entries:
+The Journal tab combines three types of entries: transactions, balance assertions, and notes. All three queries run in parallel and are merged client-side.
+
+:::info Under the Hood
+Unlike other dashboard tabs which use a **Controller** pattern (each tab has a dedicated `*Controller.ts` exposing a Svelte store), the Journal tab uses a **Service/Store** pattern: `JournalService` handles BQL query execution and `JournalStore` wraps the service in a reactive Svelte store consumed by `JournalTab.svelte`. The end result is the same reactive UI — the architecture simply differs.
+:::
 
 ### Transaction Entries
 ```sql
@@ -186,6 +190,59 @@ SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equit
 ```
 
 Shows actual quantities held (e.g., "50 AAPL", "1.5 BTC").
+
+---
+
+## 📈 Income Statement Tab Queries
+
+### Income & Expense Account Balances
+
+**Market Value (Convert):**
+```sql
+SELECT account, convert(sum(position), 'USD')
+WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account)
+GROUP BY account ORDER BY account
+```
+
+**At Cost:**
+```sql
+SELECT account, cost(sum(position))
+WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account)
+GROUP BY account ORDER BY account
+```
+
+**Units:**
+```sql
+SELECT account, units(sum(position))
+WHERE account ~ '^(Income|Expenses)' AND NOT close_date(account)
+GROUP BY account ORDER BY account
+```
+
+### Trend Chart Queries
+
+**Net Profit by Month:**
+```sql
+SELECT year, month, only('USD', convert(sum(position), 'USD', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth
+WHERE account ~ '^(Income|Expenses)' GROUP BY year, month ORDER BY year, month
+```
+
+**Net Profit by Week:**
+```sql
+SELECT last(date_add(date_trunc('week', date), 6)) AS week_end, only('USD', convert(sum(position), 'USD', last(date_add(date_trunc('week', date), 6))))
+WHERE account ~ '^(Income|Expenses)' GROUP BY date_trunc('week', date) ORDER BY week_end
+```
+
+**Income by Month:**
+```sql
+SELECT year, month, only('USD', convert(sum(position), 'USD', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth
+WHERE account ~ '^(Income)' GROUP BY year, month ORDER BY year, month
+```
+
+**Expenses by Month:**
+```sql
+SELECT year, month, only('USD', convert(sum(position), 'USD', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth
+WHERE account ~ '^(Expenses)' GROUP BY year, month ORDER BY year, month
+```
 
 ---
 

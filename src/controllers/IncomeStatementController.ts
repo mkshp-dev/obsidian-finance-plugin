@@ -5,8 +5,10 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
+import { getOpenAccounts } from '../utils/accounts';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
+import { sanitizeEquivalentCurrencies, collectEquivalents } from '../utils/equivalents';
 // Re-export AccountItem so IncomeStatementTab can import from here
 export type { AccountItem } from './BalanceSheetController';
 import type { AccountItem } from './BalanceSheetController';
@@ -47,6 +49,12 @@ export interface IncomeStatementState {
 	chartInterval: 'month' | 'week';
 	/** The active trend type shown in the Trends chart. */
 	chartTrendType: 'netprofit' | 'income' | 'expense';
+	/** Total income converted to each enabled equivalent currency (raw beancount sign — negative). */
+	totalIncomeEquivalents: Record<string, number>;
+	/** Total expenses converted to each enabled equivalent currency. */
+	totalExpensesEquivalents: Record<string, number>;
+	/** Net profit converted to each enabled equivalent currency (positive when income > expenses). */
+	netProfitEquivalents: Record<string, number>;
 }
 
 /**
@@ -79,6 +87,9 @@ export class IncomeStatementController {
 			chartLoading: false,
 			chartInterval: 'month' as const,
 			chartTrendType: 'netprofit' as const,
+			totalIncomeEquivalents: {},
+			totalExpensesEquivalents: {},
+			netProfitEquivalents: {},
 		});
 	}
 
@@ -419,10 +430,12 @@ export class IncomeStatementController {
 			let tempExpenses: [string, string][] = [];
 			let hasUnconvertedCommodities = false;
 			const unconvertedAccounts: string[] = [];
+			const seenAccounts = new Set<string>();
 
 			for (const row of rows) {
 				if (row.length < 2) continue;
 				const [account, amountStr] = row;
+				seenAccounts.add(account);
 
 				if (valuationMethod === 'convert' && amountStr.includes(',')) {
 					hasUnconvertedCommodities = true;
@@ -436,6 +449,20 @@ export class IncomeStatementController {
 				}
 			}
 
+			// Backfill opened-but-unused Income/Expenses accounts so the
+			// chart of accounts is the source of truth, not the postings.
+			try {
+				const openAccounts = await getOpenAccounts(this.plugin);
+				const zeroAmount = `0.00 ${reportingCurrency}`;
+				for (const acc of openAccounts) {
+					if (seenAccounts.has(acc)) continue;
+					if (acc.startsWith('Income')) tempIncome.push([acc, zeroAmount]);
+					else if (acc.startsWith('Expenses')) tempExpenses.push([acc, zeroAmount]);
+				}
+			} catch (e) {
+				Logger.log('[IncomeStatementController] could not load open accounts list:', e);
+			}
+
 			const incomeHierarchy = this.buildAccountHierarchy(tempIncome, 'Income', valuationMethod);
 			const expensesHierarchy = this.buildAccountHierarchy(tempExpenses, 'Expenses', valuationMethod);
 
@@ -443,6 +470,17 @@ export class IncomeStatementController {
 			const totalExpenses = this.calculateCategoryTotals(expensesHierarchy, reportingCurrency);
 			// totalIncome is negative in beancount (credit accounts); compute conventional profit
 			const netProfit = -(totalIncome + totalExpenses);
+
+			// Equivalents are only meaningful for the 'convert' valuation method —
+			// cost/units don't have a single base, so equivalents would be misleading.
+			const equivalents = valuationMethod === 'convert'
+				? sanitizeEquivalentCurrencies(this.plugin.settings.equivalentCurrencies, reportingCurrency)
+				: [];
+			const [totalIncomeEquivalents, totalExpensesEquivalents, netProfitEquivalents] = await Promise.all([
+				collectEquivalents(this.plugin, equivalents, queries.getTotalIncomeQuery),
+				collectEquivalents(this.plugin, equivalents, queries.getTotalExpensesQuery),
+				collectEquivalents(this.plugin, equivalents, queries.getNetProfitQuery),
+			]);
 
 			let unconvertedWarning: string | null = null;
 			if (hasUnconvertedCommodities) {
@@ -468,6 +506,9 @@ export class IncomeStatementController {
 				chartLoading: true,
 				chartInterval: currentState.chartInterval,
 				chartTrendType: currentState.chartTrendType,
+				totalIncomeEquivalents,
+				totalExpensesEquivalents,
+				netProfitEquivalents,
 			});
 
 			// Load chart data

@@ -27,6 +27,9 @@
 		monthlyExpenses: '0.00 USD',
 		savingsRate: '0%',
 		currency: 'USD',
+		netWorthEquivalents: {},
+		monthlyIncomeEquivalents: {},
+		monthlyExpensesEquivalents: {},
 	});
 
 	// 2. Use a reactive statement ($:) to update the local store variable
@@ -96,9 +99,9 @@
 		</div>
 		
 		<div class="kpi-grid">
-			<CardComponent label="Total Balance" value={state.netWorth} comparison="Assets minus liabilities" />
-			<CardComponent label="Monthly Income" value={state.monthlyIncome} comparison="Current month earnings" />
-			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} comparison="Current month spending" />
+			<CardComponent label="Total Balance" value={state.netWorth} equivalents={state.netWorthEquivalents} comparison="Assets minus liabilities" />
+			<CardComponent label="Monthly Income" value={state.monthlyIncome} equivalents={state.monthlyIncomeEquivalents} comparison="Current month earnings" />
+			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} equivalents={state.monthlyExpensesEquivalents} comparison="Current month spending" />
 			<CardComponent label="Savings Rate" value={state.savingsRate} comparison="Income minus expenses" />
 		</div>
 

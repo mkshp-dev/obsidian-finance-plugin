@@ -86,7 +86,25 @@ Click the **↺ refresh button** (top-right of the section) to re-run all indica
 
 ---
 
-## 🔍 Behind the Scenes: BQL Queries
+## � Recurring Transactions
+
+The Overview tab includes a **Recurring Widget** that surfaces upcoming scheduled transactions so you're never caught off-guard by a payment.
+
+### How It Works
+
+The widget reads `custom "recurring"` directives from your `recurring.beancount` file (located at `<structuredFolderName>/recurring.beancount` by default, or the path set via `recurringFilePath` in settings). It then calculates which occurrences fall within the configured **lookahead window** (`recurringLookaheadDays` setting, default 30 days).
+
+### What It Shows
+- Each upcoming occurrence with its **due date**, **description**, and **estimated amount**
+- Occurrences are sorted chronologically so the nearest items appear first
+- If the `recurring.beancount` file does not exist the widget is silently hidden
+
+### Refreshing
+Click the **↺ refresh** button on the widget to re-read the file and recalculate upcoming occurrences without reloading the full dashboard.
+
+---
+
+## �🔍 Behind the Scenes: BQL Queries
 
 All data on this tab comes from direct **bean-query** BQL queries. Here are the exact queries used:
 
