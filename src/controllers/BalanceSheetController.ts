@@ -38,22 +38,18 @@ export interface BalanceSheetState {
 	isLoading: boolean;
 	/** Error message if loading failed. */
 	error: string | null;
-	/** Tree of Asset accounts (excluding Assets:Receivables which split out). */
+	/** Tree of Asset accounts. */
 	assets: AccountItem[];
 	/** Tree of Liability accounts. */
 	liabilities: AccountItem[];
 	/** Tree of Equity accounts. */
 	equity: AccountItem[];
-	/** Tree of Assets:Receivables accounts (money owed to the user). */
-	receivables: AccountItem[];
-	/** Total numeric value of Assets (excluding Receivables). */
+	/** Total numeric value of Assets. */
 	totalAssets: number;
 	/** Total numeric value of Liabilities. */
 	totalLiabilities: number;
 	/** Total numeric value of Equity. */
 	totalEquity: number;
-	/** Total numeric value of Receivables. */
-	totalReceivables: number;
 	/** The reporting currency used. */
 	currency: string;
 	/** Whether multi-currency entries were detected. */
@@ -95,11 +91,9 @@ export class BalanceSheetController {
 			assets: [],
 			liabilities: [],
 			equity: [],
-			receivables: [],
 			totalAssets: 0,
 			totalLiabilities: 0,
 			totalEquity: 0,
-			totalReceivables: 0,
 			currency: plugin.settings.operatingCurrency || 'USD',
 			hasUnconvertedCommodities: false,
 			unconvertedWarning: null,
@@ -415,7 +409,6 @@ export class BalanceSheetController {
 			const rows = firstRowIsHeader ? records.slice(1) : records;
 
 			let tempAssets: [string, string][] = [];
-			let tempReceivables: [string, string][] = [];
 			let tempLiab: [string, string][] = [];
 			let tempEquity: [string, string][] = [];
 			let hasUnconvertedCommodities = false;
@@ -431,12 +424,7 @@ export class BalanceSheetController {
 					unconvertedAccounts.push(account);
 				}
 
-				// Receivables (money owed *to* the user) split out of the
-				// regular Assets column so the Balance Sheet doesn't fold
-				// loan-shaped accounts into the bank/cash totals.
-				if (account.startsWith('Assets:Receivables')) {
-					tempReceivables.push([account, amountStr]);
-				} else if (account.startsWith('Assets')) {
+				if (account.startsWith('Assets')) {
 					tempAssets.push([account, amountStr]);
 				} else if (account.startsWith('Liabilities')) {
 					tempLiab.push([account, amountStr]);
@@ -447,13 +435,11 @@ export class BalanceSheetController {
 
 			// Build hierarchical structures
 			const assetsHierarchy = this.buildAccountHierarchy(tempAssets, 'Assets', valuationMethod);
-			const receivablesHierarchy = this.buildAccountHierarchy(tempReceivables, 'Assets', valuationMethod);
 			const liabilitiesHierarchy = this.buildAccountHierarchy(tempLiab, 'Liabilities', valuationMethod);
 			const equityHierarchy = this.buildAccountHierarchy(tempEquity, 'Equity', valuationMethod);
 
 			// Calculate totals - always use reporting currency
 			const totalAssets = this.calculateCategoryTotals(assetsHierarchy, reportingCurrency);
-			const totalReceivables = this.calculateCategoryTotals(receivablesHierarchy, reportingCurrency);
 			const totalLiabilities = this.calculateCategoryTotals(liabilitiesHierarchy, reportingCurrency);
 			const totalEquity = this.calculateCategoryTotals(equityHierarchy, reportingCurrency);
 
@@ -470,11 +456,9 @@ export class BalanceSheetController {
 				isLoading: false,
 				error: null,
 				assets: this.flattenHierarchy(assetsHierarchy),
-				receivables: this.flattenHierarchy(receivablesHierarchy),
 				liabilities: this.flattenHierarchy(liabilitiesHierarchy),
 				equity: this.flattenHierarchy(equityHierarchy),
 				totalAssets,
-				totalReceivables,
 				totalLiabilities,
 				totalEquity,
 				currency: reportingCurrency,
