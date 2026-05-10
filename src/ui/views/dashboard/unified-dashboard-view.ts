@@ -105,6 +105,13 @@ export class UnifiedDashboardView extends ItemView {
 		this.transactionController.handleFilterChange({}); // Load initial transactions
 		this.balanceSheetController.loadData();
 		this.incomeStatementController.loadData();
+
+		// --- Listen for cross-component refresh signals ---
+		this.registerEvent(
+			(this.app.workspace as any).on('beancount:recurring-rules-updated', () => {
+				this.recurringController.refresh().catch(() => { /* widget may not yet be wired */ });
+			})
+		);
 	}
 
 	async onClose() {
