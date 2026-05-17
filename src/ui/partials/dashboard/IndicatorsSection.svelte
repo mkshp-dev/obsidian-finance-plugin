@@ -1,9 +1,18 @@
 <!-- src/ui/partials/dashboard/IndicatorsSection.svelte -->
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
+	import { Notice } from 'obsidian';
+	import { readFile } from 'fs/promises';
 	import { parse as parseCsv } from 'csv-parse/sync';
 	import { runQuery } from '../../../utils';
-	import { getBudgetListQuery, getTargetListQuery, getIndicatorStatusQuery } from '../../../queries';
+	import {
+		getBudgetListQuery,
+		getTargetListQuery,
+		getSavingsListQuery,
+		getIndicatorStatusQuery,
+	} from '../../../queries';
+	import { IndicatorEditModal } from '../../modals/IndicatorEditModal';
+	import type { IndicatorType } from '../../../services/indicators.service';
 
 	export let plugin: any = null;
 
@@ -21,16 +30,28 @@
 		remaining: number;
 		loading: boolean;
 		error: string | null;
+		/** When set (Savings only), the indicator's target is computed
+		 * monthly as percent × income. The dashboard card shows the
+		 * percent and skips the progress bar (no fixed cap). */
+		targetPercent?: number;
 	}
 
-	type IndicatorView = 'Budgets' | 'Targets';
+	type IndicatorView = 'Budgets' | 'Savings';
 	let activeView: IndicatorView = 'Budgets';
 	let budgets: IndicatorItem[] = [];
-	let targets: IndicatorItem[] = [];
+	let targets: IndicatorItem[] = [];   // legacy on-disk type; merged into Savings view
+	let savings: IndicatorItem[] = [];
 	let isLoading = false;
 	let loadError: string | null = null;
 
-	$: currentItems = activeView === 'Budgets' ? budgets : targets;
+	// "Savings" tab unifies legacy `Target` + `Savings` indicators per
+	// the merge decided in the forecast roadmap.
+	$: currentItems = activeView === 'Budgets'
+		? budgets
+		: [...targets, ...savings];
+	$: activeKind = (activeView === 'Budgets'
+		? 'Budget'
+		: 'Savings') as IndicatorType;
 
 	function col(row: any, name: string): any {
 		// bean-query preserves leading underscores but LOWERCASES all alias characters.
@@ -103,11 +124,72 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			await Promise.all([loadBudgets(), loadTargets()]);
+			await Promise.all([loadBudgets(), loadTargets(), loadSavings()]);
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	function pickPercent(r: any): number | undefined {
+		const v = parseNumericValue(col(r, '_targetPercent'));
+		return v > 0 && v <= 100 ? v : undefined;
+	}
+
+	async function loadSavings() {
+		const csv = await runQuery(plugin, getSavingsListQuery());
+		const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as any[];
+		const items: IndicatorItem[] = rows.map((r: any) => ({
+			name: col(r, '_name') || '',
+			accountString: col(r, '_accountString') || '',
+			period: col(r, '_period') || 'Monthly',
+			isRollOver: parseBool(col(r, '_isRollOver')),
+			targetAmount: parseNumericValue(col(r, '_targetAmount')),
+			currency: col(r, '_currency') || '',
+			startDate: col(r, '_startDate') || '',
+			spent: 0,
+			remaining: 0,
+			loading: true,
+			error: null,
+			targetPercent: pickPercent(r),
+		}));
+		savings = items;
+		await Promise.all(items.map((_, i) => loadSavingsStatus(i)));
+	}
+
+	async function loadSavingsStatus(index: number) {
+		const item = savings[index];
+		// Percent-mode indicators are valid with target=0 (the percent
+		// is the source of truth). Only flag as incomplete if BOTH
+		// target and percent are missing/zero.
+		const hasFixedTarget = item.targetAmount > 0;
+		const hasPercent = (item.targetPercent ?? 0) > 0;
+		if (!item.accountString || !item.startDate || (!hasFixedTarget && !hasPercent)) {
+			savings = savings.map((s, i) => i === index
+				? { ...s, loading: false, error: 'Indicator data incomplete — check the event directive in events.beancount.' }
+				: s);
+			return;
+		}
+		try {
+			const period = item.period.toLowerCase() === 'weekly' ? 'week' : 'month';
+			const csv = await runQuery(
+				plugin,
+				getIndicatorStatusQuery(item.isRollOver, item.currency, item.accountString, item.targetAmount, item.startDate, period)
+			);
+			const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as any[];
+			if (rows.length > 0) {
+				const row = rows[0];
+				const current = parseNumericValue(col(row, '_expenseThisCycle'));
+				savings = savings.map((s, i) => i === index
+					? { ...s, spent: current, remaining: s.targetAmount - current, loading: false } : s);
+			} else {
+				savings = savings.map((s, i) => i === index
+					? { ...s, spent: 0, remaining: s.targetAmount, loading: false } : s);
+			}
+		} catch (e) {
+			savings = savings.map((s, i) => i === index
+				? { ...s, loading: false, error: e instanceof Error ? e.message : 'Error loading status' } : s);
 		}
 	}
 
@@ -126,6 +208,7 @@
 			remaining: 0,
 			loading: true,
 			error: null,
+			targetPercent: pickPercent(r),
 		}));
 		budgets = items;
 		await Promise.all(items.map((_: any, i: number) => loadBudgetStatus(i)));
@@ -133,7 +216,9 @@
 
 	async function loadBudgetStatus(index: number) {
 		const item = budgets[index];
-		if (!item.accountString || !item.startDate || item.targetAmount <= 0) {
+		const hasFixedTarget = item.targetAmount > 0;
+		const hasPercent = (item.targetPercent ?? 0) > 0;
+		if (!item.accountString || !item.startDate || (!hasFixedTarget && !hasPercent)) {
 			budgets = budgets.map((b, i) => i === index
 				? { ...b, loading: false, error: 'Indicator data incomplete — check the event directive in events.beancount.' }
 				: b);
@@ -177,6 +262,7 @@
 			remaining: 0,
 			loading: true,
 			error: null,
+			targetPercent: pickPercent(r),
 		}));
 		targets = items;
 		await Promise.all(items.map((_: any, i: number) => loadTargetStatus(i)));
@@ -184,7 +270,9 @@
 
 	async function loadTargetStatus(index: number) {
 		const item = targets[index];
-		if (!item.accountString || !item.startDate || item.targetAmount <= 0) {
+		const hasFixedTarget = item.targetAmount > 0;
+		const hasPercent = (item.targetPercent ?? 0) > 0;
+		if (!item.accountString || !item.startDate || (!hasFixedTarget && !hasPercent)) {
 			targets = targets.map((t, i) => i === index
 				? { ...t, loading: false, error: 'Indicator data incomplete — check the event directive in events.beancount.' }
 				: t);
@@ -215,8 +303,80 @@
 	onMount(() => { if (plugin) loadAll(); });
 
 	function setView(view: IndicatorView) { activeView = view; }
-	function handleAddBudget() { dispatch('add-budget'); }
-	function handleAddTarget() { dispatch('add-target'); }
+
+	function openAddModal() {
+		if (!plugin) return;
+		const modal = new IndicatorEditModal(plugin.app, plugin, {
+			mode: 'add',
+			kind: activeKind,
+			onSaved: () => loadAll(),
+		});
+		modal.open();
+	}
+
+	async function openEditModal(item: IndicatorItem) {
+		if (!plugin) return;
+		// We have the rendered values from BQL but not the file's source line.
+		// Re-read events.beancount, find the matching block (same kind+name)
+		// so editing rewrites that exact directive.
+		try {
+			const { getTargetFile } = await import('../../../utils/structuredLayout');
+			const { convertWslPathToWindows } = await import('../../../utils/fileEditor');
+			const { parseIndicators } = await import('../../../services/indicators.service');
+
+			const filePath = getTargetFile(plugin, 'event');
+			if (!filePath) {
+				new Notice('Events file path not configured.');
+				return;
+			}
+			const content = await readFile(convertWslPathToWindows(filePath), 'utf-8');
+			const all = parseIndicators(content);
+			const match = all.find((d) => d.type === activeKind && d.name === item.name);
+			if (!match) {
+				new Notice(`Could not locate "${item.name}" in events.beancount — try reloading.`);
+				return;
+			}
+			const modal = new IndicatorEditModal(plugin.app, plugin, {
+				mode: 'edit',
+				kind: activeKind,
+				initial: match,
+				onSaved: () => loadAll(),
+			});
+			modal.open();
+		} catch (e) {
+			new Notice(`Failed to open edit modal: ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
+
+	async function openDeleteConfirm(item: IndicatorItem) {
+		// Same lookup as edit, but jumps straight to the modal's delete action
+		// after the user confirms.
+		if (!plugin) return;
+		if (!confirm(`Delete ${activeKind.toLowerCase()} "${item.name}"?`)) return;
+		try {
+			const { getTargetFile } = await import('../../../utils/structuredLayout');
+			const { convertWslPathToWindows, atomicFileWrite, createBackupFile } = await import('../../../utils/fileEditor');
+			const { parseIndicators, applyIndicatorEdits } = await import('../../../services/indicators.service');
+
+			const filePath = getTargetFile(plugin, 'event');
+			if (!filePath) { new Notice('Events file path not configured.'); return; }
+			const normalized = convertWslPathToWindows(filePath);
+			const content = await readFile(normalized, 'utf-8');
+			const all = parseIndicators(content);
+			const remaining = all.filter((d) => !(d.type === activeKind && d.name === item.name));
+			if (remaining.length === all.length) {
+				new Notice(`No matching indicator found in file.`);
+				return;
+			}
+			const next = applyIndicatorEdits(content, remaining);
+			await createBackupFile(normalized, true, 'IndicatorsSection.delete');
+			await atomicFileWrite(normalized, next);
+			new Notice(`${activeKind} "${item.name}" deleted.`);
+			loadAll();
+		} catch (e) {
+			new Notice(`Failed to delete: ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
 </script>
 
 <div class="indicators-section">
@@ -231,17 +391,20 @@
 		<div class="controls-row">
 			<div class="view-toggle">
 				<button class="toggle-btn" class:active={activeView === 'Budgets'} on:click={() => setView('Budgets')}>
-					Budgets
+					💸 Budgets
 					<span class="count-badge" class:active={activeView === 'Budgets'}>{budgets.length}</span>
 				</button>
-				<button class="toggle-btn" class:active={activeView === 'Targets'} on:click={() => setView('Targets')}>
-					Targets
-					<span class="count-badge" class:active={activeView === 'Targets'}>{targets.length}</span>
+				<button class="toggle-btn" class:active={activeView === 'Savings'} on:click={() => setView('Savings')}
+					title={targets.length > 0
+						? `Includes ${targets.length} legacy 'Target' indicator${targets.length === 1 ? '' : 's'}`
+						: 'Asset accrual goals'}>
+					📈 Savings
+					<span class="count-badge" class:active={activeView === 'Savings'}>{targets.length + savings.length}</span>
 				</button>
 			</div>
-			<button class="add-btn" on:click={activeView === 'Budgets' ? handleAddBudget : handleAddTarget}>
+			<button class="add-btn" on:click={openAddModal}>
 				<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-				{activeView === 'Budgets' ? 'Add Budget' : 'Add Target'}
+				Add {activeKind}
 			</button>
 		</div>
 	</div>
@@ -264,9 +427,9 @@
 					<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
 				</svg>
 				<p>No {activeView.toLowerCase()} defined yet.</p>
-				<button class="add-btn" on:click={activeView === 'Budgets' ? handleAddBudget : handleAddTarget}>
+				<button class="add-btn" on:click={openAddModal}>
 					<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-					Add {activeView === 'Budgets' ? 'Budget' : 'Target'}
+					Add {activeKind}
 				</button>
 			</div>
 		{:else}
@@ -280,7 +443,7 @@
 					{@const status = getStatusBadge(pct, isBudget)}
 					<div class="indicator-card" class:over-budget={pct >= 100 && isBudget}>
 
-						<!-- Top row: name / meta left — remaining right -->
+						<!-- Top row: name / meta left — remaining + actions right -->
 						<div class="card-top">
 							<div class="card-identity">
 								<span class="card-name">{item.name}</span>
@@ -293,15 +456,48 @@
 										<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
 										{item.period}
 									</span>
+									{#if item.isRollOver}
+										<span class="meta-chip rollover-chip" title="Unspent amounts carry forward to the next cycle">
+											<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+											rollover
+										</span>
+									{/if}
+									{#if item.targetPercent}
+										<span class="meta-chip percent-chip" title="Percent of monthly income — resolved each cycle by the Forecast tile">
+											{item.targetPercent}% of income
+										</span>
+									{/if}
 								</div>
 							</div>
-							{#if !item.loading && !item.error}
-								<div class="card-remaining">
-									<span class="remaining-label">{isBudget ? 'Remaining' : 'Still needed'}</span>
-									<span class="remaining-value" style="color:{barColor};">{formatAmount(Math.max(item.remaining, 0), item.currency)}</span>
-									<span class="status-badge {status.cls}">{status.label}</span>
+							<div class="card-side">
+								<div class="card-actions">
+									<button
+										class="card-action"
+										type="button"
+										on:click={() => openEditModal(item)}
+										title="Edit this {activeKind.toLowerCase()}"
+										aria-label="Edit"
+									>
+										✎
+									</button>
+									<button
+										class="card-action danger"
+										type="button"
+										on:click={() => openDeleteConfirm(item)}
+										title="Delete this {activeKind.toLowerCase()}"
+										aria-label="Delete"
+									>
+										✕
+									</button>
 								</div>
-							{/if}
+								{#if !item.loading && !item.error && !item.targetPercent}
+									<div class="card-remaining">
+										<span class="remaining-label">{isBudget ? 'Remaining' : 'Still needed'}</span>
+										<span class="remaining-value" style="color:{barColor};">{formatAmount(Math.max(item.remaining, 0), item.currency)}</span>
+										<span class="status-badge {status.cls}">{status.label}</span>
+									</div>
+								{/if}
+							</div>
 						</div>
 
 						{#if item.loading}
@@ -312,6 +508,22 @@
 							</div>
 						{:else if item.error}
 							<div class="card-error">{item.error}</div>
+						{:else if item.targetPercent}
+							<!-- Percent-mode: no fixed cap. Show actual spend
+							     in the cycle so far + reminder that the
+							     forecast tile resolves the % to an amount. -->
+							<div class="progress-section percent-mode">
+								<div class="progress-label-row">
+									<span class="progress-label-text">
+										{isBudget ? 'Spent' : 'Accrued'} this cycle:
+										{formatAmount(item.spent, item.currency)}
+									</span>
+									<span class="pct-text percent-badge">{item.targetPercent}% of income</span>
+								</div>
+								<div class="percent-hint">
+									Effective amount resolved monthly in the Discretionary forecast tile.
+								</div>
+							</div>
 						{:else}
 							<!-- Progress section -->
 							<div class="progress-section">
@@ -612,8 +824,77 @@
 	}
 
 	.meta-chip svg { flex-shrink: 0; opacity: 0.7; }
+	.meta-chip.percent-chip {
+		background: color-mix(in srgb, var(--color-green, var(--interactive-accent)), transparent 80%);
+		color: var(--color-green, var(--interactive-accent));
+		padding: 1px 6px;
+		border-radius: 999px;
+		font-weight: 600;
+	}
 
-	/* ── Right: remaining + badge ──────────────────────── */
+	/* Percent-mode card body: no fixed-cap progress bar. */
+	.progress-section.percent-mode {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-1);
+	}
+	.percent-mode .percent-badge {
+		background: color-mix(in srgb, var(--color-green, var(--interactive-accent)), transparent 80%);
+		color: var(--color-green, var(--interactive-accent));
+		padding: 2px 8px;
+		border-radius: 999px;
+		font-weight: 600;
+		font-size: var(--font-ui-small);
+	}
+	.percent-hint {
+		font-size: var(--font-ui-smaller);
+		color: var(--text-muted);
+		font-style: italic;
+	}
+
+	/* ── Right side: actions + remaining + badge ───────── */
+	.card-side {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+		flex-shrink: 0;
+	}
+	.card-actions {
+		display: flex;
+		gap: 4px;
+		opacity: 0.55;
+		transition: opacity 0.15s;
+	}
+	.indicator-card:hover .card-actions { opacity: 1; }
+	.card-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-s);
+		color: var(--text-muted);
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+		transition: background 0.12s, color 0.12s, border-color 0.12s;
+	}
+	.card-action:hover {
+		background: var(--background-modifier-hover);
+		color: var(--text-normal);
+	}
+	.card-action.danger:hover {
+		color: var(--text-error);
+		border-color: var(--text-error);
+	}
+
+	.rollover-chip { color: var(--color-green, #4caf74); }
+	.rollover-chip svg { opacity: 1; }
+
 	.card-remaining {
 		display: flex;
 		flex-direction: column;
