@@ -60,10 +60,16 @@ function resolveAccountsPath(plugin: BeancountPlugin): string {
 
 function parseBalanceCell(raw: string): { amount: number | null; currency: string | null } {
     // BQL `sum(position)` returns a string like "12500.00 UYU" or
-    // "-200.00 UYU, 5.00 USD" for multi-currency positions. We split
-    // on the first comma and parse the first component.
-    if (!raw) return { amount: null, currency: null };
+    // "-200.00 UYU, 5.00 USD" for multi-currency positions. When all
+    // positions cancel out (e.g. a pad inserted -200 against a +200
+    // payment, leaving net zero) beancount emits an EMPTY cell — which
+    // semantically means zero, not "no data". The account being in the
+    // result set at all tells us it has postings; the empty cell means
+    // they net out. Returning null here would let the caller fall back
+    // to the principal metadata, defeating Force Balance / payoff.
+    if (!raw) return { amount: 0, currency: null };
     const first = raw.split(',')[0].trim();
+    if (!first) return { amount: 0, currency: null };
     const parts = first.split(/\s+/);
     if (parts.length < 2) return { amount: null, currency: null };
     const amount = parseFloat(parts[0].replace(/,/g, ''));

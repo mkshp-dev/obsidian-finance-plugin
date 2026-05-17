@@ -4,13 +4,58 @@
 	import type { BalanceSheetController, BalanceSheetState, AccountItem } from '../../../controllers/BalanceSheetController';
 	import { Logger } from '../../../utils/logger';
 	import { AccountManagementModal } from '../../modals/AccountManagementModal';
+	import { SetBalanceModal } from '../../modals/SetBalanceModal';
+	import { applyForceBalance } from '../../../utils/forceBalance';
 	import SunburstChart from '../../common/SunburstChart.svelte';
 	import ChartComponent from '../../common/ChartComponent.svelte';
+
+	/** Pulls "30,496.00 UYU" → { value: 30496, currency: "UYU" } from
+	 * the formatted amount string. Returns null for multi-currency
+	 * parent rows (e.g. "30496 UYU, 200 USD"). */
+	function parseAmountCell(s: string): { value: number; currency: string } | null {
+		if (!s) return null;
+		const trimmed = s.replace(/,/g, '').trim();
+		const m = trimmed.match(/^(-?[\d.]+)\s+([A-Z][A-Z0-9'._-]*)$/);
+		if (!m) return null;
+		const value = parseFloat(m[1]);
+		if (!isFinite(value)) return null;
+		return { value, currency: m[2] };
+	}
+
+	function openForceBalance(item: AccountItem) {
+		if (!plugin) return;
+		const parsed = parseAmountCell(item.amount);
+		const fallback = { currency: 'UYU', value: item.amountNumber ?? 0 };
+		const init = parsed ?? fallback;
+		new SetBalanceModal(plugin.app, {
+			account: item.account,
+			currency: init.currency,
+			current: init.value,
+			onSubmit: async (amount) => {
+				const r = await applyForceBalance(plugin, {
+					account: item.account,
+					currency: init.currency,
+					amount,
+				});
+				// Re-fetch in the same valuation mode the user is viewing.
+				// BalanceSheetController has loadData (not refresh) — calling
+				// it with the current state's mode + currency keeps the
+				// dropdown selection stable while the numbers update.
+				if (r.ok && controller) {
+					await controller.loadData(state.valuationMethod, state.currency);
+				}
+			},
+		}).open();
+	}
 
 	// Chart selector: which chart is shown in the chart area
 	let selectedChart: 'trend' | 'balances' = 'trend';
 	// Sub-selector for Balances view
 	let selectedBalanceSection: 'assets' | 'liabilities' | 'equity' = 'assets';
+	// Equity is a residual/diagnostic for personal use — hide by default.
+	// User can opt-in via the header toggle when they need the breakdown
+	// (e.g. auditing accumulated pad/opening-balance adjustments).
+	let showEquity = false;
 
 	// --- Receive the controller ---
 	export let plugin: any = null;
@@ -367,17 +412,23 @@
 		<div class="balance-sheet-section">
 			<div class="balance-sheet-section-header">
 				<h3>Balance Sheet</h3>
-				<div class="valuation-method-selector">
-					<label for="valuation-method">Show in:</label>
-					<select
-						id="valuation-method"
-						value={selectedShowInKey}
-						on:change={handleShowInChange}
-					>
-						{#each showInOptions as opt}
-							<option value={optionKey(opt)}>{optionLabel(opt)}</option>
-						{/each}
-					</select>
+				<div class="balance-sheet-controls">
+					<label class="equity-toggle" title="Equity is the residual that balances pads + opening declarations. Rarely useful day-to-day.">
+						<input type="checkbox" bind:checked={showEquity} />
+						Show Equity
+					</label>
+					<div class="valuation-method-selector">
+						<label for="valuation-method">Show in:</label>
+						<select
+							id="valuation-method"
+							value={selectedShowInKey}
+							on:change={handleShowInChange}
+						>
+							{#each showInOptions as opt}
+								<option value={optionKey(opt)}>{optionLabel(opt)}</option>
+							{/each}
+						</select>
+					</div>
 				</div>
 			</div>
 
@@ -407,6 +458,11 @@
 							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
+									{#if !item.isCategory && plugin}
+										<button class="force-balance-btn" type="button"
+											on:click|stopPropagation={() => openForceBalance(item)}
+											title="Force balance — write a pad + balance assertion to override the computed balance">⚖</button>
+									{/if}
 								</td>
 								{#if showOtherCurrenciesColumn}
 									<td class="align-right other-currencies-cell">
@@ -445,6 +501,11 @@
 								</td>
 									<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 										{item.amount}
+										{#if !item.isCategory && plugin}
+											<button class="force-balance-btn" type="button"
+												on:click|stopPropagation={() => openForceBalance(item)}
+												title="Force balance — write a pad + balance assertion to override the computed balance">⚖</button>
+										{/if}
 									</td>
 									{#if showOtherCurrenciesColumn}
 										<td class="align-right other-currencies-cell">
@@ -483,6 +544,11 @@
 							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
+									{#if !item.isCategory && plugin}
+										<button class="force-balance-btn" type="button"
+											on:click|stopPropagation={() => openForceBalance(item)}
+											title="Force balance — write a pad + balance assertion to override the computed balance">⚖</button>
+									{/if}
 								</td>
 								{#if showOtherCurrenciesColumn}
 									<td class="align-right other-currencies-cell">
@@ -495,6 +561,7 @@
 				</table>
 			</div>
 
+			{#if showEquity}
 			<div class="column">
 				<h4 class="section-spacer">Equity</h4>
 				<table class="beancount-table">
@@ -520,6 +587,11 @@
 							</td>
 								<td class="align-right amount-cell" class:category-amount={item.isCategory}>
 									{item.amount}
+									{#if !item.isCategory && plugin}
+										<button class="force-balance-btn" type="button"
+											on:click|stopPropagation={() => openForceBalance(item)}
+											title="Force balance — write a pad + balance assertion to override the computed balance">⚖</button>
+									{/if}
 								</td>
 								{#if showOtherCurrenciesColumn}
 									<td class="align-right other-currencies-cell">
@@ -531,6 +603,7 @@
 					</tbody>
 				</table>
 			</div>
+			{/if}
 		</div>
 		</div>
 	{/if}
@@ -717,6 +790,27 @@
 		font-size: var(--font-ui-larger);
 	}
 
+	.balance-sheet-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-4);
+		flex-wrap: wrap;
+	}
+	.equity-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--size-4-1);
+		font-size: 0.9em;
+		color: var(--text-muted);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.equity-toggle input[type="checkbox"] {
+		cursor: pointer;
+		accent-color: var(--interactive-accent);
+		margin: 0;
+	}
+
 	.valuation-method-selector {
 		display: flex;
 		align-items: center;
@@ -889,6 +983,24 @@
 		white-space: nowrap;
 		width: 25%;
 		text-align: right;
+	}
+	.force-balance-btn {
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: 4px;
+		padding: 0 4px;
+		margin-left: 6px;
+		cursor: pointer;
+		color: var(--text-faint);
+		font-size: 11px;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+	}
+	tr:hover .force-balance-btn { opacity: 1; }
+	.force-balance-btn:hover {
+		color: var(--text-accent);
+		background: var(--background-modifier-hover);
 	}
 
 	.other-currencies-cell {

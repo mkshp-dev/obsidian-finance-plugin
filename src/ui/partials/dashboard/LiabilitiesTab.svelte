@@ -13,6 +13,8 @@
 	import { formatCurrency, formatCurrencyAmount } from '../../../utils/currency-precision';
 	import { LoanEditModal } from '../../modals/LoanEditModal';
 	import { RecordPaymentModal } from '../../modals/RecordPaymentModal';
+	import { SetBalanceModal } from '../../modals/SetBalanceModal';
+	import { applyForceBalance } from '../../../utils/forceBalance';
 
 	export let controller: LiabilitiesController;
 	export let plugin: any = null;
@@ -90,6 +92,30 @@
 		}).open();
 	}
 
+	/** Force the displayed balance to a user-supplied value by appending
+	 * a `pad` + `balance` directive pair. Mirrors the existing
+	 * `pads.beancount` / `balances.beancount` pattern in the user's
+	 * vault: pad source defaults to Equity:OpeningBalances. The
+	 * balance assertion goes on `today + 1` because beancount checks
+	 * assertions at the START of the asserted date (see
+	 * balances.beancount header comment). */
+	function forceBalance(row: LoanRow) {
+		if (!plugin) return;
+		new SetBalanceModal(plugin.app, {
+			account: row.account,
+			currency: row.currency,
+			current: row.currentBalance ?? 0,
+			onSubmit: async (amount) => {
+				const r = await applyForceBalance(plugin, {
+					account: row.account,
+					currency: row.currency,
+					amount,
+				});
+				if (r.ok) controller?.refresh();
+			},
+		}).open();
+	}
+
 	function formatMonths(n: number | null): string {
 		if (n === null) return '';
 		if (n < 1) return '< 1 mo';
@@ -142,6 +168,23 @@
 	function payoffPct(row: LoanRow): number | null {
 		const f = payoffFraction(row.currentBalance, row.principal);
 		return f === null ? null : f * 100;
+	}
+
+	/** Linear RGB interpolation red→green for the loan-card left edge.
+	 * We compute the color in JS (instead of `color-mix()`) because
+	 * Chromium's color-mix doesn't re-evaluate when its input vars
+	 * change at runtime — different cards on the same screen end up
+	 * sharing one resolved color. Plain rgb() avoids the issue. */
+	function gradientColor(pct: number): string {
+		const t = Math.max(0, Math.min(100, pct)) / 100;
+		// Anchors picked to match the existing red/green theme tokens
+		// (Obsidian's default callout reds/greens are close to these).
+		const r0 = 208, g0 = 66, b0 = 85;   // red end (#d04255)
+		const r1 = 88, g1 = 168, b1 = 100;  // green end (#58a864) — slightly cooler than the theme green so midtones don't look muddy
+		const r = Math.round(r0 + (r1 - r0) * t);
+		const g = Math.round(g0 + (g1 - g0) * t);
+		const b = Math.round(b0 + (b1 - b0) * t);
+		return `rgb(${r}, ${g}, ${b})`;
 	}
 
 	function isAboveBudget(row: LoanRow): boolean {
@@ -352,18 +395,31 @@
 								{@const months = monthsRemaining(row.currentBalance, row.monthlyPayment)}
 								{@const isOneTime = row.paymentMode === 'one-time'}
 								{@const eventDate = nextEventDate(row)}
-								<article class="loan-card {urgencyClassForRow(row)}" class:above-principal={above} class:one-time={isOneTime}>
+								{@const pctClamped = pct === null ? null : Math.max(0, Math.min(100, pct))}
+								{@const isPaidOff = pct !== null && pct >= 99.5 && !above}
+								<article
+									class="loan-card {urgencyClassForRow(row)}"
+									class:above-principal={above}
+									class:paid-off={isPaidOff}
+									class:has-progress={pctClamped !== null}
+									class:one-time={isOneTime}
+									style={pctClamped !== null
+										? `--payoff-pct: ${pctClamped}; --gradient-color: ${gradientColor(pctClamped)}`
+										: ''}
+								>
 									<header class="loan-card-header">
 										<div class="account">
 											<span class="account-name" title={row.account}>{row.account}</span>
 											<div class="badges">
 												{#if row.loanType}<span class="badge">{row.loanType}</span>{/if}
 												{#if isOneTime}<span class="badge schedule-badge">one-time</span>{/if}
+												{#if isPaidOff}<span class="badge paid-badge" title="Balance is zero — this loan is fully settled">✓ PAID OFF</span>{/if}
 											</div>
 										</div>
 										{#if plugin}
 											<div class="card-actions">
 												<button class="ghost small-btn" on:click={() => openPaymentModal(row)} title="Record a payment to this account">$</button>
+												<button class="ghost small-btn" on:click={() => forceBalance(row)} title="Force balance — write a pad + balance assertion to override the computed balance">⚖</button>
 												<button class="ghost small-btn" on:click={() => openEditModal(row)} title="Edit metadata in accounts.beancount">✎</button>
 												{#if row.sourceLine}
 													<button class="ghost small-btn" on:click={() => openSource(row)} title="Open accounts file at line {row.sourceLine}">↗</button>
@@ -617,6 +673,16 @@
 	.role-liability .loan-card { border-left-color: var(--color-red); }
 	.role-receivable .loan-card { border-left-color: var(--color-green); }
 
+	/* Progress-coloured left edge: red at 0% paid, green at 100%.
+	 * --gradient-color is computed inline per card (svelte template
+	 * builds the color-mix() expression with a literal % — using
+	 * var() inside color-mix() doesn't re-evaluate on var change in
+	 * Chromium). The ramp runs in oklch for perceptual uniformity. */
+	.loan-card.has-progress {
+		border-left-width: 4px;
+		border-left-color: var(--gradient-color, var(--background-modifier-border));
+	}
+
 	/* Urgency overrides — overdue is the strongest cue, then due-soon. */
 	.loan-card.urgency-overdue {
 		border-left-color: var(--color-red);
@@ -627,6 +693,31 @@
 		box-shadow: inset 4px 0 0 var(--color-orange, var(--text-warning));
 	}
 	.loan-card.above-principal { background: color-mix(in srgb, var(--color-red), transparent 95%); }
+
+	/* Fully-settled state: solid green border + subtle green tint +
+	 * faded text. Visually distinct enough that the eye skips finished
+	 * loans when scanning the grid for what still needs attention. */
+	.loan-card.paid-off {
+		border-color: color-mix(in srgb, var(--color-green), transparent 60%);
+		border-left-color: var(--color-green);
+		border-left-width: 4px;
+		background: color-mix(in srgb, var(--color-green), transparent 95%);
+	}
+	.loan-card.paid-off .balance,
+	.loan-card.paid-off .meta dd {
+		opacity: 0.65;
+	}
+	.loan-card.paid-off .balance {
+		text-decoration: line-through;
+		text-decoration-color: color-mix(in srgb, var(--color-green), transparent 40%);
+		text-decoration-thickness: 2px;
+	}
+	.badge.paid-badge {
+		background: color-mix(in srgb, var(--color-green), transparent 80%);
+		color: var(--color-green);
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
 
 	.loan-card-header {
 		display: flex;
@@ -749,9 +840,11 @@
 	}
 	.payoff-fill {
 		height: 100%;
-		background: var(--interactive-accent);
-		transition: width 0.3s ease;
+		background: var(--gradient-color, var(--interactive-accent));
+		transition: width 0.3s ease, background 0.3s ease;
 	}
+	.above-principal .payoff-fill { background: var(--color-red); }
+	.paid-off .payoff-fill { background: var(--color-green); }
 	.payoff-label {
 		font-size: var(--font-ui-smaller);
 		color: var(--text-muted);

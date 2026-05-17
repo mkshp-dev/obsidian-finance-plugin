@@ -5,6 +5,7 @@ import type BeancountPlugin from '../main';
 import * as queries from '../queries/index';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { extractConvertedAmount, extractNonReportingCurrencies, parseAmount } from '../utils/index';
+import { formatCurrencyAmount } from '../utils/currency-precision';
 import { getOpenAccounts } from '../utils/accounts';
 import type { ChartConfiguration } from 'chart.js/auto';
 import { Logger } from '../utils/logger';
@@ -83,6 +84,74 @@ export interface BalanceSheetState {
 export class BalanceSheetController {
 	public plugin: BeancountPlugin;
 	public state: Writable<BalanceSheetState>;
+
+	/** Cached commodity list used by the multi-currency precision
+	 * recovery (option-B fix for beancount's display truncation). One
+	 * fetch per controller instance — invalidated when the user
+	 * declares a new commodity by clicking refresh on the tab. */
+	private currenciesCache: string[] | null = null;
+
+	/** Refetch the list of declared commodities, used to build the
+	 * per-currency `only(...)` columns in the balance-sheet query.
+	 * Caches the result so subsequent loadData calls reuse it. */
+	private async getKnownCurrencies(): Promise<string[]> {
+		if (this.currenciesCache) return this.currenciesCache;
+		try {
+			const csv = await this.plugin.runQuery(queries.getAllCurrenciesQuery());
+			const records: string[][] = parseCsv(csv.replace(/\r/g, '').trim(), {
+				columns: false, skip_empty_lines: true,
+			});
+			const headerRow = records[0]?.[0]?.toLowerCase().includes('currency');
+			const data = headerRow ? records.slice(1) : records;
+			this.currenciesCache = data
+				.map(r => (r[0] ?? '').trim())
+				.filter(c => /^[A-Z][A-Z0-9'._-]*$/.test(c));
+			return this.currenciesCache;
+		} catch (e) {
+			Logger.warn('[BalanceSheetController] currency-list query failed:', e);
+			return [];
+		}
+	}
+
+	/** Externally callable: force a re-fetch of the commodity list on
+	 * next loadData (e.g. when the user refreshes the tab). */
+	public invalidateCurrencyCache(): void {
+		this.currenciesCache = null;
+		this.accountCurrenciesCache = null;
+	}
+
+	/** Cache of account → first declared currency, parsed from
+	 * accounts.beancount. Needed so zero-balance leaves render in
+	 * their native currency (e.g. "0.00 BTC") instead of falling back
+	 * to the operating currency. */
+	private accountCurrenciesCache: Map<string, string> | null = null;
+
+	private async getAccountCurrencies(): Promise<Map<string, string>> {
+		if (this.accountCurrenciesCache) return this.accountCurrenciesCache;
+		const out = new Map<string, string>();
+		try {
+			const folder = this.plugin.settings.structuredFolderName?.trim() || 'Finances';
+			const path = `${folder}/accounts.beancount`;
+			const adapter = this.plugin.app.vault.adapter;
+			if (!(await adapter.exists(path))) {
+				this.accountCurrenciesCache = out;
+				return out;
+			}
+			const text = await adapter.read(path);
+			// `<date> open <account>  <currency1>[, <currency2>]?`.
+			// Account names use `[A-Z][A-Za-z0-9:_-]+`; currencies use
+			// `[A-Z][A-Z0-9'._-]*`. We capture only the first currency.
+			const re = /^\d{4}-\d{2}-\d{2}\s+open\s+([A-Z][A-Za-z0-9:_-]+)(?:\s+([A-Z][A-Z0-9'._-]*))?/gm;
+			let m: RegExpExecArray | null;
+			while ((m = re.exec(text)) !== null) {
+				if (m[2]) out.set(m[1], m[2]);
+			}
+		} catch (e) {
+			Logger.warn('[BalanceSheetController] account-currency parse failed:', e);
+		}
+		this.accountCurrenciesCache = out;
+		return out;
+	}
 
 	/**
 	 * Creates an instance of BalanceSheetController.
@@ -217,7 +286,10 @@ export class BalanceSheetController {
 				account.amountNumber = childTotal;
 				
 				// Always show amount with reporting currency
-				account.amount = `${childTotal.toFixed(2)} ${currency}`;
+				// Use formatCurrencyAmount so an empty currency (units
+				// mode, where each leaf carries its own code) renders
+				// cleanly as just the number — no trailing-space artifact.
+				account.amount = formatCurrencyAmount(childTotal, currency);
 				
 				// Aggregate other currencies from children - collect unique currencies
 				const childOtherCurrencies = account.children
@@ -423,25 +495,39 @@ export class BalanceSheetController {
 		}
 
 		try {
+			// Pre-fetch the commodity list + account → currency map so we
+			// can ask beancount for the precise number of each currency
+			// component per account (option-B fix for the display-
+			// truncation issue) AND render zero-balance leaves in their
+			// declared native currency. Both cached per-instance.
+			const [knownCurrencies, accountCurrencies] = await Promise.all([
+				this.getKnownCurrencies(),
+				this.getAccountCurrencies(),
+			]);
+
 			let query: string;
 			switch (valuationMethod) {
 				case 'convert':
-					query = queries.getBalanceSheetQuery(target);
+					// Convert mode collapses everything to the target currency,
+					// so only that one column is meaningful.
+					query = queries.getBalanceSheetQuery(target, [target]);
 					break;
 				case 'cost':
-					query = queries.getBalanceSheetQueryByCost();
+					query = queries.getBalanceSheetQueryByCost(knownCurrencies);
 					break;
 				case 'units':
-					query = queries.getBalanceSheetQueryByUnits();
+					query = queries.getBalanceSheetQueryByUnits(knownCurrencies);
 					break;
 			}
 
 			const result = await this.plugin.runQuery(query);
 			const cleanStdout = result.replace(/\r/g, "").trim();
-			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true });
-
-			const firstRowIsHeader = records[0]?.[0]?.toLowerCase().includes('account');
-			const rows = firstRowIsHeader ? records.slice(1) : records;
+			// Parse as dict so we can access columns by name. The new
+			// queries return `account`, `raw`, and `bal_<CUR>` for each
+			// known commodity — variable schema based on the vault.
+			const records: any[] = parseCsv(cleanStdout, {
+				columns: true, skip_empty_lines: true, trim: true,
+			});
 
 			let tempAssets: [string, string][] = [];
 			let tempReceivables: [string, string][] = [];
@@ -451,15 +537,60 @@ export class BalanceSheetController {
 			const unconvertedAccounts: string[] = [];
 			const seenAccounts = new Set<string>();
 
-			for (const row of rows) {
-				if (row.length < 2) continue;
-				const [account, amountStr] = row;
+			// Build the ordered list of column suffixes once. We try each
+			// safe currency, fall back to whatever non-meta column we find.
+			const safeCurrencyList = knownCurrencies
+				.filter(c => /^[A-Z][A-Z0-9'._-]*$/.test(c));
+
+			for (const r of records) {
+				const account = (r.account ?? '').trim();
+				const rawAmount = (r.raw ?? '').trim();
+				if (!account) continue;
 				seenAccounts.add(account);
 
-				// Check for multi-currency results (only relevant for convert method)
-				if (valuationMethod === 'convert' && amountStr.includes(',')) {
+				// Multi-currency detection: collect per-currency numeric
+				// components from bal_<CUR> columns. Beancount yields the
+				// raw display with a comma when it can't collapse to one
+				// currency, but our numeric columns are authoritative —
+				// any row with 2+ non-zero numeric columns is multi-currency.
+				type Piece = { currency: string; value: number };
+				const pieces: Piece[] = [];
+				for (const cur of safeCurrencyList) {
+					const col = 'bal_' + cur.replace(/[.'-]/g, '_').toLowerCase();
+					// bean-query lowercases ALL alias characters in the CSV
+					// header, so look up by lowercased column name.
+					const raw = r[col];
+					if (raw === undefined || raw === '' || raw === null) continue;
+					const v = parseFloat(String(raw).replace(/,/g, ''));
+					if (!isFinite(v) || v === 0) continue;
+					pieces.push({ currency: cur, value: v });
+				}
+
+				const isMultiCurrency = pieces.length > 1 ||
+					(valuationMethod === 'convert' && rawAmount.includes(','));
+				if (isMultiCurrency && valuationMethod === 'convert') {
 					hasUnconvertedCommodities = true;
 					unconvertedAccounts.push(account);
+				}
+
+				// Build the display string. Priority:
+				//   1. Single non-zero piece → format with currency-aware decimals.
+				//   2. Multiple non-zero pieces → comma-joined formatted list.
+				//   3. Pieces empty but row exists (everything netted to
+				//      zero) → render "0 <native>" using the declared
+				//      currency from accounts.beancount. Falls back to
+				//      operating currency only as last resort.
+				let amountStr: string;
+				if (pieces.length === 1) {
+					amountStr = formatCurrencyAmount(pieces[0].value, pieces[0].currency);
+				} else if (pieces.length > 1) {
+					amountStr = pieces
+						.map(p => formatCurrencyAmount(p.value, p.currency))
+						.join(', ');
+				} else {
+					const declared = accountCurrencies.get(account)
+						|| (valuationMethod === 'convert' ? target : reportingCurrency || '');
+					amountStr = formatCurrencyAmount(0, declared);
 				}
 
 				// Receivables (money owed *to* the user) split out of the
@@ -478,11 +609,13 @@ export class BalanceSheetController {
 
 			// Determine the column-header currency. In `convert` mode the
 			// rows are all expressed in the chosen target. In `units` /
-			// `cost` mode the rows keep their native currencies — the
-			// header surfaces "Native" / "Cost" instead of a single code.
+			// `cost` mode the rows keep their native currencies — leave
+			// the header blank in units mode (each cell already carries
+			// its own currency code) and surface "Cost" only for cost
+			// mode where the value semantic differs.
 			const headerCurrency = valuationMethod === 'convert'
 				? target
-				: (valuationMethod === 'cost' ? 'Cost' : 'Native');
+				: (valuationMethod === 'cost' ? 'Cost' : '');
 
 			// `sum(position)` only returns accounts with at least one
 			// posting — so a freshly-opened Liabilities:Treasury (or any
@@ -491,9 +624,13 @@ export class BalanceSheetController {
 			// the chart of accounts so opened accounts always show.
 			try {
 				const openAccounts = await getOpenAccounts(this.plugin);
-				const zeroAmount = `0.00 ${target}`;
 				for (const acc of openAccounts) {
 					if (seenAccounts.has(acc)) continue;
+					// Render zero in the account's declared native currency,
+					// not the operating currency — otherwise opened-but-empty
+					// crypto/gold accounts misleadingly show as "0.00 UYU".
+					const declared = accountCurrencies.get(acc) || target;
+					const zeroAmount = formatCurrencyAmount(0, declared);
 					if (acc.startsWith('Assets:Receivables')) tempReceivables.push([acc, zeroAmount]);
 					else if (acc.startsWith('Assets')) tempAssets.push([acc, zeroAmount]);
 					else if (acc.startsWith('Liabilities')) tempLiab.push([acc, zeroAmount]);

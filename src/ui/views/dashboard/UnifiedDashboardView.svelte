@@ -9,6 +9,7 @@
     import JournalTab from '../../partials/dashboard/JournalTab.svelte';
     import IncomeStatementTab from '../../partials/dashboard/IncomeStatementTab.svelte';
     import LiabilitiesTab from '../../partials/dashboard/LiabilitiesTab.svelte';
+    import RecurringTab from '../../partials/dashboard/RecurringTab.svelte';
 
     // Types
     import type { OverviewController } from '../../../controllers/OverviewController';
@@ -39,6 +40,7 @@
         { id: 'balancesheet', label: 'Accounts & Balances' },
         { id: 'incomestatement', label: 'Income Statement' },
         { id: 'liabilities', label: 'Liabilities & Receivables' },
+        { id: 'recurring', label: 'Recurring' },
         { id: 'commodities', label: 'Commodities' }
     ];
 </script>
@@ -63,19 +65,32 @@
                 {plugin}
             />
         {:else if activeTab === 'transactions'}
-            <TransactionsTab 
+            <TransactionsTab
                 controller={transactionController}
+                {plugin}
                 on:filtersChange={e => transactionController.handleFilterChange(e.detail)}
             />
         {:else if activeTab === 'journal'}
             <JournalTab store={journalStore} plugin={plugin} />
         {:else if activeTab === 'balancesheet'}
-            <BalanceSheetTab controller={balanceSheetController} />
+            <BalanceSheetTab controller={balanceSheetController} {plugin} />
         {:else if activeTab === 'incomestatement'}
             <IncomeStatementTab controller={incomeStatementController} />
         {:else if activeTab === 'liabilities'}
             {#if liabilitiesController}
                 <LiabilitiesTab controller={liabilitiesController} {plugin} />
+            {/if}
+        {:else if activeTab === 'recurring'}
+            {#if recurringController}
+                <RecurringTab
+                    controller={recurringController}
+                    {plugin}
+                    on:editLoan={() => activeTab = 'liabilities'}
+                />
+            {:else}
+                <div style="padding: 24px; color: var(--text-muted);">
+                    Recurring controller is not initialized.
+                </div>
             {/if}
         {:else if activeTab === 'commodities'}
             <CommoditiesTab controller={commoditiesController} {plugin} on:openCommodity on:addCommodity />
