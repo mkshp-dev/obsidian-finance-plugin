@@ -862,7 +862,7 @@ export async function deleteQueryDirective(
 // ─── INDICATOR DIRECTIVE (Budget / Target) ─────────────────────────────────────
 
 export interface IndicatorDirectiveParams {
-    type: 'Budget' | 'Target';
+    type: 'Budget' | 'Target' | 'Savings';
     name: string;
     accountQuery: string;
     cycle: 'Monthly' | 'Weekly';
