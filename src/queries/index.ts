@@ -45,16 +45,44 @@ export function getThisMonthSavingsQuery(currency: string, rounding: number): st
 	return `SELECT neg(round(number(only('${currency}', convert(sum(position), '${currency}'))), ${rounding})) AS _thisMonthNetWorthChange WHERE account ~ '^(Income|Expenses)' AND month=month(today()) AND year=year(today())`;
 }
 
-export function getBalanceSheetQuery(currency: string): string {
-	return `SELECT account, convert(sum(position), '${currency}') WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+/** Sanitize a currency code so it's safe to splice into BQL identifiers
+ * and column aliases. We accept only the standard beancount commodity
+ * shape ([A-Z][A-Z0-9'._-]*); anything else is rejected to avoid
+ * injection from a malformed commodity name. */
+function safeCurrency(c: string): string {
+	return /^[A-Z][A-Z0-9'._-]*$/.test(c) ? c : '';
 }
 
-export function getBalanceSheetQueryByCost(): string {
-	return `SELECT account, cost(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+/** Build `, round(number(only('CUR', <inner>)), 8) AS bal_CUR`
+ * fragments for each known currency. The dashboard uses the per-
+ * currency columns to recover full-precision numeric values that
+ * beancount's display formatter would otherwise truncate (e.g.
+ * 272.10 UYU → "272 UYU"). Null/zero columns indicate "this account
+ * has no holdings in that currency"; multiple non-null columns flag
+ * a multi-currency holding. */
+function perCurrencyCols(currencies: string[], inner: string): string {
+	return currencies
+		.map(safeCurrency)
+		.filter(Boolean)
+		// Replace any `.` and `'` in the alias with `_` so the column
+		// name stays valid for parsers downstream.
+		.map(c => `, round(number(only('${c}', ${inner})), 8) AS bal_${c.replace(/[.'-]/g, '_')}`)
+		.join('');
 }
 
-export function getBalanceSheetQueryByUnits(): string {
-	return `SELECT account, units(sum(position)) WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+export function getBalanceSheetQuery(currency: string, allCurrencies: string[] = []): string {
+	const inner = `convert(sum(position), '${currency}')`;
+	return `SELECT account, ${inner} AS raw${perCurrencyCols(allCurrencies, inner)} WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+}
+
+export function getBalanceSheetQueryByCost(allCurrencies: string[] = []): string {
+	const inner = `cost(sum(position))`;
+	return `SELECT account, ${inner} AS raw${perCurrencyCols(allCurrencies, inner)} WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
+}
+
+export function getBalanceSheetQueryByUnits(allCurrencies: string[] = []): string {
+	const inner = `units(sum(position))`;
+	return `SELECT account, ${inner} AS raw${perCurrencyCols(allCurrencies, inner)} WHERE account ~ '^(Assets|Liabilities|Equity)' AND NOT close_date(account) GROUP BY account ORDER BY account`;
 }
 
 
@@ -88,7 +116,8 @@ export function getIncomeStatementQueryByUnits(): string {
 }
 
 export function getTransactionsQuery(filters: TransactionFilters, limit: number = 1000): string {
-	const selectPart = `SELECT date, payee, narration, position, balance`; // Added balance column
+	// `id` is needed by per-row Edit/Delete actions in TransactionsTab.
+	const selectPart = `SELECT date, payee, narration, position, balance, id`;
 	const whereClauses: string[] = [];
 	const orderByPart = `ORDER BY date DESC, lineno DESC LIMIT ${limit}`;
 
@@ -156,13 +185,17 @@ export function getHistoricalIncomeDataQuery(interval: 'month' | 'week' = 'month
 	}
 	return `SELECT year, month, only('${currency}', convert(sum(position), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1)))) AS _worth WHERE account ~ '^(Income)' GROUP BY year, month ORDER BY year, month`;
 }
-// --- List Budget/Target Quries ---	
+// --- List Budget/Target Quries ---
 export function getBudgetListQuery(): string {
-	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _budgetAmount, meta('currency') AS _currency FROM events WHERE type='Indicator' AND description='Budget'`;
+	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _budgetAmount, meta('currency') AS _currency, meta('targetPercent') AS _targetPercent FROM events WHERE type='Indicator' AND description='Budget'`;
 }
 
 export function getTargetListQuery(): string {
-	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _targetAmount, meta('currency') AS _currency FROM events WHERE type='Indicator' AND description='Target'`;
+	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _targetAmount, meta('currency') AS _currency, meta('targetPercent') AS _targetPercent FROM events WHERE type='Indicator' AND description='Target'`;
+}
+
+export function getSavingsListQuery(): string {
+	return `SELECT date AS _startDate, meta('name') AS _name, meta('accountQuery') AS _accountString, meta('cycle') AS _period, bool(meta('isRollover')) AS _isRollOver, meta('target') AS _targetAmount, meta('currency') AS _currency, meta('targetPercent') AS _targetPercent FROM events WHERE type='Indicator' AND description='Savings'`;
 }
 
 
@@ -220,7 +253,12 @@ export function getAllPricesQuery(limit: number = 100): string {
 }
 
 export function getAllCurrenciesQuery(): string {
-	return `SELECT distinct(currency) AS currency_`;
+	// `#commodities` returns every declared commodity, even ones with
+	// zero postings — important for the balance-sheet per-currency
+	// precision recovery (we need a `bal_<CUR>` column for every
+	// currency that COULD appear in a position, not just those that
+	// currently have one).
+	return `SELECT name AS currency_ FROM #commodities`;
 }
 
 /**

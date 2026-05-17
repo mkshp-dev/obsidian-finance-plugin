@@ -2,6 +2,12 @@
 	import CardComponent from '../../common/CardComponent.svelte';
 	import IndicatorsSection from './IndicatorsSection.svelte';
 	import RecurringWidget from './RecurringWidget.svelte';
+	import MonthlyForecastPanel from './MonthlyForecastPanel.svelte';
+	import { formatCurrencyAmount } from '../../../utils/currency-precision';
+
+	// Round to fiat-display precision (2 decimals). Avoids the noisy
+	// `16,608.953` you get from raw FX-rate multiplication.
+	const r2 = (n: number) => Math.round(n * 100) / 100;
 	import type { OverviewController } from '../../../controllers/OverviewController';
 	import type { RecurringController } from '../../../controllers/RecurringController';
 	import { writable, type Writable } from 'svelte/store'; // Import writable
@@ -30,7 +36,11 @@
 		netWorthEquivalents: {},
 		monthlyIncomeEquivalents: {},
 		monthlyExpensesEquivalents: {},
+		forecast: null,
 	});
+
+	let showForecastPanel = false;
+	function toggleForecastPanel() { showForecastPanel = !showForecastPanel; }
 
 	// 2. Use a reactive statement ($:) to update the local store variable
 	//    *after* the 'controller' prop is passed in.
@@ -103,7 +113,31 @@
 			<CardComponent label="Monthly Income" value={state.monthlyIncome} equivalents={state.monthlyIncomeEquivalents} comparison="Current month earnings" />
 			<CardComponent label="Monthly Expenses" value={state.monthlyExpenses} equivalents={state.monthlyExpensesEquivalents} comparison="Current month spending" />
 			<CardComponent label="Savings Rate" value={state.savingsRate} comparison="Income minus expenses" />
+			{#if state.forecast}
+				<button
+					class="kpi-card-button"
+					type="button"
+					on:click={toggleForecastPanel}
+					aria-expanded={showForecastPanel}
+					aria-label="Toggle monthly forecast breakdown"
+					title={showForecastPanel ? "Hide forecast breakdown" : "Show forecast breakdown"}
+				>
+					<CardComponent
+						label="Discretionary {showForecastPanel ? '▴' : '▾'}"
+						value={formatCurrencyAmount(r2(state.forecast.monthlyResidual), state.currency)}
+						comparison="After {Math.round((state.forecast.fixedConsumptionRatio || 0) * 100)}% fixed + budgets"
+					/>
+				</button>
+			{/if}
 		</div>
+
+		{#if state.forecast && showForecastPanel}
+			<MonthlyForecastPanel
+				forecast={state.forecast}
+				on:toggle-rule-discretionary={(e) => controller?.setRuleDiscretionary(e.detail.nickname, e.detail.value)}
+				on:toggle-indicator-discretionary={(e) => controller?.setIndicatorDiscretionary(e.detail.name, e.detail.type, e.detail.value)}
+			/>
+		{/if}
 
 		<IndicatorsSection
 			{plugin}
@@ -181,6 +215,33 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: var(--size-4-4);
+	}
+
+	/* Reset native button chrome so the wrapped CardComponent looks
+	 * identical to the other tiles, while keeping keyboard/a11y.
+	 * `display: contents` makes the button transparent to the grid
+	 * layout — the inner .kpi-card participates as if it were a
+	 * direct child, so widths/heights match the sibling tiles. */
+	.kpi-card-button {
+		display: contents;
+		background: none;
+		border: 0;
+		padding: 0;
+		margin: 0;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+	}
+	.kpi-card-button :global(.kpi-card) {
+		cursor: pointer;
+	}
+	.kpi-card-button:focus-visible :global(.kpi-card) {
+		outline: 2px solid var(--interactive-accent);
+		outline-offset: 2px;
+	}
+	.kpi-card-button:hover :global(.kpi-card) {
+		border-color: var(--interactive-accent);
 	}
 	
 	.conversion-warning {
