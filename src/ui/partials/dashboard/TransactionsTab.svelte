@@ -1,13 +1,20 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
+	import { Notice } from 'obsidian';
 	import type { AccountNode } from '../../../models/account';
 	import { parseAmount, debounce } from '../../../utils/index';
 	import type { TransactionController } from '../../../controllers/TransactionController'; // Import controller type
+	import { UnifiedTransactionModal } from '../../modals/UnifiedTransactionModal';
+	import { deleteTransaction } from '../../../utils/directives';
+	import { getTransactionEntries } from '../../../utils/journal';
 
 	// --- PROPS ---
 	// Receive the controller
 	export let controller: TransactionController;
-	// --- REMOVED all other data props ---
+	// `plugin` is needed for Edit/Delete actions (modal + deleteTransaction).
+	// Optional so the component still renders in legacy callers that pass
+	// only the controller — the action column hides when plugin is null.
+	export let plugin: any = null;
 
 	// --- Get the store from the controller ---
 	const stateStore = controller.state;
@@ -85,6 +92,44 @@
 	}
 	
 	// REACT to incoming data *from* the parent controller
+	async function handleEdit(id: string) {
+		if (!plugin || !id) return;
+		try {
+			// Modal expects a full JournalEntry. Fetch all transactions
+			// (BQL groups postings by id internally) and find ours.
+			const resp = await getTransactionEntries(plugin, {}, 1, 100000);
+			const entry = resp?.entries?.find?.((e: any) => e.id === id);
+			if (!entry) {
+				new Notice('Could not locate transaction to edit. Try refreshing.');
+				return;
+			}
+			new UnifiedTransactionModal(plugin.app, plugin, entry, async () => {
+				await controller.refresh();
+			}).open();
+		} catch (e) {
+			new Notice(`Edit failed: ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
+
+	async function handleDelete(id: string, date: string, payee: string, narration: string, position: string) {
+		if (!plugin || !id) return;
+		const summary = [date, payee, narration, position].filter(Boolean).join(' · ');
+		if (!confirm(`Delete transaction?\n\n${summary}\n\nThis removes the entry block from the .beancount file.`)) {
+			return;
+		}
+		try {
+			const res = await deleteTransaction(plugin, id);
+			if (res?.success === false) {
+				new Notice(`Delete failed: ${res.error ?? 'unknown error'}`);
+				return;
+			}
+			new Notice('Transaction deleted.');
+			await controller.refresh();
+		} catch (e) {
+			new Notice(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
+
 	$: if (state.currentTransactions) {
 		sortTransactions(state.currentTransactions);
 	}
@@ -182,16 +227,23 @@
 						<th on:click={() => handleSort('balance')} class:active={sortColumn === 'balance'}>
 							Balance {sortColumn === 'balance' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
 						</th>
+						<th class="actions-col">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#each sortedTransactions as [date, payee, narration, position, balance]}
+					{#each sortedTransactions as [date, payee, narration, position, balance, id]}
 						<tr>
 							<td>{date}</td>
 							<td>{payee}</td>
 							<td>{narration}</td>
 							<td class="align-right">{position}</td>
 							<td class="align-right">{balance}</td>
+							<td class="actions-col">
+								{#if plugin && id}
+									<button class="row-action" title="Edit transaction" on:click={() => handleEdit(id)}>✎</button>
+									<button class="row-action danger" title="Delete transaction" on:click={() => handleDelete(id, date, payee, narration, position)}>✕</button>
+								{/if}
+							</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -215,6 +267,18 @@
 	.transaction-table td { padding: 6px; border-bottom: 1px solid var(--background-secondary); }
 	.transaction-table tbody tr:nth-child(even) { background-color: var(--background-secondary-alt); }
 	.align-right { text-align: right; font-family: var(--font-monospace); }
+	.actions-col { width: 70px; text-align: center; }
+	.row-action {
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: 4px;
+		padding: 2px 6px;
+		cursor: pointer;
+		color: var(--text-muted);
+		font-size: 13px;
+	}
+	.row-action:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+	.row-action.danger:hover { color: var(--text-error); }
 	.error-message { color: var(--text-error); }
 	.refresh-button { display: inline-flex; align-items: center; gap: 4px; padding: var(--size-4-1) var(--size-4-3); cursor: pointer; }
 	.refresh-button:disabled { opacity: 0.6; cursor: not-allowed; }

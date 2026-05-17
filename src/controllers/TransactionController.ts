@@ -126,7 +126,7 @@ export class TransactionController {
 			const result = await this.plugin.runQuery(query);
 			const cleanStdout = result.replace(/\r/g, "").trim();
 			const records: string[][] = parseCsv(cleanStdout, { columns: false, skip_empty_lines: true, relax_column_count: true });
-			const defaultHeaders = ['date', 'payee', 'narration', 'position', 'balance']; // Added balance column
+			const defaultHeaders = ['date', 'payee', 'narration', 'position', 'balance', 'id'];
 			const firstRowIsHeader = records[0]?.[0]?.toLowerCase().includes('date');
 			const dataRows = firstRowIsHeader ? records.slice(1) : records;
 			newTransactions = dataRows.map(row => {
