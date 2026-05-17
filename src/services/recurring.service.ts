@@ -51,6 +51,14 @@ export interface RecurringRule {
     synthetic?: boolean;
     /** For synthetic rules: account that produced this rule. */
     fromLoanAccount?: string;
+    /**
+     * Opt-out flag for the Monthly Forecast aggregator. When true,
+     * the rule is treated as discretionary (counted toward income/
+     * expenses but NOT subtracted from income when computing the
+     * "Discretionary" KPI). Default false. Authored as an indented
+     * `discretionary: TRUE` line below the `custom` directive.
+     */
+    discretionary?: boolean;
 }
 
 export interface RecurringOccurrence {
@@ -83,11 +91,18 @@ const RECURRING_DIRECTIVE = new RegExp(
         String.raw`([A-Z][A-Z0-9'._-]*)\s*$`, // currency
 );
 
+// Indented `key: value` line following a `custom "recurring"`
+// directive. We currently honor `discretionary` only, but the parser
+// is open-ended so future flags don't need re-tooling.
+const META_LINE = /^\s+([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.+?)\s*$/;
+const TRUTHY = new Set(['true', 'TRUE', '1', 'yes', 'YES']);
+
 /**
  * Parse the contents of a recurring.beancount file (or any file that
  * happens to contain `custom "recurring"` lines). Lines that don't
  * match the directive shape are silently ignored — the user can keep
- * comments and blank lines freely.
+ * comments and blank lines freely. Optional indented `key: value`
+ * lines below a directive attach metadata (e.g. `discretionary: TRUE`).
  */
 export function parseRecurringFile(content: string): RecurringRule[] {
     const out: RecurringRule[] = [];
@@ -99,6 +114,17 @@ export function parseRecurringFile(content: string): RecurringRule[] {
         if (!CADENCES.has(cadence as RecurringCadence)) continue;
         const amount = parseFloat(amountStr);
         if (!isFinite(amount)) continue;
+
+        // Greedy capture of indented `key: value` lines until a
+        // non-metadata line breaks the block.
+        const meta: Record<string, string> = {};
+        let j = i + 1;
+        for (; j < lines.length; j++) {
+            const mm = META_LINE.exec(lines[j]);
+            if (!mm) break;
+            meta[mm[1]] = mm[2];
+        }
+
         out.push({
             nickname,
             cadence: cadence as RecurringCadence,
@@ -108,7 +134,11 @@ export function parseRecurringFile(content: string): RecurringRule[] {
             currency,
             startDate,
             sourceLine: i + 1,
+            ...(TRUTHY.has(meta['discretionary']) ? { discretionary: true } : {}),
         });
+
+        // Skip past consumed metadata so we don't re-scan it.
+        i = j - 1;
     }
     return out;
 }
@@ -184,6 +214,37 @@ export function occurrencesInWindow(
         cursor = advance(cursor, rule.cadence);
     }
     return out;
+}
+
+/**
+ * Toggle the `discretionary: TRUE` metadata for the rule with the
+ * given nickname. Pure: returns the modified content + a `changed`
+ * flag so the caller can skip writes when nothing moved. Preserves
+ * all unrelated formatting (comments, blank lines, ordering).
+ */
+export function toggleDiscretionaryInText(
+    content: string,
+    nickname: string,
+    value: boolean,
+): { changed: boolean; content: string } {
+    const lines = content.split(/\r?\n/);
+    const FLAG_RE = /^\s+discretionary\s*:/;
+    for (let i = 0; i < lines.length; i++) {
+        const m = RECURRING_DIRECTIVE.exec(lines[i].trim());
+        if (!m || m[2] !== nickname) continue;
+        const nextIdx = i + 1;
+        const hasFlag = nextIdx < lines.length && FLAG_RE.test(lines[nextIdx]);
+        if (value && !hasFlag) {
+            lines.splice(nextIdx, 0, '\tdiscretionary: TRUE');
+            return { changed: true, content: lines.join('\n') };
+        }
+        if (!value && hasFlag) {
+            lines.splice(nextIdx, 1);
+            return { changed: true, content: lines.join('\n') };
+        }
+        return { changed: false, content };
+    }
+    return { changed: false, content };
 }
 
 /**
