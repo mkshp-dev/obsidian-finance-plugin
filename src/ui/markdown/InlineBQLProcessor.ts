@@ -20,6 +20,12 @@ export class InlineBQLProcessor {
 	}
 
 	private async processInlineElements(element: HTMLElement, context: MarkdownPostProcessorContext) {
+		// Fast path: avoid expensive querySelectorAll if the element definitely doesn't contain BQL
+		const textContent = element.textContent || '';
+		if (!textContent.includes('bql:') && !textContent.includes('bql-q:')) {
+			return;
+		}
+
 		const codeElements = Array.from(element.querySelectorAll('code, .cm-inline-code, [data-type="code"]'));
 
 		for (const codeEl of codeElements) {
