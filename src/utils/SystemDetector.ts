@@ -1,8 +1,9 @@
 // src/utils/SystemDetector.ts
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, statSync, accessSync, constants } from 'fs';
-import { resolve, join, dirname, sep } from 'path';
+import { existsSync, accessSync, constants } from 'fs';
+import { access } from 'fs/promises';
+import { resolve, join, sep } from 'path';
 import { homedir, platform, arch, type, release } from 'os';
 
 const execAsync = promisify(exec);
@@ -170,7 +171,7 @@ export class SystemDetector {
             }
 
             // Test if wsl command is available and working
-            const { stdout } = await execAsync('wsl --list --quiet', { timeout: 5000 });
+            await execAsync('wsl --list --quiet', { timeout: 5000 });
             
             // If we get output without error, WSL is available
             // Even if no distributions are installed, the command should work
@@ -331,22 +332,41 @@ export class SystemDetector {
         const commonPaths = this.getCommonExecutablePaths();
         const possibleNames = this.getExecutableVariations(executableName);
 
+        // Flatten paths to test them concurrently without nested loops
+        const fullPaths: string[] = [];
         for (const basePath of commonPaths) {
             for (const name of possibleNames) {
-                const fullPath = join(basePath, name);
-                if (existsSync(fullPath)) {
-                    try {
-                        accessSync(fullPath, constants.F_OK | constants.X_OK);
-                        return {
-                            found: true,
-                            path: fullPath,
-                            version: null,
-                            accessible: true
-                        };
-                    } catch {
-                        continue;
-                    }
+                fullPaths.push(join(basePath, name));
+            }
+        }
+
+        // We still use existsSync as a fast-path filter to prevent the extremely
+        // slow V8 exception throwing overhead in fs.promises.access for missing files,
+        // while avoiding synchronous blocking accessSync calls.
+        const existingPaths = fullPaths.filter(p => existsSync(p));
+
+        if (existingPaths.length > 0) {
+            const accessChecks = existingPaths.map(async (fullPath) => {
+                try {
+                    await access(fullPath, constants.F_OK | constants.X_OK);
+                    return fullPath;
+                } catch {
+                    return null;
                 }
+            });
+
+            const results = await Promise.all(accessChecks);
+
+            // Find the first path that succeeded, preserving the original priority order
+            const foundPath = results.find(p => p !== null);
+
+            if (foundPath) {
+                return {
+                    found: true,
+                    path: foundPath,
+                    version: null,
+                    accessible: true
+                };
             }
         }
 
@@ -536,7 +556,7 @@ export class SystemDetector {
      * @param {number} [timeout=5000] - Timeout in milliseconds.
      * @returns {Promise<{ success: boolean; output?: string; error?: string }>} The result.
      */
-    async testCommand(command: string, timeout: number = 5000): Promise<{ success: boolean; output?: string; error?: string }> {
+    async testCommand(command: string, timeout = 5000): Promise<{ success: boolean; output?: string; error?: string }> {
         try {
             const { stdout, stderr } = await execAsync(command, { timeout });
             return { success: true, output: stdout, error: stderr };
@@ -554,7 +574,7 @@ export class SystemDetector {
      * @param {boolean} [useWSL=false] - Whether to check in WSL.
      * @returns {Promise<object>} Detailed report of Python environment.
      */
-    async detectPythonEnvironment(useWSL: boolean = false): Promise<{
+    async detectPythonEnvironment(useWSL = false): Promise<{
         command: string | null;
         version: string | null;
         isValid: boolean;
@@ -621,7 +641,7 @@ export class SystemDetector {
      * @param {string} [beancountFilePath] - Optional path to a beancount file to test against.
      * @returns {Promise<object>} Report of bean-query detection.
      */
-    async detectBeanQueryCommand(useWSL: boolean = false, beancountFilePath?: string): Promise<{
+    async detectBeanQueryCommand(useWSL = false, beancountFilePath?: string): Promise<{
         command: string | null;
         version: string | null;
         isValid: boolean;
@@ -728,7 +748,7 @@ export class SystemDetector {
      * @param {boolean} [useWSL=false] - Whether to check in WSL.
      * @returns {Promise<object>} Report of bean-price detection.
      */
-    async detectBeanPriceCommand(useWSL: boolean = false): Promise<{
+    async detectBeanPriceCommand(useWSL = false): Promise<{
         command: string | null;
         version: string | null;
         isValid: boolean;
@@ -815,7 +835,7 @@ export class SystemDetector {
      * @param {boolean} [preferWSL=false] - User preference for WSL.
      * @returns {Promise<object>} Comprehensive report containing optimal commands for python, bean-query, etc.
      */
-    async detectOptimalBeancountSetup(beancountFilePath?: string, preferWSL: boolean = false): Promise<{
+    async detectOptimalBeancountSetup(beancountFilePath?: string, preferWSL = false): Promise<{
         python: string | null;
         pythonVersion: string | null;
         beanQuery: string | null;
