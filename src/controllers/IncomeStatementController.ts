@@ -179,15 +179,23 @@ export class IncomeStatementController {
 	 */
 	private flattenHierarchy(accounts: AccountItem[]): AccountItem[] {
 		const result: AccountItem[] = [];
-		const flatten = (items: AccountItem[]) => {
-			for (const item of items) {
-				result.push(item);
-				if (item.children && item.children.length > 0) {
-					flatten(item.children);
+		const stack: AccountItem[] = [];
+
+		for (let i = accounts.length - 1; i >= 0; i--) {
+			stack.push(accounts[i]);
+		}
+
+		while (stack.length > 0) {
+			const item = stack.pop()!;
+			result.push(item);
+
+			if (item.children && item.children.length > 0) {
+				for (let i = item.children.length - 1; i >= 0; i--) {
+					stack.push(item.children[i]);
 				}
 			}
-		};
-		flatten(accounts);
+		}
+
 		return result;
 	}
 
