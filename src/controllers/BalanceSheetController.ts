@@ -428,12 +428,11 @@ export class BalanceSheetController {
 					unconvertedAccounts.push(account);
 				}
 
-				const firstChar = account.charCodeAt(0);
-				if (firstChar === 65 && account.startsWith('Assets')) { // 'A'
+				if (account.startsWith('Assets')) {
 					tempAssets.push([account, amountStr]);
-				} else if (firstChar === 76 && account.startsWith('Liabilities')) { // 'L'
+				} else if (account.startsWith('Liabilities')) {
 					tempLiab.push([account, amountStr]);
-				} else if (firstChar === 69 && account.startsWith('Equity')) { // 'E'
+				} else if (account.startsWith('Equity')) {
 					tempEquity.push([account, amountStr]);
 				}
 			}
