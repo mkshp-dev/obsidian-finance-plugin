@@ -59,22 +59,32 @@ function resolveAccountsPath(plugin: BeancountPlugin): string {
 }
 
 function parseBalanceCell(raw: string): { amount: number | null; currency: string | null } {
-    // BQL `sum(position)` returns a string like "12500.00 UYU" or
-    // "-200.00 UYU, 5.00 USD" for multi-currency positions. When all
-    // positions cancel out (e.g. a pad inserted -200 against a +200
-    // payment, leaving net zero) beancount emits an EMPTY cell — which
-    // semantically means zero, not "no data". The account being in the
-    // result set at all tells us it has postings; the empty cell means
-    // they net out. Returning null here would let the caller fall back
-    // to the principal metadata, defeating Force Balance / payoff.
-    if (!raw) return { amount: 0, currency: null };
-    const first = raw.split(',')[0].trim();
-    if (!first) return { amount: 0, currency: null };
-    const parts = first.split(/\s+/);
-    if (parts.length < 2) return { amount: null, currency: null };
-    const amount = parseFloat(parts[0].replace(/,/g, ''));
-    const currency = parts[1];
-    return { amount: isFinite(amount) ? amount : null, currency: currency || null };
+    // BQL `sum(position)` renders ONE fixed column per commodity in the
+    // ledger, comma-joined, with BLANK slots for commodities this account
+    // doesn't hold. A UYU-only balance therefore comes back as
+    // "        ,-1570.0000 UYU" — an empty leading (USD) slot and the
+    // value in a later slot. We must scan every comma-separated segment
+    // and take the first that parses as "<number> <currency>", rather
+    // than assuming the value lives in segment 0 (which silently read 0
+    // for any account whose currency isn't the first ledger column).
+    //
+    // An entirely blank cell means the account is in the result set but
+    // its positions net to zero (e.g. a pad -200 against a +200 payment)
+    // — semantically 0, not "no data". Returning null there would let the
+    // caller fall back to the principal metadata, defeating payoff / Force
+    // Balance, so we return 0.
+    if (!raw || !raw.trim()) return { amount: 0, currency: null };
+    for (const seg of raw.split(',')) {
+        const t = seg.trim();
+        if (!t) continue;
+        const parts = t.split(/\s+/);
+        if (parts.length < 2) continue;
+        const amount = parseFloat(parts[0].replace(/,/g, ''));
+        if (!isFinite(amount)) continue;
+        return { amount, currency: parts[1] || null };
+    }
+    // Non-empty cell but no segment parsed as number+currency → treat as 0.
+    return { amount: 0, currency: null };
 }
 
 function formatBalance(amount: number | null, currency: string | null): string {
