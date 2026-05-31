@@ -11,6 +11,13 @@ import RecordPaymentModalComponent from './RecordPaymentModal.svelte';
 import type { LoanRow } from '../../controllers/LiabilitiesController';
 import { getOpenAccounts } from '../../utils/accounts';
 import { Logger } from '../../utils/logger';
+import { ConfirmModal } from './ConfirmModal';
+import { atomicFileWrite, createBackupFile } from '../../utils/fileEditor';
+import {
+    computeAssertionUpdates,
+    applyAssertionUpdates,
+    type BalancePosting,
+} from '../../utils/balanceReconcile';
 
 interface PaymentDetail {
     date: string;
@@ -78,6 +85,7 @@ export class RecordPaymentModal extends Modal {
                 new Notice('Payment recorded.');
                 this.close();
                 this.onSaved?.();
+                await this.reconcileDownstreamAssertions(detail);
             } catch (err) {
                 new Notice(`Failed to record: ${err instanceof Error ? err.message : String(err)}`);
                 Logger.error('[RecordPaymentModal] write error:', err);
@@ -126,6 +134,61 @@ export class RecordPaymentModal extends Modal {
 
         const next = original + lines.join('\n') + '\n';
         await adapter.write(path, next);
+    }
+
+    /**
+     * After recording a payment, the new transaction shifts the running
+     * balance of the accounts it touches. Any balance assertion dated
+     * AFTER the transaction (common when a vault keeps forward-dated
+     * closing assertions, e.g. a clean-start cut-over) would now fail
+     * bean-check. Detect those and offer a one-click correction. Best-
+     * effort: a failure here never blocks the already-recorded payment.
+     */
+    private async reconcileDownstreamAssertions(d: PaymentDetail): Promise<void> {
+        try {
+            const folder = this.plugin.settings.structuredFolderName?.trim() || 'Finances';
+            const balRelPath = `${folder}/balances.beancount`;
+            const adapter = this.plugin.app.vault.adapter;
+            if (!(await adapter.exists(balRelPath))) return;
+            const content = await adapter.read(balRelPath);
+
+            // The two postings exactly as appendTransaction wrote them.
+            const postings: BalancePosting[] = d.role === 'liability'
+                ? [
+                    { account: d.loanAccount, amount: d.amount, currency: d.currency },
+                    { account: d.fundingAccount, amount: -d.amount, currency: d.currency },
+                ]
+                : [
+                    { account: d.fundingAccount, amount: d.amount, currency: d.currency },
+                    { account: d.loanAccount, amount: -d.amount, currency: d.currency },
+                ];
+
+            const updates = computeAssertionUpdates(content, postings, d.date);
+            if (updates.length === 0) return;
+
+            const noun = updates.length === 1 ? 'assertion' : 'assertions';
+            const list = updates
+                .map(u => `${u.date} ${u.account} ${u.oldAmount} → ${u.newAmount} ${u.currency}`)
+                .join(' · ');
+            const msg = `This payment shifts ${updates.length} later balance ${noun}: ${list}. `
+                + `Update ${updates.length === 1 ? 'it' : 'them'} so bean-check stays valid?`;
+
+            new ConfirmModal(this.app, 'Update downstream balance assertions?', msg, async () => {
+                try {
+                    const next = applyAssertionUpdates(content, updates);
+                    // @ts-ignore — getBasePath on FileSystemAdapter
+                    const absPath = `${adapter.getBasePath()}/${balRelPath}`;
+                    await createBackupFile(absPath, true, 'recordPayment.reconcile');
+                    await atomicFileWrite(absPath, next);
+                    new Notice(`Updated ${updates.length} balance ${noun}.`);
+                } catch (err) {
+                    new Notice(`Could not update assertions: ${err instanceof Error ? err.message : String(err)}`);
+                    Logger.error('[RecordPaymentModal] reconcile write error:', err);
+                }
+            }).open();
+        } catch (e) {
+            Logger.log('[RecordPaymentModal] reconcile skipped:', e);
+        }
     }
 
     onClose() {
