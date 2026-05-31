@@ -398,7 +398,7 @@
 								{@const pctClamped = pct === null ? null : Math.max(0, Math.min(100, pct))}
 								{@const isPaidOff = pct !== null && pct >= 99.5 && !above}
 								<article
-									class="loan-card {urgencyClassForRow(row)}"
+									class="loan-card {isPaidOff ? '' : urgencyClassForRow(row)}"
 									class:above-principal={above}
 									class:paid-off={isPaidOff}
 									class:has-progress={pctClamped !== null}
