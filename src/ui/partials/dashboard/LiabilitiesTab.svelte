@@ -29,6 +29,11 @@
 
 	let searchTerm = '';
 
+	type SortMode = 'event' | 'balance' | 'name' | 'opened';
+	type StatusFilter = 'all' | 'active' | 'settled';
+	let sortMode: SortMode = 'event';
+	let statusFilter: StatusFilter = 'all';
+
 	function rowToDraft(row: LoanRow): LoanFormDraft {
 		return {
 			account: row.account,
@@ -206,12 +211,39 @@
 		return daysBetween(todayIso(), next);
 	}
 
-	function sortRows(rows: LoanRow[]): LoanRow[] {
-		return [...rows].sort((a, b) => {
+	function compareBy(mode: SortMode, a: LoanRow, b: LoanRow): number {
+		if (mode === 'balance') {
+			const av = Math.abs(a.currentBalance ?? 0), bv = Math.abs(b.currentBalance ?? 0);
+			if (av !== bv) return bv - av; // biggest balance first
+		} else if (mode === 'opened') {
+			const c = (a.openDate || '').localeCompare(b.openDate || ''); // chronological by open date
+			if (c !== 0) return c;
+		} else if (mode === 'event') {
 			const ka = sortKey(a), kb = sortKey(b);
 			if (ka !== kb) return ka - kb;
-			return a.account.localeCompare(b.account);
-		});
+		}
+		// 'name', plus stable tie-breaker for every mode.
+		return a.account.localeCompare(b.account);
+	}
+
+	/** Whether a loan is fully settled: closed, zero balance, or ≥99.5% paid. */
+	function isSettled(row: LoanRow): boolean {
+		if (row.closeDate) return true;
+		if (row.currentBalance === 0) return true;
+		const f = payoffFraction(row.currentBalance, row.principal);
+		return f !== null && f >= 0.995 && !isAboveBudget(row);
+	}
+
+	function statusMatches(row: LoanRow, status: StatusFilter): boolean {
+		if (status === 'active') return !isSettled(row);
+		if (status === 'settled') return isSettled(row);
+		return true;
+	}
+
+	function applyView(rows: LoanRow[], term: string, status: StatusFilter, mode: SortMode): LoanRow[] {
+		return rows
+			.filter(r => rowMatches(r, term) && statusMatches(r, status))
+			.sort((a, b) => compareBy(mode, a, b));
 	}
 
 	function rowMatches(row: LoanRow, term: string): boolean {
@@ -243,8 +275,8 @@
 			.sort((a, b) => a.currency.localeCompare(b.currency));
 	}
 
-	$: filteredLiabilities = sortRows((state.liabilities ?? []).filter(r => rowMatches(r, searchTerm)));
-	$: filteredReceivables = sortRows((state.receivables ?? []).filter(r => rowMatches(r, searchTerm)));
+	$: filteredLiabilities = applyView(state.liabilities ?? [], searchTerm, statusFilter, sortMode);
+	$: filteredReceivables = applyView(state.receivables ?? [], searchTerm, statusFilter, sortMode);
 	$: liabilityTotalsByCcy = groupByCurrency(state.liabilities ?? []);
 	$: receivableTotalsByCcy = groupByCurrency(state.receivables ?? []);
 	$: hasAnyAccount = (state.liabilities?.length ?? 0) + (state.receivables?.length ?? 0) > 0;
@@ -339,6 +371,17 @@
 				{#if searchTerm}
 					<button class="ghost reset" on:click={() => (searchTerm = '')} title="Clear filter">✕</button>
 				{/if}
+				<select class="control-select" bind:value={sortMode} title="Sort order">
+					<option value="event">Sort: Next event</option>
+					<option value="balance">Sort: Balance</option>
+					<option value="name">Sort: Name</option>
+					<option value="opened">Sort: Open date</option>
+				</select>
+				<select class="control-select" bind:value={statusFilter} title="Show by status">
+					<option value="all">All</option>
+					<option value="active">Active</option>
+					<option value="settled">Settled</option>
+				</select>
 			</div>
 		{/if}
 
@@ -376,7 +419,7 @@
 					<div class="section-header">
 						<h4>{section.title}</h4>
 						<span class="muted small">
-							{#if searchTerm && section.rows.length !== section.total}
+							{#if section.rows.length !== section.total}
 								{section.rows.length} of {section.total}
 							{:else}
 								{section.total} {section.total === 1 ? 'account' : 'accounts'}
@@ -604,9 +647,20 @@
 		display: flex;
 		gap: 6px;
 		align-items: center;
+		flex-wrap: wrap;
+	}
+	.control-select {
+		padding: 6px 8px;
+		border-radius: var(--radius-s);
+		border: 1px solid var(--background-modifier-border);
+		background: var(--background-primary);
+		color: var(--text-normal);
+		font-size: var(--font-ui-smaller);
+		cursor: pointer;
 	}
 	.search {
 		flex: 1;
+		min-width: 160px;
 		padding: 6px 10px;
 		border-radius: var(--radius-s);
 		border: 1px solid var(--background-modifier-border);
