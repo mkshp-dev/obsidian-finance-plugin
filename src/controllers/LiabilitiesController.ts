@@ -146,6 +146,10 @@ export class LiabilitiesController {
                 const hasPosted = !!bal && bal.amount !== null;
 
                 // Derive the displayed balance with this priority:
+                //   0. a closed account is settled → 0, regardless of
+                //      principal (it's excluded from the balance query by
+                //      `NOT close_date`, so without this it would wrongly
+                //      fall through to the principal phantom below)
                 //   1. real posted balance (BQL `sum(position)`)
                 //   2. the `principal` meta — the contract face-value, which
                 //      is the user's mental model of "what's owed" when no
@@ -157,7 +161,11 @@ export class LiabilitiesController {
                 let currency: string;
                 let source: LoanRow['balanceSource'];
 
-                if (hasPosted) {
+                if (acc.closeDate) {
+                    amount = 0;
+                    currency = acc.currency;
+                    source = 'zero';
+                } else if (hasPosted) {
                     amount = bal!.amount;
                     currency = bal!.currency ?? acc.currency;
                     source = 'posted';

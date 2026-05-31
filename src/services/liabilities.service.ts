@@ -70,11 +70,18 @@ export interface LoanAccount {
     payoffDate: string | null;
     /** Total amount to pay on payoff-date. Read from the `payoff-amount` meta. */
     payoffAmount: number | null;
+    /**
+     * ISO YYYY-MM-DD date from a matching `close` directive, or null if the
+     * account is still open. A closed loan is settled, so the dashboard must
+     * show it as zero rather than falling back to its principal metadata.
+     */
+    closeDate: string | null;
     /** 1-based source line number of the open directive (for "open file at rule" jumps). */
     sourceLine?: number;
 }
 
 const OPEN_DIRECTIVE = /^(\d{4}-\d{2}-\d{2})\s+open\s+([A-Z][A-Za-z0-9:_-]*)\s*([A-Z][A-Z0-9'._-]*)?(?:\s+"[^"]*")?\s*$/;
+const CLOSE_DIRECTIVE = /^(\d{4}-\d{2}-\d{2})\s+close\s+([A-Z][A-Za-z0-9:_-]*)\s*$/;
 const META_LINE = /^\s+([a-zA-Z][a-zA-Z0-9_-]*):\s*(.*)$/;
 
 /**
@@ -153,6 +160,7 @@ export function parseLoanAccounts(content: string): LoanAccount[] {
                 paymentMode,
                 payoffDate,
                 payoffAmount,
+                closeDate: null,
                 sourceLine: startLine,
             });
         }
@@ -196,6 +204,20 @@ export function parseLoanAccounts(content: string): LoanAccount[] {
         }
     }
     flush();
+
+    // Second pass: attach close dates. A `close` directive may appear
+    // anywhere after its `open`, so we resolve them once the account list
+    // is built. Marking the account lets the controller render a settled
+    // loan as zero instead of resurrecting its principal as a phantom.
+    const closeDates = new Map<string, string>();
+    for (const line of lines) {
+        const m = CLOSE_DIRECTIVE.exec(line);
+        if (m) closeDates.set(m[2], m[1]);
+    }
+    for (const acc of out) {
+        acc.closeDate = closeDates.get(acc.account) ?? null;
+    }
+
     return out;
 }
 
@@ -447,6 +469,8 @@ export function synthesizeRecurringFromLoans(
 ): SyntheticRecurringRule[] {
     const out: SyntheticRecurringRule[] = [];
     for (const acc of accounts) {
+        // Skip closed accounts — a settled loan generates no future payments.
+        if (acc.closeDate) continue;
         // Skip one-time loans — they have no monthly cadence to replay.
         if (acc.paymentMode === 'one-time') continue;
         if (acc.monthlyPayment === null || acc.dueDay === null) continue;
