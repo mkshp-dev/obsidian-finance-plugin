@@ -96,3 +96,35 @@ The remaining uses of `parseSingleValue` (like in `InlineBQLProcessor` and Indic
 ### Conclusion
 
 By shifting string manipulation and formatting logic from the JavaScript frontend into native BQL functions (`number()`, `only()`, `round()`), we can drastically simplify the processing functions in `src/utils/`. Furthermore, consolidating isolated KPI queries into a single grouped `WHERE` clause avoids the heavy performance penalty of spawning multiple Python processes, leading to a much snappier UI experience.
+
+## 5. Detailed Review of Processing Functions
+
+Below is a breakdown of specific formatting and parsing functions in the codebase, assessing whether they can be removed or simplified.
+
+### In `src/utils/formatters.ts`
+
+-   **`parseSingleValue(csv: string)`**
+    -   **Current Usage:** Used to extract a single numeric value from single-row query responses (e.g., `getTotalWorthQuery`, inline BQL). Includes complex regex to strip brackets/parentheses for inventory strings.
+    -   **Verdict:** **Simplify.** Once the Overview KPIs are consolidated, its usage will drop. For remaining uses (like Inline BQL), if the queries consistently use BQL's `number()` to guarantee a plain numeric string, the aggressive regex cleaning in this function can be safely removed, turning it into a simple CSV-row extractor.
+
+-   **`parseAmount(amountString: string)`**
+    -   **Current Usage:** Used heavily in `IncomeStatementController`, `BalanceSheetController` charts, and `TransactionsTab.svelte` to parse strings like `"1,234.56 USD"` into `{ amount: 1234.56, currency: 'USD' }`.
+    -   **Verdict:** **Simplify/Refactor.**
+        -   For charts: By modifying chart queries to return plain numbers using `number(only(...))`, `parseAmount` is no longer needed in the `_processChartData` pipelines.
+        -   For `TransactionsTab`: It is used for sorting the Amount column. It can be kept but simplified or isolated to just handle UI string sorting, rather than being a core data-pipeline parser.
+
+-   **`extractConvertedAmount(inventoryString: string, targetCurrency: string)`**
+    -   **Current Usage:** Used by `IncomeStatementController` and `BalanceSheetController` to pull out the converted currency portion (e.g., pulling the `USD` part out of `"0.016 ETHW, 49.60 USD"`).
+    -   **Verdict:** **Cannot completely remove, but usage can be reduced.**
+        -   In chart processing: Can be **removed entirely** if the queries are updated to use `number(only(...))` as described above.
+        -   In the main hierarchy builder (`buildAccountHierarchy`): This function is still necessary when `hasUnconvertedCommodities` is true, as the query returns multi-currency inventory strings that must be parsed client-side to separate the operating currency from other holdings.
+
+-   **`extractNonReportingCurrencies(inventoryString: string, operatingCurrency: string)`**
+    -   **Current Usage:** Extracts all other currencies from a multi-currency string to display as a warning/secondary column in the balance/income hierarchies.
+    -   **Verdict:** **Keep.** Similar to `extractConvertedAmount`, this remains necessary for properly displaying multi-currency account rows in the UI when the ledger is not fully converted.
+
+### In `src/utils/csvParsers.ts`
+
+-   **`parseCombinedCommodityDataCSV` & `parseCommoditiesHoldingsCSV`**
+    -   **Current Usage:** Parses complex multi-column outputs for the commodities dashboard. Contains internal regexes like `extractNumber` and `extractCurrencyToken` to handle BQL's formatted string outputs (`"65.64 DOGE"`, `"658.37 INR"`).
+    -   **Verdict:** **Simplify.** By wrapping the `valueOp_` selection in `number(only('${operatingCurrency}', ...))` in the `getCombinedCommodityDataQuery`, we guarantee `valueOp_` is a pure number. This allows us to eliminate the internal `extractCurrencyToken` and `extractNumber` regex logic for the converted values, reducing the parsing to standard numeric casting (`parseFloat`).
