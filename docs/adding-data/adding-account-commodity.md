@@ -72,6 +72,17 @@ Our plugin recognizes specific metadata key-value pairs indented under the commo
   price: "USD:coinbase/BTC-USD"
 ```
 
+#### Sourcing Logo URLs
+
+If you want to add logos to your commodities but aren't sure where to host or find them, you can use several free public services and CDNs:
+
+*   **Stocks / Companies:** Use [Clearbit Logos](https://clearbit.com/logo). You can generate a logo URL using the company's website domain (e.g., `https://logo.clearbit.com/apple.com` for AAPL).
+*   **Fiat Currencies:** Use [Flagpedia](https://flagpedia.net/download/api) or [Flagcdn](https://flagcdn.com/). They provide flag images based on country codes (e.g., `https://flagcdn.com/w40/us.png` for USD).
+*   **Cryptocurrencies:** Use public repositories like [TrustWallet Assets](https://github.com/trustwallet/assets) or search on sites like [CryptoLogos](https://cryptologos.cc/).
+
+Simply copy the image link from these sources and paste it into the `logo` metadata field!
+
+
 ---
 
 ### Declaring Commodities via UI
