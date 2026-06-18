@@ -29,14 +29,14 @@ The plugin supports all the standard price sources provided by `bean-price`. Bel
 
 | Name                    | Module                    | Provides prices for                                  | Base currency                                | Latest price | Historical price |
 |-------------------------|---------------------------|------------------------------------------------------|----------------------------------------------|--------------|------------------|
-| Alphavantage            | `beanprice.alphavantage`  | Stocks, FX, Crypto                                   | Many currencies                              | ✓            | ✕                |
-| Coinbase                | `beanprice.coinbase`      | Most common (crypto)currencies                       | Many currencies                              | ✓            | ✓                |
-| Coincap                 | `beanprice.coincap`       | Most common (crypto)currencies                       | USD                                          | ✓            | ✓                |
-| Coinmarketcap           | `beanprice.coinmarketcap` | Most common (crypto)currencies                       | Many Currencies                              | ✓            | ✕                |
-| European Central Bank API| `beanprice.ecbrates`      | Many currencies                                      | Many currencies (Derived from EUR rates)     | ✓            | ✓                |
-| OANDA                   | `beanprice.oanda`         | Many currencies                                      | Many currencies                              | ✓            | ✓                |
-| Quandl                  | `beanprice.quandl`        | Various datasets                                     | Various datasets                             | ✓            | ✓                |
-| Rates API               | `beanprice.ratesapi`      | Many currencies                                      | Many currencies                              | ✓            | ✓                |
-| Thrift Savings Plan     | `beanprice.tsp`           | TSP Funds                                            | USD                                          | ✓            | ✓                |
-| Yahoo                   | `beanprice.yahoo`         | Many currencies                                      | Many currencies                              | ✓            | ✓                |
-| EastMoneyFund(天天基金) | `beanprice.eastmoneyfund` | Chinese Funds                                        | CNY                                          | ✓            | ✓                |
+| [Alphavantage](https://www.alphavantage.co/) | `beanprice.alphavantage`  | Stocks, FX, Crypto                                   | Many currencies                              | ✓            | ✕                |
+| [Coinbase](https://www.coinbase.com/)     | `beanprice.coinbase`      | Most common (crypto)currencies                       | Many currencies                              | ✓            | ✓                |
+| [Coincap](https://coincap.io/)       | `beanprice.coincap`       | Most common (crypto)currencies                       | USD                                          | ✓            | ✓                |
+| [Coinmarketcap](https://coinmarketcap.com/) | `beanprice.coinmarketcap` | Most common (crypto)currencies                       | Many Currencies                              | ✓            | ✕                |
+| [European Central Bank API](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) | `beanprice.ecbrates`      | Many currencies                                      | Many currencies (Derived from EUR rates)     | ✓            | ✓                |
+| [OANDA](https://www.oanda.com/)         | `beanprice.oanda`         | Many currencies                                      | Many currencies                              | ✓            | ✓                |
+| [Quandl](https://data.nasdaq.com/)        | `beanprice.quandl`        | Various datasets                                     | Various datasets                             | ✓            | ✓                |
+| [Rates API](https://ratesapi.io/)     | `beanprice.ratesapi`      | Many currencies                                      | Many currencies                              | ✓            | ✓                |
+| [Thrift Savings Plan](https://www.tsp.gov/) | `beanprice.tsp`           | TSP Funds                                            | USD                                          | ✓            | ✓                |
+| [Yahoo](https://finance.yahoo.com/)         | `beanprice.yahoo`         | Many currencies                                      | Many currencies                              | ✓            | ✓                |
+| [EastMoneyFund(天天基金)](http://fund.eastmoney.com/) | `beanprice.eastmoneyfund` | Chinese Funds                                        | CNY                                          | ✓            | ✓                |
