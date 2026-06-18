@@ -57,6 +57,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'advanced/beancount-syntax',
         'advanced/advanced-queries',
+        'advanced/bean-price-support',
       ],
     },
     'troubleshooting',
