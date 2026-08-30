@@ -12,12 +12,12 @@ The Settings page is where you configure the plugin to work with your Beancount 
 
 Settings are accessible via **Settings → Community Plugins → Beancount Ledger**. The interface is organized into these tabs:
 
-1. **General** - Currency, automatic price fetching, and debug settings
+1. **General** - Currency, dashboard defaults, automatic price fetching, and debug settings
 2. **Connection** - Beancount executable and system configuration
 3. **File Organization** - Structured layout options
-4. **BQL** - Query display preferences and editor settings
-5. **Performance** - Data fetch limits
-6. **Backup** - Backup and recovery settings
+4. **Editor** - Autocomplete, snippets, formatting, and linting
+5. **BQL** - Query display preferences
+6. **Performance** - Data fetch limits and backups
 
 ---
 
@@ -25,9 +25,14 @@ Settings are accessible via **Settings → Community Plugins → Beancount Ledge
 
 ### Operating Currency
 *   **Purpose**: The primary currency for reporting and as the default in transaction forms.
-*   **Examples**: `USD`, `EUR`, `INR`, `GBP`
+*   **Examples**: `USD`, `EUR`, `INR`, `GBP`, `BTC`
 *   **Impact**: All balance calculations and Net Worth displays use this currency as the base.
-*   **Validation**: Validated as a valid 3-letter currency code on input.
+*   **Validation**: Must start with an uppercase letter, followed by any combination of uppercase letters, digits, or `' . _ -` (not limited to 3 characters, to support tickers like `BTC` or `GOLD`).
+*   **Save to ledger**: A button next to the field writes the `operating_currency` option directly into your `ledger.beancount` file.
+
+### Default Dashboard Period
+*   **Purpose**: The period shown by dashboard summaries when the Unified Dashboard first loads.
+*   **Options**: `This month`, `Last month`, `This year`, `Last year`.
 
 ### Debug Mode
 *   **Purpose**: Enable detailed logging to the browser console for troubleshooting.
@@ -42,8 +47,8 @@ This section controls how the plugin runs `bean-price` to keep your commodity pr
 *   **Fetch interval (hours)**: How frequently the automatic fetch runs (default: 24 hours).
 *   **Last automatic fetch**: Displays when the most recent automatic fetch ran, shown as a relative time (e.g., *2 hours ago*).
 
-> **Tip**: You can also trigger a manual fetch at any time via Command Palette → **"Fetch Commodity Prices"**.
-> 
+> **Tip**: You can also trigger a manual fetch at any time via Command Palette → **"Fetch commodity prices"**.
+>
 > See the [Automated Price Fetching](./adding-data/adding-price-metadata.md) guide for details on annotating commodities with price sources.
 
 ---
@@ -59,24 +64,12 @@ On startup, the plugin automatically detects:
 *   **Beancount File**: Finds your main ledger file (if it was previously configured).
 *   **WSL Availability**: Checks if Windows Subsystem for Linux is running (for Windows users).
 
-### Status Indicators
-After detection, you'll see status icons for:
-*   **✅ Ready**: The component is correctly configured and working.
-*   **⚠️ Warning**: The component exists but may have issues.
-*   **❌ Error**: The component is not found or not working. Click to see error details.
-
 ### Manual Configuration
 If automatic detection fails, you can:
-1.  **Set Python Executable Path**: Enter the full path to your Python 3 executable.
-2.  **Set Beancount File Path**: Enter the absolute path to your `.beancount` file.
-3.  **Set Beancount Command Path**: Enter the full path to `bean-query`.
+1.  **Set Beancount Command Path**: Enter the full path to `bean-query` (or `wsl bean-query`).
+2.  **Set Bean-price Command Path**: Enter the full path to `bean-price`, for price fetching.
 
-### Test Commands
-Verify your setup with individual test buttons:
-*   **Test Bean Check**: Validates Beancount file syntax (runs `bean-check`).
-*   **Test Bean Query**: Tests BQL query execution.
-*   **Test Bean Query CSV**: Validates CSV output format.
-*   **Test All Commands**: Runs all tests sequentially.
+Each field has its own **Verify** button, which runs the command against a trivial query and shows ✅ on success or ❌ with the error output on failure.
 
 ---
 
@@ -92,20 +85,30 @@ Finances/
 ├── accounts.beancount        # Account opening directives
 ├── commodities.beancount     # Commodity declarations
 ├── prices.beancount          # Price directives
-├── balances.beancount        # Balance assertions
 ├── pads.beancount            # Pad directives
+├── balances.beancount        # Balance assertions
+├── queries.beancount         # Named query directives
 ├── notes.beancount           # Note directives
 ├── events.beancount          # Event directives
-├── queries.beancount         # Named query directives
 └── transactions/             # Folder for transaction files
-    ├── 2024.beancount        # Transactions by year
+    ├── 2024.beancount        # Transactions by year (or by year/month, see below)
     ├── 2025.beancount
     └── 2026.beancount
 ```
 
 ### Configuration Options
-*   **Folder Name**: Name of the root folder for structured layout (default: `Finances`).
+*   **Folder Name**: Name of the root folder for structured layout (default: `Finances`). Click **Edit** to rename it — the plugin renames the physical vault folder and reloads dependent caches (snippets, journal) automatically.
+*   **Transaction File Organization**: `Yearly` (e.g. `transactions/2025.beancount`) or `Monthly` (e.g. `transactions/2025/2025-01.beancount`).
 *   **Importing Existing Ledgers**: If you have an existing single-file ledger, the plugin can import and organize it into this structured layout via the onboarding wizard.
+
+---
+
+## 📝 Editor Tab
+
+*   **Editor Autocomplete**: A single toggle that enables context-aware completions in `.beancount` files — account names, payees, narrations, currencies/commodities, tags (`#`), and links (`^`). Reopen the file to apply changes.
+*   **User-defined snippets**: Enable loading custom transaction templates from a standalone `snippets.beancount` file inside your structured layout folder. Start typing at the beginning of a line to autocomplete a snippet.
+*   **Format on Save**: Automatically format `.beancount` files on save — normalizes indentation to 2 spaces, right-aligns amounts, and fixes `@`/`@@` price annotation spacing. Off by default.
+*   **Inline Lint Mode**: Select between *Off*, *On save* (default, ~500ms delay), or *On change* (2s debounce) for inline `bean-check` validation squiggles. Reopen the file to apply changes.
 
 ---
 
@@ -118,25 +121,17 @@ Customize how Beancount Query Language results are displayed in your notes.
 *   **Purpose**: Displays toolbar buttons above BQL code block results:
     *   **Refresh (⟳)**: Re-run the query with fresh data.
     *   **Copy (📋)**: Copy raw CSV results to clipboard.
-    *   **Download (📥)**: Export results as a CSV file.
+    *   **Export (📤)**: Export results as a CSV file.
 
 ### Show Query Text
 *   **Default**: Disabled ❌
 *   **Purpose**: Shows the original BQL query above results.
 
-### Editor Settings
-*   **Account Name Autocomplete**: Toggle account name popup while typing.
-*   **Editor Autocomplete**: Toggle payee, narration, currency, tag, and link autocomplete.
-*   **User-defined snippets**: Enable loading custom transaction templates from a standalone `snippets.beancount` file inside your structured layout folder.
-*   **Editor Diagnostics (Linting)**: Select between *Off*, *On save*, or *On change* validation.
-*   **Format on Save**: Format `.beancount` files automatically on save.
-
-
 ---
 
 ## ⚡ Performance Tab
 
-Optimize plugin performance for your hardware and ledger size.
+Optimize plugin performance for your hardware and ledger size, and configure backups.
 
 ### Max Transaction Results
 *   **Default**: 2000
@@ -146,17 +141,7 @@ Optimize plugin performance for your hardware and ledger size.
 *   **Default**: 1000
 *   **Purpose**: Limits entries displayed per page in the Journal tab.
 
----
-
-## 💾 Backup Tab
-
-Configure automatic backups for data safety.
-
 ### Create Backups
 *   **Default**: Enabled ✅
-*   **Purpose**: Automatically creates timestamped backup files before modifying your Beancount files.
-*   **Backup Format**: `<filename>.backup.<YYYYMMDD-HHMMSS>`
+*   **Purpose**: Before modifying a Beancount file, the plugin copies it to `<filename>.bak` in the same folder. This is a single backup that gets overwritten on each subsequent edit — not a rotating or timestamped history — so treat it as a last-edit safety net, not a substitute for version control (e.g. git) if you want a full history of changes.
 
-### Max Backup Files
-*   **Default**: 10
-*   **Purpose**: Maximum number of backup files to keep (set to `0` for unlimited). Oldest backups are automatically deleted when the limit is exceeded.

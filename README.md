@@ -22,6 +22,7 @@ A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that t
 *   **🪙 Bean Price Integration** — Automated market value updates for stocks, mutual funds, ETFs, and cryptocurrencies.
 *   **📁 Structured Layout** — Automatically split large journals into clean, organized files (accounts, prices, transactions by year, and more).
 *   **📝 Pro-grade File Editor** — A full `.beancount` editor view with live syntax highlighting, diagnostics, smart indentation, and autocompletion.
+*   **⚡ User Snippets** — Define your own transaction snippets in `snippets.beancount` and autocomplete them right from the editor.
 *   **🔒 Privacy First** — Fully local; your financial data never leaves your device.
 
 See the [Documentation Portal](https://mkshp-dev.github.io/obsidian-finance-plugin/) for the complete feature list and usage guides.
@@ -29,6 +30,8 @@ See the [Documentation Portal](https://mkshp-dev.github.io/obsidian-finance-plug
 ---
 
 ## 🔧 Requirements
+
+> **Desktop only:** This plugin is not available on Obsidian mobile. It shells out to a local Python installation to run Beancount, which mobile platforms don't support.
 
 This plugin integrates with your existing Beancount setup:
 

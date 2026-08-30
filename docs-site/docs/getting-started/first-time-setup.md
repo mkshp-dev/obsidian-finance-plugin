@@ -13,7 +13,7 @@ The **Onboarding Modal** appears automatically when:
 - No Beancount file is configured in settings
 
 **Manual Launch:**
-Open Command Palette (`Ctrl/Cmd + P`) → **"Obsidian Finance: Run Setup/Onboarding"**
+Open Command Palette (`Ctrl/Cmd + P`) → **"Beancount Ledger: Run setup/onboarding"**
 
 ---
 
@@ -91,7 +91,7 @@ After configuring your folder and options, Step 3 displays a success screen (**"
 ### 🚀 Next Steps Checklist
 
 1. Open the **Finance Dashboard** to explore your financial data.
-2. Browse the 5 main tabs: Overview, Transactions, Journal, Balance Sheet, Commodities.
+2. Browse the 6 main tabs: Overview, Transactions, Journal, Accounts & Balances, Income Statement, Commodities.
 3. Try BQL queries in your Markdown notes using ` ```bql ` code blocks.
 4. Manage commands anytime in **Settings → Connection**.
 
@@ -130,7 +130,7 @@ Finances/                      # Your chosen folder name
 You can run the onboarding wizard anytime:
 
 1. Open Command Palette (`Ctrl/Cmd + P`)
-2. Type **"Obsidian Finance: Run Setup/Onboarding"**
+2. Type **"Beancount Ledger: Run setup/onboarding"**
 3. Follow the wizard to reconfigure or start fresh
 
 **Use Cases:**
@@ -202,7 +202,7 @@ After onboarding completes:
 
 ### Onboarding Modal Doesn't Appear
 - Check if onboarding is already completed in settings
-- Manually run: Command Palette → **"Obsidian Finance: Run Setup/Onboarding"**
+- Manually run: Command Palette → **"Beancount Ledger: Run setup/onboarding"**
 
 ### File Path Invalid
 - Ensure the file exists and has `.beancount` extension

@@ -61,7 +61,7 @@ You can add and test price sources directly through the plugin UI:
 1.  Go to the **Unified Dashboard** → **Commodities** tab.
 2.  Click on a commodity row to open its detailed view modal.
 3.  In the **Price Source** field, enter the format (e.g., `USD:yahoo/AAPL`).
-4.  Click the **Test Price Source** button:
+4.  Click the **Test** button:
     *   The plugin validates the format.
     *   It runs a live command (`bean-price -e ...`) in the background to fetch a quote.
     *   If successful, it displays the retrieved price in green. If it fails, it displays the error from `bean-price`.
@@ -87,6 +87,6 @@ Once your commodities are annotated with price sources, you can let the plugin f
 
 ### Manual Price Fetch:
 To run a price fetch immediately, open the Command Palette (`Ctrl/Cmd + P`) and execute:
-**"Fetch Commodity Prices"**
+**"Fetch commodity prices"**
 
 A desktop notification will report how many new price directives were appended to your `prices.beancount` file.

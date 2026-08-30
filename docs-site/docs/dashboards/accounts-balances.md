@@ -41,7 +41,7 @@ Your accounts are structured hierarchically (e.g., `Assets:Checking:Main` is a c
 
 ### Collapsible Nodes
 *   You can click on any parent account row to collapse or expand its subtree.
-*   The plugin remembers your expansion/collapse state so that you don't have to re-configure it every time you switch tabs or reload Obsidian.
+*   The plugin remembers your expansion/collapse state for the current session (e.g. switching to another dashboard tab and back), but it resets the next time you reload Obsidian or reopen the dashboard.
 
 ### Account Details
 *   **Right-click any leaf account row** to open the **Account details** modal — open/close dates, currencies, and reconciliation status, with the ability to set or change the account's `reconcile` interval on the spot. See [Reconciliation](../reconciliation.md) for what that status means and the Balance/Force reconcile actions available from the same modal.
@@ -59,12 +59,12 @@ You can create or retire accounts directly from this tab without writing plain t
     *   **Date**: Select when this account becomes active (typically the current date or start of the year).
     *   **Allowed Currencies**: List comma-separated currencies (e.g., `USD, EUR`) if you wish to restrict the currencies this account can hold (optional).
     *   **Reconciliation interval (days)**: Set an optional interval (e.g., `30`) to track reconciliation health in the Snapshot sidebar.
-3.  Click **Create**. The plugin appends the `open` directive with metadata to `accounts.beancount`.
+3.  Click **Open Account**. The plugin appends the `open` directive with metadata to `accounts.beancount`.
 
 ### 2. Closing an Account
 1.  Click the **❌ Close Account** button in the header.
 2.  Select the active account you wish to retire from the dropdown.
 3.  Choose the closing date.
-4.  Click **Close**. The plugin appends the `close` directive to `accounts.beancount`.
-    > [!WARNING]
-    > An account can only be closed if its balance is exactly zero on the closing date. If it holds assets, transfer them to another account first.
+4.  Click **Close Account**. The plugin appends the `close` directive to `accounts.beancount`.
+    > [!NOTE]
+    > Beancount doesn't require a zero balance to close an account, and the plugin doesn't check this for you — a closed account simply can't receive new postings. If the account still holds a balance, it's usually best to transfer it out first (e.g. to the account taking over, or an equity account) so the balance doesn't linger unexplained in reports.

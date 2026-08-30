@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # Plugin API
 
-The Obsidian Finance plugin exposes a public JavaScript API so that other Obsidian plugins can run Beancount queries programmatically, without needing to invoke `bean-query` themselves.
+The Beancount Ledger plugin exposes a public JavaScript API so that other Obsidian plugins can run Beancount queries programmatically, without needing to invoke `bean-query` themselves.
 
 ---
 
@@ -14,7 +14,7 @@ The Obsidian Finance plugin exposes a public JavaScript API so that other Obsidi
 const financePlugin = (app.plugins.plugins as any)['beancount-finance'];
 
 if (!financePlugin?.api) {
-  console.warn('Obsidian Finance Plugin is not enabled.');
+  console.warn('Beancount Ledger plugin is not enabled.');
   return;
 }
 

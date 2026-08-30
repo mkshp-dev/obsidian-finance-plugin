@@ -6,6 +6,10 @@ sidebar_position: 1
 
 Before you can use Beancount Ledger, you need to set up the underlying Python and Beancount dependencies on your machine. This guide covers the required software and how to install them on any major operating system.
 
+:::important Desktop only
+Beancount Ledger requires a local Python installation and is not available on Obsidian mobile (iOS/Android).
+:::
+
 ---
 
 ## 📋 System Prerequisites

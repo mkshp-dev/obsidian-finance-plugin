@@ -13,7 +13,7 @@ The **Unified Transaction Modal** is the central interface for adding and editin
 You can open the modal in three ways:
 
 1.  **Ribbon Icon**: Click the **(+)** icon in the left ribbon of Obsidian.
-2.  **Command Palette**: Press `Ctrl/Cmd + P` and run the command **"Add Beancount Transaction"**.
+2.  **Command Palette**: Press `Ctrl/Cmd + P` and run the command **"Beancount Ledger: Add Beancount transaction"**.
 3.  **Hotkey**: Assign a custom keyboard shortcut in **Obsidian Settings → Hotkeys**.
 
 ---

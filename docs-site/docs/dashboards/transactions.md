@@ -18,11 +18,10 @@ You can filter your transaction history by any combination of the following crit
 *   **Account**: Substring match on the account name (e.g. searching `Food` matches `Expenses:Food:Groceries` and `Expenses:Food:Restaurants`).
 *   **Payee**: Searches the transaction payee field for matching text.
 *   **Tags**: Filter transactions by specific hashtags (e.g., `#vacation`, `#business`).
-*   **Search**: Full-text search across payee, narration, and comments.
 
 ### Results Table
-*   **Columns**: Date, Payee, Narration, Amount, Account.
-*   **Sorting**: Automatically sorted by date (newest first).
+*   **Columns**: Date, Payee, Narration, Amount, Balance.
+*   **Sorting**: Click any column header to sort by it (click again to reverse direction). Sorted by date (newest first) by default.
 *   **Pagination**: Respects the "Max Transaction Results" setting in your performance preferences.
 *   **Interactivity**: Click on any transaction row to open the editing view and make adjustments directly.
 

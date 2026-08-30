@@ -66,10 +66,13 @@ Extracts month-end net worth totals by summing all Assets and Liabilities:
 SELECT year, month, convert(sum(position), 'USD') WHERE account ~ '^(Assets|Liabilities)' GROUP BY year, month ORDER BY year, month
 ```
 
-### 2. Monthly Savings Rate (Nested Subqueries)
-Calculates monthly savings rate percentages (`(Income - Expenses) / Income`) using nested BQL subqueries for a specific year:
+### 2. Monthly Income and Expenses (for Savings Rate)
+BQL doesn't support correlated subqueries, so compute income and expenses as two separate queries for a given year, then divide `(income - expenses) / income` yourself:
 ```sql
-SELECT month, (SELECT convert(sum(position), 'USD') WHERE account ~ '^Income' AND month = parent.month) AS income, (SELECT convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND month = parent.month) AS expenses WHERE year = 2026 GROUP BY month
+SELECT month, convert(sum(position), 'USD') WHERE account ~ '^Income' AND year = 2026 GROUP BY month ORDER BY month
+```
+```sql
+SELECT month, convert(sum(position), 'USD') WHERE account ~ '^Expenses' AND year = 2026 GROUP BY month ORDER BY month
 ```
 
 ### 3. Credit Card Balance History

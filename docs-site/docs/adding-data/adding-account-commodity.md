@@ -76,7 +76,7 @@ Our plugin recognizes specific metadata key-value pairs indented under the commo
 
 If you want to add logos to your commodities but aren't sure where to host or find them, you can use several free public services and CDNs:
 
-*   **Stocks / Companies:** Use [Clearbit Logos](https://clearbit.com/logo). You can generate a logo URL using the company's website domain (e.g., `https://logo.clearbit.com/apple.com` for AAPL).
+*   **Stocks / Companies:** Use [Logo.dev](https://www.logo.dev/), which replaced the now-discontinued Clearbit Logo API. It provides logo images by company domain; check their site for the current URL format and free public token.
 *   **Fiat Currencies:** Use [Flagpedia](https://flagpedia.net/download/api) or [Flagcdn](https://flagcdn.com/). They provide flag images based on country codes (e.g., `https://flagcdn.com/w40/us.png` for USD).
 *   **Cryptocurrencies:** Use public repositories like [TrustWallet Assets](https://github.com/trustwallet/assets) or search on sites like [CryptoLogos](https://cryptologos.cc/).
 
@@ -90,10 +90,12 @@ Simply copy the image link from these sources and paste it into the `logo` metad
 You can configure and declare commodities directly from the dashboard:
 
 1.  Open the **Unified Dashboard** and navigate to the **Commodities** tab.
-2.  Click the **➕ Add Commodity** button in the header (or click on an existing commodity's row to edit it).
-3.  Fill in the fields:
+2.  Click the **+ Add Commodity** button in the header to create a new one. Fill in:
     *   **Symbol**: The ticker/currency symbol (e.g., `AAPL`, `EUR`).
-    *   **Display Name**: Human-readable name (e.g. `Apple Inc.`).
-    *   **Logo URL**: Image link for the icon.
-    *   **Quote Currency**: The currency this commodity's price is measured in (e.g. `USD`).
-4.  The plugin writes the commodity directive and formatted metadata keys to `commodities.beancount` in your structured layout.
+    *   **Date**: When the commodity was first introduced.
+    *   **Price Source** *(optional)*: The automated price source (see [Adding Price Metadata](./adding-price-metadata.md)) — has a **Test** button to verify it resolves before saving.
+    *   **Logo URL** *(optional)*: Image link for the icon — also has a **Test** button that previews the image.
+3.  Click on an existing commodity's row to open its detail view, where you can edit its **Price Source** or **Logo** in place and see its price history.
+4.  The plugin writes the commodity directive and any price/logo metadata to `commodities.beancount` in your structured layout.
+
+*Note:* the `name` metadata key (display name) is read and shown by the dashboard if present, but there's currently no UI field to set it — add it by editing the commodity directive directly, as shown in the example above.

@@ -16,10 +16,7 @@ The **Commodities Tab** manages all currencies and assets used in your Beancount
 View all commodities declared in your ledger with:
 *   **Symbol**: Ticker or commodity code (e.g., `AAPL`, `BTC`, `EUR`).
 *   **Latest Price**: Most recent price point with date.
-*   **Status Indicator**: Quick visual indicator of price data availability:
-    *   🟢 **Automated**: Price fetcher configured and working.
-    *   ⚪ **Manual**: No automated source configured.
-    *   ❌ **Error**: Price fetcher failed.
+*   **Status Pill**: Shows **LIVE** (green) if the latest price point is current, or the relative time since the last recorded price (e.g. "3d ago") if it's stale.
 
 ### 🔍 Search and Filters
 
@@ -47,14 +44,12 @@ The operating currency defined in your ledger (e.g., `USD` or `INR`) is highligh
 ![Commodity Card](/img/CommoditiesTab-CommodityCard.png)
 ![Commodity Details Modal](/img/CommoditiesTab-CommodityDetailsModal.png)
 
-For each commodity, you can configure:
-*   **Commodity Details**: Access via click to open detailed view modal.
-*   **Price Source**: The fetch source string (e.g., `yahoo/AAPL` for Yahoo Finance).
-*   **Logo/Icon URL**: Custom image URL for the commodity.
-*   **Display Name**: Human-readable name.
-*   **Quote Currency**: The currency this commodity is priced in.
+Click a commodity's card to open its detail view, where you can configure:
+*   **Price Source**: The fetch source string (e.g., `yahoo/AAPL` for Yahoo Finance), editable in place with a **Test** button.
+*   **Logo/Icon URL**: Custom image URL for the commodity, editable in place with a **Test** button.
+*   Price history is also shown as a chart.
+
+*Note:* the `name` (display name) metadata key is shown on the card when present, but there's no UI field to set it — add it by editing the commodity directive directly in the `.beancount` file.
 
 ### Price Validation
-*   **Test Price Source**: Verify your price fetcher configuration works correctly.
-*   **Validate Format**: Ensures the price source string is valid.
-*   **Live Testing**: Runs `bean-price` to check if the source can actually fetch prices.
+*   **Test**: Runs `bean-price` in the background to verify the price source can actually fetch a quote, and shows the result inline.

@@ -37,8 +37,6 @@ export interface BeancountPluginSettings {
     // Backup Settings
     /** Whether to create backup files when modifying the beancount file. */
     createBackups: boolean;
-    /** Maximum number of backup files to keep (0 = unlimited). */
-    maxBackupFiles: number;
     // Structured Layout Settings
     /** Name of the folder for structured layout (e.g., "Finances"). */
     structuredFolderName: string;
@@ -80,7 +78,6 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     debugMode: false,
     // Backup Settings
     createBackups: true,
-    maxBackupFiles: 10,
     // Structured Layout Settings
     structuredFolderName: 'Finances',
     fileOrganization: 'yearly',
@@ -128,8 +125,7 @@ export class BeancountSettingTab extends PluginSettingTab {
             bqlShowQuery: { name: 'Show query text', description: 'Display the BQL query text above the results in a collapsible section.' },
             maxTransactionResults: { name: 'Max transaction results', description: 'Maximum number of transactions to load at once.' },
             maxJournalResults: { name: 'Max journal results', description: 'Maximum number of journal entries to load at once.' },
-            createBackups: { name: 'Create backups', description: 'Create timestamped backup files before modifying your Beancount file.' },
-            maxBackupFiles: { name: 'Max backup files', description: 'Maximum number of backup files to keep.' }
+            createBackups: { name: 'Create backups', description: 'Create a backup file before modifying your Beancount file.' }
         };
     }
 
@@ -461,26 +457,12 @@ export class BeancountSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Create backups')
-            .setDesc('Create timestamped backup files before modifying your Beancount file. Highly recommended for data safety.')
+            .setDesc('Create a backup file (<filename>.bak) before modifying your Beancount file. Highly recommended for data safety.')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.createBackups)
                 .onChange(async (value) => {
                     this.plugin.settings.createBackups = value;
                     await this.plugin.saveSettings();
-                }));
-
-        new Setting(containerEl)
-            .setName('Max backup files')
-            .setDesc('Maximum number of backup files to keep (oldest are deleted automatically). Set to 0 for unlimited backups.')
-            .addText(text => text
-                .setPlaceholder('10')
-                .setValue(this.plugin.settings.maxBackupFiles.toString())
-                .onChange(async (value) => {
-                    const numValue = parseInt(value);
-                    if (!isNaN(numValue) && numValue >= 0 && numValue <= 1000) {
-                        this.plugin.settings.maxBackupFiles = numValue;
-                        await this.plugin.saveSettings();
-                    }
                 }));
     }
 

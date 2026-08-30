@@ -60,5 +60,5 @@ The Snapshot sidebar has two more tabs, each detailed on their own page:
 
 ### Placement
 Access the Snapshot View via:
-*   **Command Palette**: `Ctrl/Cmd + P` → "Open Beancount Snapshot".
+*   **Command Palette**: `Ctrl/Cmd + P` → "Beancount Ledger: Open Beancount snapshot".
 *   **Right Sidebar**: Drag and position the view anywhere in Obsidian's layout.

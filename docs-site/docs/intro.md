@@ -45,3 +45,4 @@ This plugin bridges the gap between powerful plain-text accounting and the conve
 *   **✅ Reconciliation Tracking**: Monitor account reconciliation health in the Snapshot sidebar with custom per-account intervals and automated status checks.
 *   **📅 Scheduled & Recurring Transactions**: Define one-time or repeating transactions (rent, subscriptions, insurance) from the Snapshot sidebar, then review what's due and Insert, Skip, or Hold each occurrence individually.
 *   **📝 Pro-grade File Editor**: A complete `.beancount` editor view featuring live syntax highlighting, diagnostics/linting, smart auto-indentation, and autocompletion.
+*   **⚡ User Snippets**: Define your own transaction snippets in `snippets.beancount` and autocomplete them right from the editor.

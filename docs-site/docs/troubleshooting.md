@@ -15,12 +15,11 @@ This guide addresses common issues with connectivity, queries, and data display.
 *   **Solution**: 
     1.  Install beanquery: `pip install beanquery` (see [Requirements](./getting-started/requirements.md)).
     2.  Go to **Settings → Beancount Ledger → Connection**.
-    3.  Click **Test All Commands** to see which commands fail.
-    4.  If auto-detection fails, manually enter the absolute path to `bean-query`:
+    3.  If auto-detection fails, manually enter the absolute path to `bean-query`:
         *   Windows: `C:\Users\<YourUsername>\AppData\Local\Programs\Python\Python3X\Scripts\bean-query.exe`
         *   macOS/Linux: `/usr/local/bin/bean-query` or `~/.local/bin/bean-query`
         *   WSL: `wsl bean-query`
-    5.  Click **Test Bean Query** to verify it works.
+    4.  Click **Verify** next to the command field to confirm it works.
 
 ### "File not found" errors
 *   **Cause**: The Beancount file path in settings is incorrect or the file doesn't exist.
@@ -28,7 +27,7 @@ This guide addresses common issues with connectivity, queries, and data display.
     *   Windows: `C:\Users\YourName\Documents\finances.beancount`
     *   macOS/Linux: `/home/username/finances.beancount`
     *   WSL: `/mnt/c/Users/YourName/Documents/finances.beancount` (Linux-style path)
-*   **Test**: Use the **Test Bean Check** button to validate the file.
+*   **Test**: Check the file status indicator at the top of the [Snapshot sidebar](./snapshot-view.md) — it runs `bean-check` and shows ✅ or the specific errors.
 
 ### WSL Path Errors
 *   **Symptom**: Commands work but file operations fail on Windows when using WSL.
@@ -36,7 +35,7 @@ This guide addresses common issues with connectivity, queries, and data display.
 *   **Solution**:
     *   If your Beancount file is in Windows, use the WSL path format: `/mnt/c/Users/YourName/...`
     *   The plugin automatically converts paths when executing commands.
-    *   Verify in **Settings → Connection** that "WSL (Default)" is detected.
+    *   Verify in **Settings → Connection** that "🐧 WSL Environment" is detected.
 
 ### Python Not Found
 *   **Symptom**: All Beancount commands fail.

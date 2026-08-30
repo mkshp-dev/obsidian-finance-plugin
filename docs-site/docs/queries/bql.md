@@ -16,10 +16,6 @@ The plugin supports two distinct modes:
 
 Use standard Markdown code blocks with the `bql` language identifier to create formatted, interactive tables.
 
-:::warning Important
-**Single-Line Queries Only**: BQL queries must be written on a single line. Multi-line queries will only execute the first line and ignore subsequent lines.
-:::
-
 ### Basic Usage
 
     ````

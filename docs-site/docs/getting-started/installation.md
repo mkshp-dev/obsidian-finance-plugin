@@ -16,7 +16,7 @@ This guide covers how to install the **Beancount Ledger** plugin in your Obsidia
 You can install the plugin using one of the three methods below.
 
 ### Method 1: Obsidian Community Plugins (Recommended)
-Once the plugin is approved and listed in the official Obsidian store, this is the easiest method:
+The plugin is listed in the official Obsidian community plugin store — this is the easiest method:
 1.  Open Obsidian and go to **Settings** → **Community Plugins**.
 2.  Turn off **Restricted mode** if it is enabled.
 3.  Click **Browse** and search for **"Beancount Ledger"**.

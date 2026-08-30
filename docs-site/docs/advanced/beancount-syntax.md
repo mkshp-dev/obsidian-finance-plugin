@@ -169,7 +169,7 @@ Prices are used for currency conversions where you don't need to track cost basi
 
 **How to use:**
 1. Add posting with amount (e.g., `-400.00 USD`)
-2. Click "▶ Advanced (Cost/Price)" to expand the section
+2. Click the **@** (Price) icon on the posting row to expand the price fields
 3. Fill in **Price Amount**: `1.09`
 4. Fill in **Price Currency**: `CAD`
 5. Leave "Total Price" checkbox unchecked
@@ -184,7 +184,7 @@ Prices are used for currency conversions where you don't need to track cost basi
 
 **How to use:**
 1. Add posting with amount
-2. Click "▶ Advanced (Cost/Price)"
+2. Click the **@** (Price) icon on the posting row
 3. Fill in **Price Amount**: `436.00`
 4. Fill in **Price Currency**: `CAD`
 5. **Check** "Total Price (use @@ instead of @)"
@@ -205,7 +205,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 
 **How to use:**
 1. Add posting: Amount `10`, Currency `AAPL`
-2. Click "▶ Advanced (Cost/Price)"
+2. Click the **$** (Cost) icon on the posting row
 3. Fill in **Cost Amount**: `150.00`
 4. Fill in **Cost Currency**: `USD`
 5. Leave "Total Cost" checkbox unchecked
@@ -220,7 +220,7 @@ Costs are used for commodities held at cost (stocks, investments) to track cost 
 
 **How to use:**
 1. Add posting: Amount `10`, Currency `IVV`
-2. Click "▶ Advanced (Cost/Price)"
+2. Click the **$** (Cost) icon on the posting row
 3. Fill in **Cost Amount**: `1850.00`
 4. Fill in **Cost Currency**: `USD`
 5. **Check** "Total Cost (use &#123;&#123;&#125;&#125; instead of &#123;&#125;)"
@@ -277,7 +277,7 @@ You can specify both cost and price on the same posting. The cost is used for ba
 
 **How to use:**
 1. Add posting: Amount `-10`, Currency `AAPL`
-2. Click "▶ Advanced (Cost/Price)"
+2. Click both the **$** (Cost) and **@** (Price) icons on the posting row
 3. Fill in **Cost** section: Amount `150.00`, Currency `USD`
 4. Fill in **Price** section: Amount `175.00`, Currency `USD`
 
@@ -311,7 +311,7 @@ When selling investments, you can specify which lot to reduce using various matc
 
 **How to use:**
 1. Add posting: Amount `-20`, Currency `MSFT`
-2. Click "▶ Advanced (Cost/Price)"
+2. Click the **$** (Cost) icon on the posting row
 3. **Leave Cost Amount empty**
 4. Fill in **Cost Date**: Select the acquisition date
 5. Leave Cost Currency empty
@@ -329,7 +329,7 @@ When selling investments, you can specify which lot to reduce using various matc
 
 **How to use:**
 1. Add posting: Amount `-15`, Currency `GOOG`
-2. Click "▶ Advanced (Cost/Price)"
+2. Click the **$** (Cost) icon on the posting row
 3. **Leave Cost Amount and Cost Date empty**
 4. Fill in **Cost Label**: `lot-2024-001`
 5. Leave Cost Currency empty

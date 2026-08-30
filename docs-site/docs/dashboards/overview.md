@@ -14,10 +14,10 @@ The **Overview Tab** is the landing page of the Unified Dashboard. It answers th
 
 ![Key Performance Indicators](/img/Overview-KPI.png)
 
-At-a-glance metrics displayed at the top:
-*   **Net Worth**: Your total wealth (Assets + Liabilities) in your Operating Currency.
-*   **Monthly Income**: Total income accrued this calendar month.
-*   **Monthly Expenses**: Total expenses incurred this calendar month.
+At-a-glance metrics displayed at the top (all clickable — see [Inter-Tab Navigation](../advanced/inter-tab-navigation.md)):
+*   **Total Balance**: Your total wealth (Assets minus Liabilities) in your Operating Currency.
+*   **Income**: Total income accrued in the current period.
+*   **Expenses**: Total expenses incurred in the current period.
 *   **Savings Rate**: Your savings efficiency percentage: `Savings / Income × 100`.
 ---
 
@@ -52,7 +52,7 @@ Click **+ Add Budget** and fill in:
 | Target Amount | Spending limit per cycle |
 | Currency | Tracking currency (defaults to Operating Currency) |
 | Enable Rollover | Roll unspent budget into next cycle |
-| Start Date | When the budget begins (only shown when rollover is off) |
+| Start Date | Anchor date for rollover cycles (only shown when rollover is enabled) |
 | Tag | Optional tag to filter transactions (e.g. `dining` or `vacation`) |
 | Tag Mode | Match strategy: `has` (must contain tag) or `not_has` (must exclude tag) |
 
