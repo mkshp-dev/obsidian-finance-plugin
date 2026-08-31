@@ -58,6 +58,17 @@ const sidebars: SidebarsConfig = {
         'upcoming-transactions',
       ],
     },
+    {
+      type: 'category',
+      label: 'Workflows',
+      collapsed: false,
+      items: [
+        'workflows/first-time-account-setup',
+        'workflows/loans-and-amortization',
+        'workflows/tracking-subscriptions',
+        'workflows/periodic-reconciliation',
+      ],
+    },
     'plugin-api',
     'settings',
     {

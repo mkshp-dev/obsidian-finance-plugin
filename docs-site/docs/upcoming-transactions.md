@@ -22,6 +22,7 @@ Click the **＋** button in the Upcoming tab to open the **Add Scheduled Transac
 *   **Start Date** — the first (or only, for `One-time`) occurrence.
 *   **Payee / Narration** — optional, same as a regular transaction.
 *   **Postings** — add as many as you need. Leave one posting's amount blank to have Beancount auto-balance it, exactly like a manually-entered transaction.
+*   **Tags & Links** — optional, same as a regular transaction. Carried into every occurrence the schedule generates, so it's a convenient way to tag a whole recurring series (e.g. `#subscription`) for later BQL reporting.
 
 Each row in the list shows the schedule's name, amount, frequency, and next due date, with an orange indicator when something is due.
 
