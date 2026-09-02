@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Consistent dropdown styling** — Replaced several native `<select>`/button-toggle controls with the shared pill-style `CustomSelect` dropdown already used elsewhere on the dashboard: the Balance Sheet and Income Statement tabs' Valuation selector, and the Financial Indicators section's Budgets/Targets toggle (now shows counts directly in the option labels, e.g. "Budgets (3)"). Also added dedicated icons for "Today" and "Table" so those options aren't missing an icon next to options that have one.
+
+- **Commodity Details modal: Metadata / Price History tabs** — Split the modal into two tabs instead of one long scroll: **Metadata** (price source, logo, other metadata) and **Price History** (the chart/table toggle). The identity header and Delete/Done footer stay visible regardless of tab.
+
+- **Upcoming tab: Filter by period** — Added a **Today / This Week / This Month / All** dropdown to the Snapshot sidebar's Upcoming tab, so the list can be narrowed to what's actually coming up instead of every active schedule at once. Already-overdue transactions still show up under every period, not just "All".
+
+- **Account Details modal: Clearer labels** — The reconciliation interval field now reads "Reconciliation interval (days)" to make the unit explicit, and the **Balance** button was renamed to **Add Balance**.
+
 ## 2.4.1 - 2026-08-29
 
 - **Reconciliation Actions: Edit, Balance, and Force Reconcile** — The Snapshot sidebar's Reconciliation tab now does more than report status. Each account row gets three buttons: **Edit** opens a new **Account details** modal — view open/close dates, currencies, and reconciliation status, and set or clear the `reconcile` interval on an already-open account, previously only settable once at account creation — also reachable by right-clicking an account row in the Accounts & Balances tab. **Balance** jumps straight to the Add Transaction modal's Balance tab with the account pre-filled, for the everyday "check the real balance, record it" step. **Force reconcile** — enabled only when an account's latest balance assertion is actually failing — inserts a Beancount `pad` directive so Beancount auto-generates a transaction covering the difference, with a pad-account picker and a plain-language warning that this is a plug, not a fix for whatever caused the gap. The summary row was also simplified from two bordered stat boxes to a single text line ("N overdue · N up to date") with a new **Only overdue** toggle to filter the list down to what needs attention.

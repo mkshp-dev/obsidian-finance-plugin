@@ -109,12 +109,12 @@
 
 			{#if detail.isClosed}
 				<div class="kv-row">
-					<span class="kv-key">Reconcile interval</span>
+					<span class="kv-key">Reconciliation interval (days)</span>
 					<span class="kv-value">{detail.reconcileDays ? `${detail.reconcileDays} days (account closed)` : "—"}</span>
 				</div>
 			{:else}
 				<div class="kv-row">
-					<span class="kv-key">Reconcile interval</span>
+					<span class="kv-key">Reconciliation interval (days)</span>
 					<span class="kv-value">
 						<div class="edit-area">
 							<input type="number" min="1" bind:value={reconcileInput} placeholder="e.g. 30 (blank to clear)" />
@@ -130,7 +130,7 @@
 
 	<div class="footer">
 		<div class="footer-group">
-			<button class="btn" on:click={handleBalance}>Balance</button>
+			<button class="btn" on:click={handleBalance}>Add Balance</button>
 			<button
 				class="btn"
 				disabled={!detail.isFailing}

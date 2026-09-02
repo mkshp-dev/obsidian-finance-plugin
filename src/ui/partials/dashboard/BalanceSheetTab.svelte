@@ -94,11 +94,9 @@
 		(hasOtherCurrencies(state.assets) || hasOtherCurrencies(state.liabilities) || hasOtherCurrencies(state.equity));
 
 	// Handle valuation method change
-	async function handleValuationMethodChange(event: Event) {
-		const target = event.target as HTMLSelectElement;
-		const method = target.value as 'convert' | 'cost' | 'units';
+	async function handleValuationMethodChange(method: string) {
 		if (controller) {
-			await controller.setValuationMethod(method);
+			await controller.setValuationMethod(method as 'convert' | 'cost' | 'units');
 		}
 	}
 
@@ -375,16 +373,19 @@
 			<div class="balance-sheet-section-header">
 				<h3>Balance Sheet</h3>
 				<div class="valuation-method-selector">
-					<label for="valuation-method">Valuation:</label>
-					<select
-						id="valuation-method"
+					<span class="valuation-method-label">Valuation:</span>
+					<CustomSelect
+						variant="secondary"
+						position="single"
+						options={[
+							{ value: 'convert', label: `Market Value (Convert to ${state.currency})` },
+							{ value: 'cost', label: 'At Cost' },
+							{ value: 'units', label: 'Units' },
+						]}
 						value={state.valuationMethod || 'convert'}
-						on:change={handleValuationMethodChange}
-					>
-						<option value="convert">Market Value (Convert to {state.currency})</option>
-						<option value="cost">At Cost</option>
-						<option value="units">Units</option>
-					</select>
+						on:change={(e) => handleValuationMethodChange(e.detail)}
+						ariaLabel="Valuation method"
+					/>
 				</div>
 			</div>
 
@@ -655,25 +656,10 @@
 		gap: var(--size-4-2);
 	}
 
-	.valuation-method-selector label {
+	.valuation-method-label {
 		font-size: 0.9em;
 		color: var(--text-muted);
 		white-space: nowrap;
-	}
-
-	.valuation-method-selector select {
-		background: var(--background-primary);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--radius-s);
-		padding: var(--size-4-1) var(--size-4-2);
-		color: var(--text-normal);
-		font-size: 0.9em;
-		min-width: 200px;
-	}
-
-	.valuation-method-selector select:focus {
-		outline: 2px solid var(--color-accent);
-		outline-offset: 1px;
 	}
 
 	.column {
@@ -727,10 +713,6 @@
 		.valuation-method-selector {
 			width: 100%;
 			justify-content: space-between;
-		}
-
-		.valuation-method-selector select {
-			min-width: 180px;
 		}
 	}
 	
