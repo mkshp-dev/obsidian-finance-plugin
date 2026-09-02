@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Sliding-pill tab bar** — New shared `TabBar` component (segmented pill with an animated sliding highlight, keyboard arrow-key navigation, optional colored count badges) rolled out to the Commodity Details modal (Metadata / Price History), the Snapshot sidebar (Key Metrics / Upcoming, and Errors / Reconciliation), the main dashboard's top-level navigation (Overview / Transactions / Journal / Accounts & Balances / Income Statement / Commodities), and the Add Entry modal's Transaction / Balance / Note / Query tabs — replacing the old plain underline tabs throughout.
+
 - **Consistent dropdown styling** — Replaced several native `<select>`/button-toggle controls with the shared pill-style `CustomSelect` dropdown already used elsewhere on the dashboard: the Balance Sheet and Income Statement tabs' Valuation selector, and the Financial Indicators section's Budgets/Targets toggle (now shows counts directly in the option labels, e.g. "Budgets (3)"). Also added dedicated icons for "Today" and "Table" so those options aren't missing an icon next to options that have one.
 
 - **Commodity Details modal: Metadata / Price History tabs** — Split the modal into two tabs instead of one long scroll: **Metadata** (price source, logo, other metadata) and **Price History** (the chart/table toggle). The identity header and Delete/Done footer stay visible regardless of tab.

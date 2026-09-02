@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import { Notice } from 'obsidian'; // Ensure Notice is imported
 	import UpcomingTab from './UpcomingTab.svelte';
+	import TabBar from '../../common/TabBar.svelte';
 
 	export let plugin: any = null;
 	export let isLoading = true;
@@ -52,12 +53,12 @@
 		}
 	}
 
-	function switchTab(tab: 'errors' | 'reconciliation') {
-		dispatch('tabChange', tab);
+	function switchTab(tab: string) {
+		dispatch('tabChange', tab as 'errors' | 'reconciliation');
 	}
 
-	function switchUpperTab(tab: 'metrics' | 'upcoming') {
-		activeUpperTab = tab;
+	function switchUpperTab(tab: string) {
+		activeUpperTab = tab as 'metrics' | 'upcoming';
 	}
 
 	function handleUpcomingDueCount(e: CustomEvent<number>) {
@@ -144,24 +145,16 @@
 </div>
 
 <!-- Upper-region toggle: Key Metrics / Upcoming -->
-<div class="tab-strip upper-tab-strip">
-	<button
-		class="tab-button"
-		class:tab-active={activeUpperTab === 'metrics'}
-		on:click={() => switchUpperTab('metrics')}
-	>
-		Key Metrics
-	</button>
-	<button
-		class="tab-button"
-		class:tab-active={activeUpperTab === 'upcoming'}
-		on:click={() => switchUpperTab('upcoming')}
-	>
-		Upcoming
-		{#if upcomingDueCount > 0}
-			<span class="tab-badge tab-badge-warning">{upcomingDueCount}</span>
-		{/if}
-	</button>
+<div class="upper-tab-strip">
+	<TabBar
+		tabs={[
+			{ value: 'metrics', label: 'Key Metrics' },
+			{ value: 'upcoming', label: 'Upcoming', ...(upcomingDueCount > 0 ? { count: upcomingDueCount, tone: 'warning' } : {}) },
+		]}
+		value={activeUpperTab}
+		on:change={(e) => switchUpperTab(e.detail)}
+		ariaLabel="Snapshot upper section"
+	/>
 </div>
 
 <div class="upper-tab-content" class:hidden={activeUpperTab !== 'metrics'}>
@@ -199,27 +192,16 @@
 
 <!-- Tabbed bottom section -->
 <hr class="tab-separator">
-<div class="tab-strip">
-	<button
-		class="tab-button"
-		class:tab-active={activeTab === 'errors'}
-		on:click={() => switchTab('errors')}
-	>
-		Errors
-		{#if errorCount > 0}
-			<span class="tab-badge tab-badge-error">{errorCount}</span>
-		{/if}
-	</button>
-	<button
-		class="tab-button"
-		class:tab-active={activeTab === 'reconciliation'}
-		on:click={() => switchTab('reconciliation')}
-	>
-		Reconciliation
-		{#if reconciliationOverdue > 0}
-			<span class="tab-badge tab-badge-warning">{reconciliationOverdue}</span>
-		{/if}
-	</button>
+<div class="bottom-tab-strip">
+	<TabBar
+		tabs={[
+			{ value: 'errors', label: 'Errors', ...(errorCount > 0 ? { count: errorCount, tone: 'error' } : {}) },
+			{ value: 'reconciliation', label: 'Reconciliation', ...(reconciliationOverdue > 0 ? { count: reconciliationOverdue, tone: 'warning' } : {}) },
+		]}
+		value={activeTab}
+		on:change={(e) => switchTab(e.detail)}
+		ariaLabel="Snapshot bottom section"
+	/>
 </div>
 
 <!-- Tab content -->
@@ -524,67 +506,16 @@
 		margin: var(--size-4-4) 0 0 0;
 	}
 
-	.tab-strip {
-		display: flex;
-		gap: 0;
-		margin-bottom: var(--size-4-2);
-		border-bottom: 1px solid var(--background-modifier-border);
-	}
-
 	.upper-tab-strip {
 		margin-bottom: var(--size-4-3);
 	}
 
+	.bottom-tab-strip {
+		margin: var(--size-4-3) 0 var(--size-4-2) 0;
+	}
+
 	.upper-tab-content.hidden {
 		display: none;
-	}
-
-	.tab-button {
-		flex: 1;
-		padding: var(--size-4-2) var(--size-4-2);
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-size: var(--font-ui-small);
-		font-weight: 500;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
-	}
-
-	.tab-button:hover {
-		color: var(--text-normal);
-		background: var(--background-modifier-hover);
-		box-shadow: none;
-	}
-
-	.tab-button.tab-active {
-		color: var(--text-accent);
-		border-bottom-color: var(--text-accent);
-	}
-
-	.tab-badge {
-		font-size: 0.72em;
-		min-width: 16px;
-		padding: 1px 6px;
-		border-radius: 20px;
-		font-weight: 700;
-		line-height: 1.5;
-		text-align: center;
-	}
-
-	.tab-badge-error {
-		background-color: var(--color-red, #e05252);
-		color: white;
-	}
-
-	.tab-badge-warning {
-		background-color: var(--color-orange, #e8a027);
-		color: white;
 	}
 
 	/* --- Tab Empty State --- */

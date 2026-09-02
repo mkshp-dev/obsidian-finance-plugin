@@ -3,6 +3,7 @@
 	import type { ChartConfiguration } from "chart.js/auto";
 	import ChartComponent from "../common/ChartComponent.svelte";
 	import CustomSelect from "../common/CustomSelect.svelte";
+	import TabBar from "../common/TabBar.svelte";
 	import { formatSignificantAmount } from "../../utils/index";
 	export let symbol: string;
 	export let commodity: any = {
@@ -186,24 +187,15 @@
 	</div>
 
 	<!-- Tabs -->
-	<div class="modal-tabs" role="tablist">
-		<button
-			type="button"
-			class="modal-tab"
-			class:active={activeTab === "metadata"}
-			role="tab"
-			aria-selected={activeTab === "metadata"}
-			on:click={() => (activeTab = "metadata")}
-		>Metadata</button>
-		<button
-			type="button"
-			class="modal-tab"
-			class:active={activeTab === "price-history"}
-			role="tab"
-			aria-selected={activeTab === "price-history"}
-			on:click={() => (activeTab = "price-history")}
-		>Price History</button>
-	</div>
+	<TabBar
+		tabs={[
+			{ value: 'metadata', label: 'Metadata' },
+			{ value: 'price-history', label: 'Price History' },
+		]}
+		bind:value={activeTab}
+		fullWidth={false}
+		ariaLabel="Commodity detail sections"
+	/>
 
 	{#if activeTab === "price-history"}
 		<!-- Price History -->
@@ -477,34 +469,6 @@
 		color: var(--text-muted);
 		font-size: 14px;
 		line-height: 1.35;
-	}
-
-	/* ── Tabs ─────────────────────────────────────────── */
-	.modal-tabs {
-		display: flex;
-		gap: 4px;
-		border-bottom: 1px solid var(--background-modifier-border);
-	}
-
-	.modal-tab {
-		padding: 8px 4px;
-		background: transparent;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-size: 13px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: color 0.15s ease, border-color 0.15s ease;
-	}
-
-	.modal-tab:hover {
-		color: var(--text-normal);
-	}
-
-	.modal-tab.active {
-		color: var(--text-normal);
-		border-bottom-color: var(--interactive-accent);
 	}
 
 	/* ── Section ──────────────────────────────────────── */
