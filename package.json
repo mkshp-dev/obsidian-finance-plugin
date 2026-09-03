@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-finance-plugin",
-	"version": "2.4.2-beta.1",
+	"version": "2.4.2-beta.2",
 	"description": "Comprehensive financial dashboard with Beancount integration. Features unified entry management, live BQL queries, connection validation, auto-starting backend, and streamlined settings.",
 	"main": "main.js",
 	"scripts": {
