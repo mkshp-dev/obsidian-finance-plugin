@@ -197,6 +197,13 @@
 			<EmptyState icon="💸" title="No Transactions Found" description="Try selecting a different account or adjusting the date range and filters." />
 		{:else}
 			<table class="transaction-table sortable">
+				<colgroup>
+					<col style="width: 11%;" />
+					<col style="width: 16%;" />
+					<col style="width: 33%;" />
+					<col style="width: 20%;" />
+					<col style="width: 20%;" />
+				</colgroup>
 				<thead>
 					<tr>
 						<th on:click={() => handleSort('date')} class:active={sortColumn === 'date'}>
@@ -211,7 +218,7 @@
 						<th on:click={() => handleSort('amount')} class:active={sortColumn === 'amount'}>
 							Amount {sortColumn === 'amount' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
 						</th>
-						<th on:click={() => handleSort('balance')} class:active={sortColumn === 'balance'}>
+						<th on:click={() => handleSort('balance')} class:active={sortColumn === 'balance'} title={state.currentFilters.account ? '' : 'Select an account to see its running balance'}>
 							Balance {sortColumn === 'balance' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
 						</th>
 					</tr>
@@ -231,7 +238,7 @@
 							</td>
 							<td>{narration}</td>
 							<td class="align-right">{position}</td>
-							<td class="align-right">{balance}</td>
+							<td class="align-right">{balance || '—'}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -258,7 +265,8 @@
 		padding: 2px var(--size-4-2);
 	}
 	.controls input[type="text"] { min-width: 150px; }
-	.transaction-table { width: 100%; border-collapse: collapse; }
+	.transaction-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+	.transaction-table td { word-break: break-word; }
 	.transaction-table th { text-align: left; font-size: var(--font-ui-small); font-weight: 600; color: var(--text-muted); padding: 8px 6px; border-bottom: 1px solid var(--background-modifier-border); }
 	.transaction-table th.active { color: var(--text-accent); }
 	.transaction-table th { cursor: pointer; user-select: none; }
