@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+## 2.4.2 - 2026-09-04
+
 - **Budgets/Targets: Multi-account selection** — Add Budget/Add Target now let you pick multiple accounts (e.g. `Expenses:(Rent|Utility)`) via a "+ Add another account" button, instead of hand-typing the pattern. Editing correctly splits an existing multi-account query back into rows.
 
 - **Fixed: Transactions tab freezing on large ledgers** — The default view no longer requests a running `balance` column for every row (a multi-commodity ledger could produce a huge CSV response and freeze the UI). It's now only fetched once a specific account is selected. Also fixed a layout bug where the Amount column could visually shift under the Balance header.
@@ -20,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upcoming tab: Filter by period** — Added a Today / This Week / This Month / All dropdown to the Snapshot sidebar's Upcoming tab. Overdue transactions still show under every period.
 
 - **Account Details modal: Clearer labels** — Reconciliation interval field now reads "Reconciliation interval (days)", and the Balance button was renamed to Add Balance.
+
 
 ## 2.4.1 - 2026-08-29
 
