@@ -30,6 +30,9 @@ jobs:
         - name: Install dependencies
           run: npm ci
 
+        - name: Install beanquery (for SystemDetector detection tests)
+          run: pip3 install beanquery --break-system-packages
+
         - name: Run lint
           run: npm run lint
 
