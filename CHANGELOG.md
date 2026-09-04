@@ -7,17 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
-- **Fixed: Transactions tab freezing on large ledgers** — The default (no account selected) view was requesting a running `balance` column for every row, which beanquery computes as the full multi-commodity inventory of whichever account each posting hit. On a ledger with multi-commodity accounts (e.g. a brokerage holding dozens of tickers), this produced a massive CSV response that froze the UI thread while parsing/rendering — visible as Obsidian becoming unresponsive and the devtools console logging "Disconnected from...". The `balance` column is now only requested once a specific account is selected, where it's actually meaningful; the column shows "—" otherwise. Also fixed a layout bug where, with `balance` now often empty, the browser's automatic column-width recalculation shifted the Amount column's values visually under the Balance header — columns now use fixed percentage widths so this can't happen regardless of cell content length.
+- **Budgets/Targets: Multi-account selection** — Add Budget/Add Target now let you pick multiple accounts (e.g. `Expenses:(Rent|Utility)`) via a "+ Add another account" button, instead of hand-typing the pattern. Editing correctly splits an existing multi-account query back into rows.
 
-- **Sliding-pill tab bar** — New shared `TabBar` component (segmented pill with an animated sliding highlight, keyboard arrow-key navigation, optional colored count badges) rolled out to the Commodity Details modal (Metadata / Price History), the Snapshot sidebar (Key Metrics / Upcoming, and Errors / Reconciliation), the main dashboard's top-level navigation (Overview / Transactions / Journal / Accounts & Balances / Income Statement / Commodities), and the Add Entry modal's Transaction / Balance / Note / Query tabs — replacing the old plain underline tabs throughout. The track now sits on a white/primary background with a thin border instead of a gray fill, so only the active tab reads as filled in.
+- **Fixed: Transactions tab freezing on large ledgers** — The default view no longer requests a running `balance` column for every row (a multi-commodity ledger could produce a huge CSV response and freeze the UI). It's now only fetched once a specific account is selected. Also fixed a layout bug where the Amount column could visually shift under the Balance header.
 
-- **Consistent dropdown styling** — Replaced several native `<select>`/button-toggle controls with the shared pill-style `CustomSelect` dropdown already used elsewhere on the dashboard: the Balance Sheet and Income Statement tabs' Valuation selector, and the Financial Indicators section's Budgets/Targets toggle (now shows counts directly in the option labels, e.g. "Budgets (3)"). Also added dedicated icons for "Today" and "Table" so those options aren't missing an icon next to options that have one.
+- **Sliding-pill tab bar** — New shared `TabBar` component (animated sliding highlight, keyboard navigation, count badges) replaces the old underline tabs across the Commodity Details modal, Snapshot sidebar, main dashboard navigation, and Add Entry modal.
 
-- **Commodity Details modal: Metadata / Price History tabs** — Split the modal into two tabs instead of one long scroll: **Metadata** (price source, logo, other metadata) and **Price History** (the chart/table toggle). The identity header and Delete/Done footer stay visible regardless of tab.
+- **Consistent dropdown styling** — Several native `<select>`/toggle controls now use the shared pill-style `CustomSelect` dropdown, including the Valuation selectors and the Financial Indicators Budgets/Targets toggle.
 
-- **Upcoming tab: Filter by period** — Added a **Today / This Week / This Month / All** dropdown to the Snapshot sidebar's Upcoming tab, so the list can be narrowed to what's actually coming up instead of every active schedule at once. Already-overdue transactions still show up under every period, not just "All".
+- **Commodity Details modal: Metadata / Price History tabs** — Split into two tabs instead of one long scroll, with the identity header and Delete/Done footer staying visible regardless of tab.
 
-- **Account Details modal: Clearer labels** — The reconciliation interval field now reads "Reconciliation interval (days)" to make the unit explicit, and the **Balance** button was renamed to **Add Balance**.
+- **Upcoming tab: Filter by period** — Added a Today / This Week / This Month / All dropdown to the Snapshot sidebar's Upcoming tab. Overdue transactions still show under every period.
+
+- **Account Details modal: Clearer labels** — Reconciliation interval field now reads "Reconciliation interval (days)", and the Balance button was renamed to Add Balance.
 
 ## 2.4.1 - 2026-08-29
 
