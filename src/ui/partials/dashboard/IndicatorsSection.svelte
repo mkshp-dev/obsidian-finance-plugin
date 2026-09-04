@@ -12,6 +12,7 @@
 	import { AddBudgetModal } from '../../modals/AddBudgetModal';
 	import { AddTargetModal } from '../../modals/AddTargetModal';
 	import { Notice } from 'obsidian';
+	import CustomSelect from '../../common/CustomSelect.svelte';
 
 	export let plugin: any = null;
 	export let navigate: ((req: NavRequest) => void) | null = null;
@@ -422,6 +423,7 @@
 	onMount(() => { if (plugin) loadAll(); });
 
 	function setView(view: IndicatorView) { activeView = view; }
+	function handleViewChange(value: string) { setView(value as IndicatorView); }
 	function handleAddBudget() { dispatch('add-budget'); }
 	function handleAddTarget() { dispatch('add-target'); }
 
@@ -466,16 +468,17 @@
 			<button class="btn btn-primary" on:click={loadAll} disabled={isLoading}>Refresh</button>
 		</div>
 		<div class="controls-row">
-			<div class="view-toggle">
-				<button class="toggle-btn" class:active={activeView === 'Budgets'} on:click={() => setView('Budgets')}>
-					Budgets
-					<span class="count-badge" class:active={activeView === 'Budgets'}>{budgets.length}</span>
-				</button>
-				<button class="toggle-btn" class:active={activeView === 'Targets'} on:click={() => setView('Targets')}>
-					Targets
-					<span class="count-badge" class:active={activeView === 'Targets'}>{targets.length}</span>
-				</button>
-			</div>
+			<CustomSelect
+				variant="secondary"
+				position="single"
+				options={[
+					{ value: 'Budgets', label: `Budgets (${budgets.length})` },
+					{ value: 'Targets', label: `Targets (${targets.length})` },
+				]}
+				value={activeView}
+				on:change={(e) => handleViewChange(e.detail)}
+				ariaLabel="Select indicator view"
+			/>
 			<button class="add-btn" on:click={activeView === 'Budgets' ? handleAddBudget : handleAddTarget}>
 				<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 				{activeView === 'Budgets' ? 'Add Budget' : 'Add Target'}
@@ -644,54 +647,6 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-	}
-
-	/* ── Toggle ────────────────────────────────────────── */
-	.view-toggle {
-		display: flex;
-		gap: 2px;
-		background: var(--background-modifier-border);
-		border-radius: var(--radius-s);
-		padding: 2px;
-	}
-
-	.toggle-btn {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		padding: 3px 12px;
-		border: none;
-		background: transparent;
-		border-radius: var(--radius-s);
-		color: var(--text-muted);
-		cursor: pointer;
-		font-size: var(--font-ui-small);
-		transition: background 0.15s, color 0.15s;
-	}
-
-	.toggle-btn.active {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-	}
-
-	.count-badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 17px;
-		height: 15px;
-		padding: 0 4px;
-		border-radius: 8px;
-		font-size: 10px;
-		font-weight: 600;
-		background: var(--background-modifier-border);
-		color: var(--text-muted);
-		transition: background 0.15s, color 0.15s;
-	}
-
-	.count-badge.active {
-		background: rgba(255, 255, 255, 0.22);
-		color: var(--text-on-accent);
 	}
 
 	/* ── Buttons ───────────────────────────────────────── */

@@ -2,6 +2,8 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { nativeDatePicker } from '../actions/nativeDatePicker';
+	import { buildAccountQuery, parseAccountQuery } from '../../utils';
+	import AccountQueryRow from './AccountQueryRow.svelte';
 
 	const dispatch = createEventDispatcher();
 
@@ -13,7 +15,7 @@
 
 	// Form state
 	let name: string = '';
-	let accountQuery: string = '';
+	let accountRows: string[] = [''];
 	let cycle: 'Monthly' | 'Weekly' | 'Quarterly' | 'Yearly' = 'Monthly';
 	let target: string = '';
 	let currency: string = defaultCurrency;
@@ -29,18 +31,21 @@
 
 	// Filtered asset accounts
 	$: assetAccounts = accounts.filter(a => a.startsWith('Assets'));
-	$: filteredAccounts = accountQuery
-		? assetAccounts.filter(a => a.toLowerCase().includes(accountQuery.toLowerCase()))
-		: assetAccounts;
-	$: accountSummary = accountQuery
-		? `${filteredAccounts.length} matching asset account${filteredAccounts.length === 1 ? '' : 's'}`
-		: `${assetAccounts.length} asset account${assetAccounts.length === 1 ? '' : 's'} available. Type to filter.`;
-	let showDropdown = false;
+
+	function addAccountRow() {
+		accountRows = [...accountRows, ''];
+	}
+
+	function removeAccountRow(index: number) {
+		const next = accountRows.filter((_, i) => i !== index);
+		accountRows = next.length > 0 ? next : [''];
+	}
 
 	onMount(() => {
 		if (editingIndicator) {
 			name = editingIndicator.name || '';
-			accountQuery = editingIndicator.accountString || '';
+			accountRows = parseAccountQuery(editingIndicator.accountString || '');
+			if (accountRows.length === 0) accountRows = [''];
 			cycle = editingIndicator.period || 'Monthly';
 			target = String(editingIndicator.targetAmount || '');
 			currency = editingIndicator.currency || defaultCurrency;
@@ -63,8 +68,8 @@
 			nameError = 'Name is required';
 			valid = false;
 		}
-		if (!accountQuery.trim()) {
-			accountError = 'Account is required';
+		if (!accountRows.some(r => r.trim())) {
+			accountError = 'At least one account is required';
 			valid = false;
 		}
 		const t = parseFloat(target);
@@ -75,16 +80,12 @@
 		return valid;
 	}
 
-	function selectAccount(acc: string) {
-		accountQuery = acc;
-		showDropdown = false;
-	}
-
 	function handleSave() {
 		if (!validate()) return;
+		const cleanedAccounts = accountRows.map(r => r.trim()).filter(Boolean);
 		dispatch('save', {
 			name: name.trim(),
-			accountQuery: accountQuery.trim(),
+			accountQuery: buildAccountQuery(cleanedAccounts),
 			cycle,
 			target: parseFloat(target),
 			currency,
@@ -118,31 +119,19 @@
 
 		<div class="form-group full-width">
 			<label for="target-account">Asset Account <span class="required">*</span></label>
-			<div class="autocomplete-wrapper">
-				<input
-					id="target-account"
-					type="text"
-					bind:value={accountQuery}
-					placeholder="e.g. Assets:Savings"
-					class:error={accountError}
-					on:focus={() => (showDropdown = true)}
-					on:blur={() => setTimeout(() => (showDropdown = false), 150)}
-				/>
-				{#if showDropdown}
-					<ul class="autocomplete-dropdown">
-						<li class="autocomplete-summary">{accountSummary}</li>
-						{#if filteredAccounts.length > 0}
-							{#each filteredAccounts as acc}
-								<!-- svelte-ignore a11y-click-events-have-key-events -->
-								<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-								<li on:click={() => selectAccount(acc)}>{acc}</li>
-							{/each}
-						{:else}
-							<li class="autocomplete-empty">No asset accounts match your filter.</li>
-						{/if}
-					</ul>
-				{/if}
+			<div class="account-rows">
+				{#each accountRows as row, i (i)}
+					<AccountQueryRow
+						bind:value={accountRows[i]}
+						accounts={assetAccounts}
+						showRemove={accountRows.length > 1}
+						placeholder="e.g. Assets:Savings"
+						hasError={!!accountError}
+						on:remove={() => removeAccountRow(i)}
+					/>
+				{/each}
 			</div>
+			<button type="button" class="add-row-btn" on:click={addAccountRow}>+ Add another account</button>
 			{#if accountError}<span class="error-msg">{accountError}</span>{/if}
 		</div>
 
@@ -271,44 +260,26 @@
 		font-size: var(--font-ui-smaller);
 	}
 
-	.autocomplete-wrapper {
-		position: relative;
+	.account-rows {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-1);
 	}
 
-	.autocomplete-dropdown {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		z-index: 100;
-		background: var(--background-primary);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--radius-s);
-		max-height: 240px;
-		overflow-y: auto;
-		list-style: none;
-		margin: 2px 0 0;
-		padding: 0;
-	}
-
-	.autocomplete-dropdown li {
-		padding: var(--size-4-1) var(--size-4-2);
-		font-size: var(--font-ui-small);
-	}
-
-	.autocomplete-dropdown li:not(.autocomplete-summary, .autocomplete-empty) {
+	.add-row-btn {
+		align-self: flex-start;
+		margin-top: var(--size-4-1);
+		padding: 2px 0;
+		background: transparent;
+		border: none;
+		box-shadow: none;
+		color: var(--text-accent);
 		cursor: pointer;
-	}
-
-	.autocomplete-dropdown li:not(.autocomplete-summary, .autocomplete-empty):hover {
-		background: var(--background-modifier-hover);
-	}
-
-	.autocomplete-summary,
-	.autocomplete-empty {
-		color: var(--text-muted);
-		cursor: default;
 		font-size: var(--font-ui-smaller);
+	}
+
+	.add-row-btn:hover {
+		text-decoration: underline;
 	}
 
 	.rollover-row {

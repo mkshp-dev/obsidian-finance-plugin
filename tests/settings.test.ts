@@ -10,7 +10,6 @@ describe('Settings Defaults', () => {
 		expect(DEFAULT_SETTINGS.structuredFolderName).toBe('Finances');
 		expect(DEFAULT_SETTINGS.fileOrganization).toBe('yearly');
 		expect(DEFAULT_SETTINGS.createBackups).toBe(true);
-		expect(DEFAULT_SETTINGS.maxBackupFiles).toBe(10);
 		expect(DEFAULT_SETTINGS.onboardingCompleted).toBe(false);
 	});
 

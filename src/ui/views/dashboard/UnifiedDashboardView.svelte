@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
 
     // Components
+    import TabBar from '../../common/TabBar.svelte';
     import OverviewTab from '../../partials/dashboard/OverviewTab.svelte';
     import TransactionsTab from '../../partials/dashboard/TransactionsTab.svelte';
     import BalanceSheetTab from '../../partials/dashboard/BalanceSheetTab.svelte';
@@ -49,26 +50,19 @@
     }
 
     const tabs = [
-        { id: 'overview', label: 'Overview' },
-        { id: 'transactions', label: 'Transactions' },
-        { id: 'journal', label: 'Journal' },
-        { id: 'balancesheet', label: 'Accounts & Balances' },
-        { id: 'incomestatement', label: 'Income Statement' },
-        { id: 'commodities', label: 'Commodities' }
+        { value: 'overview', label: 'Overview' },
+        { value: 'transactions', label: 'Transactions' },
+        { value: 'journal', label: 'Journal' },
+        { value: 'balancesheet', label: 'Accounts & Balances' },
+        { value: 'incomestatement', label: 'Income Statement' },
+        { value: 'commodities', label: 'Commodities' }
     ];
 </script>
 
 <div class="beancount-dashboard">
 
     <div class="tabs-header">
-        {#each tabs as tab}
-            <button
-                class="tab-button {activeTab === tab.id ? 'active' : ''}"
-                on:click={() => activeTab = tab.id}
-            >
-                {tab.label}
-            </button>
-        {/each}
+        <TabBar {tabs} bind:value={activeTab} fullWidth={false} ariaLabel="Dashboard sections" />
     </div>
 
     <div class="tab-content">
@@ -103,33 +97,10 @@
 
     .tabs-header {
         display: flex;
+        padding: var(--size-4-2) var(--size-4-3);
         border-bottom: 1px solid var(--background-modifier-border);
         background: var(--background-secondary);
         overflow-x: auto;
-    }
-
-    .tab-button {
-        background: none;
-        border: none;
-        padding: 8px 16px;
-        cursor: pointer;
-        font-size: var(--font-ui-small);
-        color: var(--text-muted);
-        border-bottom: 2px solid transparent;
-        white-space: nowrap;
-        border-radius: 0;
-    }
-
-    .tab-button:hover {
-        color: var(--text-normal);
-        background: var(--background-modifier-hover);
-    }
-
-    .tab-button.active {
-        color: var(--text-accent);
-        border-bottom-color: var(--text-accent);
-        background: var(--background-primary);
-        font-weight: 600;
     }
 
     .tab-content {

@@ -91,7 +91,14 @@ export function getIncomeStatementQueryByUnits(currency: string): string {
 }
 
 export function getTransactionsQuery(filters: TransactionFilters, limit = 1000): string {
-	const selectPart = `SELECT date, payee, narration, position, balance`; // Added balance column
+	// `balance` is the running inventory of whichever account each row's posting hit. Without an
+	// account filter, rows span every account in the ledger, so any row touching a multi-commodity
+	// account (e.g. a brokerage holding dozens of tickers) renders a huge inventory string. Multiplied
+	// across up to `limit` rows this can produce a multi-MB CSV response that freezes the UI thread
+	// during parsing/rendering on large ledgers. Only request it once scoped to a single account.
+	const selectPart = filters.account
+		? `SELECT date, payee, narration, position, balance`
+		: `SELECT date, payee, narration, position`;
 	const whereClauses: string[] = [];
 	const orderByPart = `ORDER BY date DESC, lineno DESC LIMIT ${limit}`;
 

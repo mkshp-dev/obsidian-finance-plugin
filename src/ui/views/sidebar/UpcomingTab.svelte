@@ -9,6 +9,7 @@
 	import { AddScheduleModal } from '../../modals/AddScheduleModal';
 	import { ConfirmDueSchedulesModal } from '../../modals/ConfirmDueSchedulesModal';
 	import { Notice } from 'obsidian';
+	import CustomSelect from '../../common/CustomSelect.svelte';
 
 	export let plugin: any = null;
 
@@ -18,7 +19,20 @@
 	let isLoading = false;
 	let loadError: string | null = null;
 
+	type Period = 'today' | 'week' | 'month' | 'all';
+	let period: Period = 'all';
+	const PERIOD_OPTIONS: { value: Period; label: string; icon?: string }[] = [
+		{ value: 'today', label: 'Today', icon: 'today' },
+		{ value: 'week', label: 'This Week', icon: 'week' },
+		{ value: 'month', label: 'This Month', icon: 'month' },
+		{ value: 'all', label: 'All', icon: 'all' },
+	];
+
 	$: activeItems = items.filter((i) => i.active);
+	// Bound is inclusive and always >= today, so already-overdue items
+	// (nextDate <= today) fall inside every period, not just "All".
+	$: periodEndDate = period === 'today' ? todayISO() : period === 'week' ? endOfWeekISO() : period === 'month' ? endOfMonthISO() : null;
+	$: displayedItems = periodEndDate === null ? activeItems : activeItems.filter((i) => i.nextDate <= periodEndDate);
 	// Sum of every missed occurrence across all schedules, not just the count
 	// of due schedules — a schedule 3 cycles overdue contributes 3.
 	$: dueCount = activeItems.reduce(
@@ -50,9 +64,25 @@
 		return match ? parseFloat(match[0]) : 0;
 	}
 
-	function todayISO(): string {
-		const d = new Date();
+	function toISO(d: Date): string {
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+	}
+
+	function todayISO(): string {
+		return toISO(new Date());
+	}
+
+	/** Last day (Saturday) of the calendar week containing today. */
+	function endOfWeekISO(): string {
+		const d = new Date();
+		d.setDate(d.getDate() + (6 - d.getDay()));
+		return toISO(d);
+	}
+
+	/** Last day of the calendar month containing today. */
+	function endOfMonthISO(): string {
+		const d = new Date();
+		return toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 	}
 
 	function formatAmount(amount: number, currency: string): string {
@@ -175,18 +205,27 @@
 
 <div class="upcoming-tab">
 	<div class="upcoming-controls">
-		<button type="button" class="icon-btn icon-btn-labeled" on:click={handleRefresh} disabled={isLoading} title="Check for due transactions">
-			<svg class:loading-spinner={isLoading} xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M3 12a9 9 0 013.5-7.1"/>
-				<path d="M20.5 5.5a9 9 0 01.5 6.5"/>
-				<path d="M3 12a9 9 0 016.5 8.1"/>
-				<path d="M20.5 18.5a9 9 0 01-6.5-5.5"/>
-			</svg>
-			<span>Process dues</span>
-		</button>
-		<button type="button" class="icon-btn" on:click={handleAdd} title="Add scheduled transaction">
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-		</button>
+		<CustomSelect
+			variant="secondary"
+			position="single"
+			options={PERIOD_OPTIONS}
+			bind:value={period}
+			ariaLabel="Filter upcoming by period"
+		/>
+		<div class="upcoming-controls-buttons">
+			<button type="button" class="icon-btn icon-btn-labeled" on:click={handleRefresh} disabled={isLoading} title="Check for due transactions">
+				<svg class:loading-spinner={isLoading} xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M3 12a9 9 0 013.5-7.1"/>
+					<path d="M20.5 5.5a9 9 0 01.5 6.5"/>
+					<path d="M3 12a9 9 0 016.5 8.1"/>
+					<path d="M20.5 18.5a9 9 0 01-6.5-5.5"/>
+				</svg>
+				<span>Process dues</span>
+			</button>
+			<button type="button" class="icon-btn" on:click={handleAdd} title="Add scheduled transaction">
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+			</button>
+		</div>
 	</div>
 
 	{#if isLoading && activeItems.length === 0}
@@ -197,9 +236,13 @@
 		<div class="tab-empty-state">
 			<span>No scheduled transactions.<br>Click + to add one.</span>
 		</div>
+	{:else if displayedItems.length === 0}
+		<div class="tab-empty-state">
+			<span>No transactions due in this period.</span>
+		</div>
 	{:else}
 		<div class="upcoming-list">
-			{#each activeItems as item (item.name + item.lineno)}
+			{#each displayedItems as item (item.name + item.lineno)}
 				<div
 					class="upcoming-item"
 					class:item-due={item.isDue}
@@ -237,7 +280,13 @@
 
 	.upcoming-controls {
 		display: flex;
-		justify-content: flex-end;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--size-4-1);
+	}
+
+	.upcoming-controls-buttons {
+		display: flex;
 		gap: var(--size-4-1);
 	}
 

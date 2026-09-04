@@ -2,6 +2,8 @@
 	import { createEventDispatcher, onMount, tick } from "svelte";
 	import type { ChartConfiguration } from "chart.js/auto";
 	import ChartComponent from "../common/ChartComponent.svelte";
+	import CustomSelect from "../common/CustomSelect.svelte";
+	import TabBar from "../common/TabBar.svelte";
 	import { formatSignificantAmount } from "../../utils/index";
 	export let symbol: string;
 	export let commodity: any = {
@@ -19,6 +21,7 @@
 	let logoInput = "";
 	let priceInput = "";
 	let priceHistoryView: "chart" | "table" = "chart";
+	let activeTab: "metadata" | "price-history" = "metadata";
 
 	let priceInputRef: HTMLInputElement | null = null;
 	let logoInputRef: HTMLInputElement | null = null;
@@ -183,169 +186,180 @@
 		</div>
 	</div>
 
-	<!-- Price History -->
-	<div class="section">
-		<div class="section-heading">
-			<p class="section-title">Price History</p>
-			{#if priceHistory.length > 0}
-				<div class="segmented-control" role="group" aria-label="Price history view">
-					<button
-						type="button"
-						class:active={priceHistoryView === "chart"}
-						on:click={() => (priceHistoryView = "chart")}
-					>Chart</button>
-					<button
-						type="button"
-						class:active={priceHistoryView === "table"}
-						on:click={() => (priceHistoryView = "table")}
-					>Table</button>
-				</div>
-			{/if}
-		</div>
-		<div class="section-card history-card">
-			{#if priceHistory.length === 0}
-				<div class="empty-history">No price directives found for this commodity.</div>
-			{:else if priceHistoryView === "chart" && priceHistoryChartConfig}
-				<div class="price-history-chart">
-					<ChartComponent config={priceHistoryChartConfig} height="240px" />
-				</div>
-			{:else}
-				<div class="price-history-table-wrap">
-					<table class="price-history-table">
-						<thead>
-							<tr>
-								<th>Date</th>
-								<th>Price</th>
-								<th>Currency</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each priceHistory.slice().reverse() as point}
-								<tr>
-									<td>{point.date}</td>
-									<td>{formatPriceAmount(point.amount)}</td>
-									<td>{point.currency}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</div>
-	</div>
+	<!-- Tabs -->
+	<TabBar
+		tabs={[
+			{ value: 'metadata', label: 'Metadata' },
+			{ value: 'price-history', label: 'Price History' },
+		]}
+		bind:value={activeTab}
+		fullWidth={false}
+		ariaLabel="Commodity detail sections"
+	/>
 
-	<!-- Price Source -->
-	<div class="section">
-		<p class="section-title">Price Source</p>
-		<div class="section-card">
-			{#if !editingPrice}
-				<div class="kv-row">
-					<span class="kv-key">Source</span>
-					<span class="kv-value">{priceSource || "—"}</span>
-					<div class="kv-actions">
-						<button
-							class="btn btn-ghost"
-							on:click={testPrice}
-							title="Test this price source">Test</button
-						>
-						<button class="btn" on:click={toggleEditPrice}
-							>{priceSource ? "Edit" : "Add"}</button
-						>
-					</div>
-				</div>
-			{:else}
-				<div class="edit-area">
-					<input
-						type="text"
-						bind:value={priceInput}
-						bind:this={priceInputRef}
-						placeholder="e.g. yahoo/BTC-USD or crypto:coingecko/bitcoin"
-					/>
-					<span class="edit-hint"
-						>Format: provider/symbol — e.g. <code>yahoo/AAPL</code>
-						or <code>crypto:coingecko/bitcoin</code></span
-					>
-					<div class="edit-buttons">
-						<button class="btn btn-primary" on:click={saveMetadata}
-							>Save</button
-						>
-						<button class="btn btn-ghost" on:click={testPrice}
-							>Test</button
-						>
-						<button class="btn btn-ghost" on:click={toggleEditPrice}
-							>Cancel</button
-						>
-					</div>
-				</div>
-			{/if}
-		</div>
-	</div>
-
-	<!-- Logo -->
-	<div class="section">
-		<p class="section-title">Logo</p>
-		<div class="section-card">
-			{#if !editingLogo}
-				<div class="kv-row">
-					<span class="kv-key">URL</span>
-					<span class="kv-value">{logoUrl || "—"}</span>
-					<div class="kv-actions">
-						{#if logoUrl}
-							<button
-								class="btn btn-ghost"
-								on:click={testLogo}
-								title="Verify logo URL">Test</button
-							>
-						{/if}
-						<button class="btn" on:click={toggleEditLogo}
-							>{logoUrl ? "Edit" : "Add"}</button
-						>
-					</div>
-				</div>
-			{:else}
-				<div class="edit-area">
-					<input
-						type="text"
-						bind:value={logoInput}
-						bind:this={logoInputRef}
-						placeholder="https://example.com/logo.png"
-					/>
-					<span class="edit-hint"
-						>Direct image URL (PNG, SVG, or JPG)</span
-					>
-					<div class="edit-buttons">
-						<button class="btn btn-primary" on:click={saveMetadata}
-							>Save</button
-						>
-						<button class="btn btn-ghost" on:click={testLogo}
-							>Test URL</button
-						>
-						<button class="btn btn-ghost" on:click={toggleEditLogo}
-							>Cancel</button
-						>
-					</div>
-				</div>
-			{/if}
-		</div>
-	</div>
-
-	<!-- Other Metadata -->
-	{#if otherMeta.length > 0}
+	{#if activeTab === "price-history"}
+		<!-- Price History -->
 		<div class="section">
-			<p class="section-title">Other Metadata</p>
-			<div class="section-card">
-				{#each otherMeta as [key, value]}
-					<div class="kv-row">
-						<span class="kv-key">{key}</span>
-						<span class="kv-value"
-							>{typeof value === "string"
-								? value
-								: JSON.stringify(value)}</span
-						>
+			<div class="section-heading">
+				<p class="section-title">Price History</p>
+				{#if priceHistory.length > 0}
+					<CustomSelect
+						variant="secondary"
+						position="single"
+						options={[
+							{ value: 'chart', label: 'Chart', icon: 'trend' },
+							{ value: 'table', label: 'Table', icon: 'table' },
+						]}
+						bind:value={priceHistoryView}
+						ariaLabel="Price history view"
+					/>
+				{/if}
+			</div>
+			<div class="section-card history-card">
+				{#if priceHistory.length === 0}
+					<div class="empty-history">No price directives found for this commodity.</div>
+				{:else if priceHistoryView === "chart" && priceHistoryChartConfig}
+					<div class="price-history-chart">
+						<ChartComponent config={priceHistoryChartConfig} height="240px" />
 					</div>
-				{/each}
+				{:else}
+					<div class="price-history-table-wrap">
+						<table class="price-history-table">
+							<thead>
+								<tr>
+									<th>Date</th>
+									<th>Price</th>
+									<th>Currency</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each priceHistory.slice().reverse() as point}
+									<tr>
+										<td>{point.date}</td>
+										<td>{formatPriceAmount(point.amount)}</td>
+										<td>{point.currency}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
 			</div>
 		</div>
+	{:else}
+		<!-- Price Source -->
+		<div class="section">
+			<p class="section-title">Price Source</p>
+			<div class="section-card">
+				{#if !editingPrice}
+					<div class="kv-row">
+						<span class="kv-key">Source</span>
+						<span class="kv-value">{priceSource || "—"}</span>
+						<div class="kv-actions">
+							<button
+								class="btn btn-ghost"
+								on:click={testPrice}
+								title="Test this price source">Test</button
+							>
+							<button class="btn" on:click={toggleEditPrice}
+								>{priceSource ? "Edit" : "Add"}</button
+							>
+						</div>
+					</div>
+				{:else}
+					<div class="edit-area">
+						<input
+							type="text"
+							bind:value={priceInput}
+							bind:this={priceInputRef}
+							placeholder="e.g. yahoo/BTC-USD or crypto:coingecko/bitcoin"
+						/>
+						<span class="edit-hint"
+							>Format: provider/symbol — e.g. <code>yahoo/AAPL</code>
+							or <code>crypto:coingecko/bitcoin</code></span
+						>
+						<div class="edit-buttons">
+							<button class="btn btn-primary" on:click={saveMetadata}
+								>Save</button
+							>
+							<button class="btn btn-ghost" on:click={testPrice}
+								>Test</button
+							>
+							<button class="btn btn-ghost" on:click={toggleEditPrice}
+								>Cancel</button
+							>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- Logo -->
+		<div class="section">
+			<p class="section-title">Logo</p>
+			<div class="section-card">
+				{#if !editingLogo}
+					<div class="kv-row">
+						<span class="kv-key">URL</span>
+						<span class="kv-value">{logoUrl || "—"}</span>
+						<div class="kv-actions">
+							{#if logoUrl}
+								<button
+									class="btn btn-ghost"
+									on:click={testLogo}
+									title="Verify logo URL">Test</button
+								>
+							{/if}
+							<button class="btn" on:click={toggleEditLogo}
+								>{logoUrl ? "Edit" : "Add"}</button
+							>
+						</div>
+					</div>
+				{:else}
+					<div class="edit-area">
+						<input
+							type="text"
+							bind:value={logoInput}
+							bind:this={logoInputRef}
+							placeholder="https://example.com/logo.png"
+						/>
+						<span class="edit-hint"
+							>Direct image URL (PNG, SVG, or JPG)</span
+						>
+						<div class="edit-buttons">
+							<button class="btn btn-primary" on:click={saveMetadata}
+								>Save</button
+							>
+							<button class="btn btn-ghost" on:click={testLogo}
+								>Test URL</button
+							>
+							<button class="btn btn-ghost" on:click={toggleEditLogo}
+								>Cancel</button
+							>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- Other Metadata -->
+		{#if otherMeta.length > 0}
+			<div class="section">
+				<p class="section-title">Other Metadata</p>
+				<div class="section-card">
+					{#each otherMeta as [key, value]}
+						<div class="kv-row">
+							<span class="kv-key">{key}</span>
+							<span class="kv-value"
+								>{typeof value === "string"
+									? value
+									: JSON.stringify(value)}</span
+							>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 	{/if}
 
 	<!-- Footer -->
@@ -489,34 +503,6 @@
 
 	.history-card {
 		min-height: 72px;
-	}
-
-	.segmented-control {
-		display: inline-flex;
-		align-items: center;
-		border: 1px solid var(--background-modifier-border);
-		border-radius: 6px;
-		overflow: hidden;
-		background: var(--background-secondary);
-	}
-
-	.segmented-control button {
-		border: 0;
-		border-right: 1px solid var(--background-modifier-border);
-		background: transparent;
-		color: var(--text-muted);
-		padding: 4px 10px;
-		font-size: 12px;
-		cursor: pointer;
-	}
-
-	.segmented-control button:last-child {
-		border-right: 0;
-	}
-
-	.segmented-control button.active {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
 	}
 
 	.price-history-chart {

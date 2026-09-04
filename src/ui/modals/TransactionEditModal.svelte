@@ -10,6 +10,7 @@
 	import { runQuery } from "../../utils/queryRunner";
 	import { getQueryDirectives } from "../../utils";
 	import { nativeDatePicker } from "../actions/nativeDatePicker";
+	import TabBar from "../common/TabBar.svelte";
 
 	export let transaction: JournalTransaction | null = null; // Now optional for Add mode
 	export let entry: JournalEntry | null = null; // Support for any entry type
@@ -1042,32 +1043,17 @@
 		<!-- Entry Type Tabs -->
 		{#if mode === "add"}
 			<div class="entry-tabs">
-				<button
-					class="tab-button {activeTab === 'transaction'
-						? 'active'
-						: ''}"
-					on:click={() => (activeTab = "transaction")}
-				>
-					💰 Transaction
-				</button>
-				<button
-					class="tab-button {activeTab === 'balance' ? 'active' : ''}"
-					on:click={() => (activeTab = "balance")}
-				>
-					⚖️ Balance
-				</button>
-				<button
-					class="tab-button {activeTab === 'note' ? 'active' : ''}"
-					on:click={() => (activeTab = "note")}
-				>
-					📝 Note
-				</button>
-				<button
-					class="tab-button {activeTab === 'query' ? 'active' : ''}"
-					on:click={() => (activeTab = "query")}
-				>
-					🔍 Query
-				</button>
+				<TabBar
+					tabs={[
+						{ value: 'transaction', label: '💰 Transaction' },
+						{ value: 'balance', label: '⚖️ Balance' },
+						{ value: 'note', label: '📝 Note' },
+						{ value: 'query', label: '🔍 Query' },
+					]}
+					bind:value={activeTab}
+					fullWidth={false}
+					ariaLabel="Entry type"
+				/>
 			</div>
 		{/if}
 
@@ -1780,34 +1766,7 @@
 	/* Entry Type Tabs */
 	.entry-tabs {
 		display: flex;
-		gap: 0.25rem;
 		margin-bottom: 0.75rem;
-		border-bottom: 1px solid var(--background-modifier-border);
-		padding-bottom: 0.25rem;
-	}
-
-	.tab-button {
-		background: none;
-		border: none;
-		padding: 0.4rem 0.75rem;
-		cursor: pointer;
-		color: var(--text-muted);
-		font-size: 0.85rem;
-		border-radius: 4px 4px 0 0;
-		border-bottom: 2px solid transparent;
-		transition: all 0.2s ease;
-		white-space: nowrap;
-	}
-
-	.tab-button:hover {
-		background: var(--background-modifier-hover);
-		color: var(--text-normal);
-	}
-
-	.tab-button.active {
-		color: var(--text-accent);
-		border-bottom-color: var(--text-accent);
-		background: var(--background-modifier-form-field);
 	}
 
 	/* Form adaptations for different entry types */
@@ -2114,16 +2073,6 @@
 		.footer-right {
 			width: 100%;
 			justify-content: center;
-		}
-
-		.entry-tabs {
-			flex-wrap: wrap;
-			gap: 0.25rem;
-		}
-
-		.tab-button {
-			padding: 0.5rem 0.75rem;
-			font-size: 0.8rem;
 		}
 
 		.posting-toggle-buttons {
