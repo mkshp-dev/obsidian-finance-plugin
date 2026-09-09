@@ -10,6 +10,7 @@
 	import { BeancountView, BEANCOUNT_VIEW_TYPE } from '../../views/sidebar/sidebar-view';
 	import { resolveNavTab, type NavRequest } from '../../../types/navigation';
 	import SunburstChart from '../../common/SunburstChart.svelte';
+	import IcicleChart from '../../common/IcicleChart.svelte';
 	import ChartComponent from '../../common/ChartComponent.svelte';
 	import SkeletonLoader from '../../common/SkeletonLoader.svelte';
 	import ErrorBanner from '../../common/ErrorBanner.svelte';
@@ -21,6 +22,8 @@
 	let selectedChart: 'trend' | 'balances' = 'trend';
 	// Sub-selector for Balances view
 	let selectedBalanceSection: 'assets' | 'liabilities' | 'equity' = 'assets';
+	// Which hierarchy visualization to show within the Balances view
+	let selectedBalanceChartType: 'sunburst' | 'icicle' = 'sunburst';
 
 	// --- Receive the controller ---
 	export let controller: BalanceSheetController;
@@ -308,6 +311,17 @@
 							on:change={(e) => selectedBalanceSection = e.detail}
 							ariaLabel="Select balance section"
 						/>
+						<CustomSelect
+							variant="secondary"
+							position="right"
+							options={[
+								{ value: 'sunburst', label: 'Sunburst', icon: 'pie-chart' },
+								{ value: 'icicle', label: 'Icicle', icon: 'layers' }
+							]}
+							bind:value={selectedBalanceChartType}
+							on:change={(e) => selectedBalanceChartType = e.detail}
+							ariaLabel="Select chart type"
+						/>
 					{/if}
 				</div>
 			</div>
@@ -326,7 +340,8 @@
 				</div>
 			{:else if selectedChart === 'balances'}
 				{#if selectedBalanceSection === 'assets'}
-					<SunburstChart
+					<svelte:component
+						this={selectedBalanceChartType === 'icicle' ? IcicleChart : SunburstChart}
 						title="Assets"
 						assets={state.assets}
 						liabilities={[]}
@@ -339,7 +354,8 @@
 						on:segment-click={handleSegmentClick}
 					/>
 				{:else if selectedBalanceSection === 'liabilities'}
-					<SunburstChart
+					<svelte:component
+						this={selectedBalanceChartType === 'icicle' ? IcicleChart : SunburstChart}
 						title="Liabilities"
 						assets={[]}
 						liabilities={state.liabilities}
@@ -352,7 +368,8 @@
 						on:segment-click={handleSegmentClick}
 					/>
 				{:else}
-					<SunburstChart
+					<svelte:component
+						this={selectedBalanceChartType === 'icicle' ? IcicleChart : SunburstChart}
 						title="Equity"
 						assets={[]}
 						liabilities={[]}
