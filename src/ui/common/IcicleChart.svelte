@@ -1,8 +1,9 @@
 <!-- src/ui/common/IcicleChart.svelte -->
 <!--
   Pure-SVG icicle chart — no D3, no extra dependencies.
-  Top-down partition layout: root row at top, leaf accounts toward the
-  bottom, rectangle widths proportional to balance. Mirrors the props,
+  Left-to-right partition layout: root column at the left, leaf accounts
+  toward the right (depth increases left-to-right), rectangle heights
+  proportional to balance within each column. Mirrors the props,
   drill-down, and interaction contract of SunburstChart.svelte so the two
   can be swapped in the same UI area.
 -->
@@ -31,11 +32,22 @@
 	export let liabilitiesExpectNegative: boolean = true;  // beancount liabilities are credit (negative)
 
 	// ── SVG geometry ─────────────────────────────────────────────────────────
-	const CHART_W    = 480;  // px, viewBox width
-	const ROW_H      = 40;   // px per depth row
-	const ROW_GAP    = 2;    // gap between stacked rows
-	const MIN_LABEL_W = 34;  // px — below this, no label is drawn
-	const MIN_SLICE_W = 1.5; // px — below this, node is skipped (space still consumed)
+	// CHART_V is the "value axis" extent (vertical) — analogous to the old
+	// CHART_W — and stays constant regardless of depth. COL_W is the
+	// per-depth column width (horizontal); total viewBox width grows with
+	// the tree's depth, so deeper trees get wider rather than squeezing
+	// existing columns.
+	const CHART_V    = 480;  // px, viewBox height (value axis)
+	const COL_W      = 130;  // px per depth column
+	const COL_GAP    = 3;    // gap between adjacent columns
+	const MIN_SLICE  = 1.5;  // px — below this, node is skipped (space still consumed)
+	const TEXT_PAD   = 8;    // px horizontal padding reserved inside a rect for text
+	const CHAR_W_RATIO = 0.58; // rough average glyph width as a fraction of font-size
+
+	// Rough text-width estimate (no canvas measurement — keeps this dependency-free).
+	function estTextWidth(s: string, fontSize: number): number {
+		return s.length * fontSize * CHAR_W_RATIO;
+	}
 
 	// ── Internal types ───────────────────────────────────────────────────────
 	interface IcicleNode {
@@ -113,7 +125,7 @@
 
 		for (const item of items) {
 			const w = (Math.abs(item.amountNumber) / total) * span;
-			if (w < MIN_SLICE_W) { x += w; continue; } // skip near-invisible slices
+			if (w < MIN_SLICE) { x += w; continue; } // skip near-invisible slices
 
 			const p = parentPath ? `${parentPath} › ${item.displayName}` : item.displayName;
 			const isNeg = item.amountNumber < 0;
@@ -140,7 +152,7 @@
 		return result;
 	}
 
-	// ── Full-tree layout (three sections side-by-side at row 0) ─────────────
+	// ── Full-tree layout (three sections stacked in column 0) ────────────────
 	$: grandTotal =
 		Math.abs(totalAssets) +
 		Math.abs(totalLiabilities) +
@@ -149,9 +161,9 @@
 	$: fullLayout = (() => {
 		if (grandTotal < 0.001) return [];
 
-		const aW = (Math.abs(totalAssets)      / grandTotal) * CHART_W;
-		const lW = (Math.abs(totalLiabilities) / grandTotal) * CHART_W;
-		const eW = CHART_W - aW - lW;
+		const aW = (Math.abs(totalAssets)      / grandTotal) * CHART_V;
+		const lW = (Math.abs(totalLiabilities) / grandTotal) * CHART_V;
+		const eW = CHART_V - aW - lW;
 
 		// Root-level items for each section (level === 0 in the flat list)
 		const aRoots = assets.filter(i => i.level === 0);
@@ -188,12 +200,12 @@
 		}
 
 		const nodes: IcicleNode[] = [];
-		if (aW > MIN_SLICE_W)
+		if (aW > MIN_SLICE)
 			nodes.push(syntheticRoot('__assets__',      assetsLabel,      'Assets',      totalAssets,      0,      aW,          aRoots));
-		if (lW > MIN_SLICE_W)
+		if (lW > MIN_SLICE)
 			nodes.push(syntheticRoot('__liabilities__', liabilitiesLabel, 'Liabilities', totalLiabilities, aW,     aW + lW,     lRoots));
-		if (eW > MIN_SLICE_W)
-			nodes.push(syntheticRoot('__equity__',      equityLabel,      'Equity',      totalEquity,      aW + lW, CHART_W,   eRoots));
+		if (eW > MIN_SLICE)
+			nodes.push(syntheticRoot('__equity__',      equityLabel,      'Equity',      totalEquity,      aW + lW, CHART_V,   eRoots));
 
 		return nodes;
 	})();
@@ -202,7 +214,7 @@
 	$: drillLayout = (() => {
 		if (drillStack.length === 0) return null;
 		const { items, section, crumb } = drillStack[drillStack.length - 1];
-		return buildNodes(items, section, 0, CHART_W, 0, crumb);
+		return buildNodes(items, section, 0, CHART_V, 0, crumb);
 	})();
 
 	$: activeLayout = drillLayout ?? fullLayout;
@@ -214,10 +226,12 @@
 	$: allNodes = flattenNodes(activeLayout);
 
 	$: maxDepth = allNodes.reduce((m, n) => Math.max(m, n.depth), 0);
-	$: chartHeight = (maxDepth + 1) * ROW_H;
+	$: chartWidth = (maxDepth + 1) * COL_W;
 
+	// x/width come from depth (column), y/height come from the node's
+	// proportional [x0, x1) range along the value axis.
 	function rectFor(n: IcicleNode) {
-		return { x: n.x0, y: n.depth * ROW_H, width: Math.max(0, n.x1 - n.x0), height: ROW_H - ROW_GAP };
+		return { x: n.depth * COL_W, y: n.x0, width: COL_W - COL_GAP, height: Math.max(0, n.x1 - n.x0) };
 	}
 
 	// ── Interactions ─────────────────────────────────────────────────────────
@@ -283,7 +297,9 @@
 	>
 		<svg
 			bind:this={svgEl}
-			viewBox="0 0 {CHART_W} {chartHeight}"
+			width={chartWidth}
+			height={CHART_V}
+			viewBox="0 0 {chartWidth} {CHART_V}"
 			class="icicle-svg"
 			role="img"
 			aria-label="Icicle chart"
@@ -328,29 +344,36 @@
 				{/if}
 			{/each}
 
-			<!-- ── Inline labels (only if rect is wide enough) ── -->
+			<!-- ── Inline labels (only drawn if they'll actually fit — otherwise
+			     the hover tooltip is the source of truth for name/amount) ── -->
 			{#each allNodes as node (node.id + '-lbl')}
 				{@const r = rectFor(node)}
-				{#if r.width > MIN_LABEL_W}
+				{@const labelSize = node.depth === 0 ? 12 : 10}
+				{@const lineH = labelSize + 5}
+				{@const showLabel = r.height >= lineH + 4 && estTextWidth(node.label, labelSize) <= r.width - TEXT_PAD}
+				{@const showAmount = showLabel && r.height >= lineH * 2 + 4 && estTextWidth(node.amount, 9) <= r.width - TEXT_PAD}
+				{#if showLabel}
 					<text
 						x={r.x + r.width / 2}
-						y={r.y + r.height / 2 - 5}
+						y={showAmount ? r.y + r.height / 2 - 5 : r.y + r.height / 2}
 						text-anchor="middle"
 						dominant-baseline="middle"
-						font-size={node.depth === 0 ? 12 : 10}
+						font-size={labelSize}
 						font-weight={node.depth === 0 ? '600' : '400'}
 						fill="rgba(255,255,255,0.92)"
 						pointer-events="none"
 					>{node.label}</text>
-					<text
-						x={r.x + r.width / 2}
-						y={r.y + r.height / 2 + 9}
-						text-anchor="middle"
-						dominant-baseline="middle"
-						font-size="9"
-						fill="rgba(255,255,255,0.78)"
-						pointer-events="none"
-					>{node.amount}</text>
+					{#if showAmount}
+						<text
+							x={r.x + r.width / 2}
+							y={r.y + r.height / 2 + 9}
+							text-anchor="middle"
+							dominant-baseline="middle"
+							font-size="9"
+							fill="rgba(255,255,255,0.78)"
+							pointer-events="none"
+						>{node.amount}</text>
+					{/if}
 				{/if}
 			{/each}
 		</svg>
@@ -431,7 +454,6 @@
 		flex-wrap: wrap;
 		font-size: var(--font-ui-small);
 		width: 100%;
-		max-width: 460px;
 	}
 
 	.crumb-btn {
@@ -449,17 +471,19 @@
 
 	.crumb-sep { color: var(--text-faint); font-size: 12px; }
 
-	/* SVG container */
+	/* SVG container — columns keep a fixed real pixel width regardless of
+	   tree depth, so text stays readable; wide/deep trees scroll instead
+	   of squeezing every column down. */
 	.icicle-chart-wrap {
 		position: relative;
 		width: 100%;
-		max-width: 460px;
+		overflow-x: auto;
 	}
 
 	.icicle-svg {
-		width: 100%;
-		height: auto;
 		display: block;
+		margin: 0 auto;
+		max-width: 100%;
 	}
 
 	/* Tooltip */
