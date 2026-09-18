@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.
 
+- **Account Details modal: Balance History tab** — Added a second tab (alongside the renamed **Metadata** tab) showing the account's balance trend as a line chart or table, with Monthly/Weekly and Chart/Table pill toggles.
+
 ## 2.4.2 - 2026-09-04
 
 - **Budgets/Targets: Multi-account selection** — Add Budget/Add Target now let you pick multiple accounts (e.g. `Expenses:(Rent|Utility)`) via a "+ Add another account" button, instead of hand-typing the pattern. Editing correctly splits an existing multi-account query back into rows.

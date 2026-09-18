@@ -44,7 +44,9 @@ Your accounts are structured hierarchically (e.g., `Assets:Checking:Main` is a c
 *   The plugin remembers your expansion/collapse state for the current session (e.g. switching to another dashboard tab and back), but it resets the next time you reload Obsidian or reopen the dashboard.
 
 ### Account Details
-*   **Right-click any leaf account row** to open the **Account details** modal — open/close dates, currencies, and reconciliation status, with the ability to set or change the account's `reconcile` interval on the spot. See [Reconciliation](../reconciliation.md) for what that status means and the Balance/Force reconcile actions available from the same modal.
+*   **Right-click any leaf account row** to open the **Account details** modal, split into two tabs:
+    *   **Metadata**: open/close dates, currencies, and reconciliation status, with the ability to set or change the account's `reconcile` interval on the spot. See [Reconciliation](../reconciliation.md) for what that status means and the Balance/Force reconcile actions available from the same modal.
+    *   **Balance History**: the account's balance trend as a line chart or table, switchable between **Monthly** and **Weekly** intervals via the same pill-style controls used elsewhere in the dashboard.
 
 ---
 
