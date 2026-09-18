@@ -3,8 +3,8 @@
 import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../main';
 import { runQuery } from '../utils/queryRunner';
-import { getAccountDetailQuery, getLastBalanceDateQuery, getLatestBalanceStatusQuery } from '../queries/index';
-import { parseAccountDetailCSV } from '../utils/csvParsers';
+import { getAccountDetailQuery, getAccountBalanceHistoryQuery, getLastBalanceDateQuery, getLatestBalanceStatusQuery } from '../queries/index';
+import { parseAccountDetailCSV, parseAccountBalanceHistoryMonthlyCSV, parseAccountBalanceHistoryWeeklyCSV } from '../utils/csvParsers';
 import { computeReconciliationStatus } from './reconciliation.service';
 import { Logger } from '../utils/logger';
 
@@ -30,6 +30,10 @@ export interface AccountDetail {
 	isFailing: boolean;
 	failingDate: string | null;
 	failingDiscrepancy: string | null;
+	/** Balance trend, converted to balanceHistoryCurrency. */
+	balanceHistoryMonthly: Array<{ date: string; label: string; value: number }>;
+	balanceHistoryWeekly: Array<{ date: string; label: string; value: number }>;
+	balanceHistoryCurrency: string;
 }
 
 /**
@@ -45,11 +49,18 @@ export interface AccountDetail {
 export async function getAccountDetail(plugin: BeancountPlugin, account: string): Promise<AccountDetail> {
 	Logger.log('[AccountDetail] Fetching detail for', account);
 
-	const [detailCsv, lastBalanceCsv, latestStatusCsv] = await Promise.all([
+	const balanceHistoryCurrency = plugin.settings.operatingCurrency || 'USD';
+
+	const [detailCsv, lastBalanceCsv, latestStatusCsv, balanceHistoryMonthlyCsv, balanceHistoryWeeklyCsv] = await Promise.all([
 		runQuery(plugin, getAccountDetailQuery(account)),
 		runQuery(plugin, getLastBalanceDateQuery()),
 		runQuery(plugin, getLatestBalanceStatusQuery()),
+		runQuery(plugin, getAccountBalanceHistoryQuery(account, 'month', balanceHistoryCurrency)),
+		runQuery(plugin, getAccountBalanceHistoryQuery(account, 'week', balanceHistoryCurrency)),
 	]);
+
+	const balanceHistoryMonthly = parseAccountBalanceHistoryMonthlyCSV(balanceHistoryMonthlyCsv);
+	const balanceHistoryWeekly = parseAccountBalanceHistoryWeeklyCSV(balanceHistoryWeeklyCsv);
 
 	const detail = parseAccountDetailCSV(detailCsv);
 	const isClosed = !!detail.closeDate;
@@ -90,5 +101,8 @@ export async function getAccountDetail(plugin: BeancountPlugin, account: string)
 		isFailing,
 		failingDate: isFailing ? (latestStatus.last_date || null) : null,
 		failingDiscrepancy: isFailing ? latestStatus.last_discrepancy : null,
+		balanceHistoryMonthly,
+		balanceHistoryWeekly,
+		balanceHistoryCurrency,
 	};
 }

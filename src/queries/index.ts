@@ -404,3 +404,16 @@ export function getAccountDetailQuery(account: string): string {
 	const safeAccount = escapeBqlString(account);
 	return `SELECT account, open.date AS open_date, close.date AS close_date, open.currencies AS currencies, open.meta['reconcile'] AS reconcile_days, open.meta['filename'] AS filename, open.meta['lineno'] AS lineno FROM #accounts WHERE account = '${safeAccount}'`;
 }
+
+/**
+ * Monthly (or weekly) balance trend for a single account, converted to
+ * `currency`. Modeled on getHistoricalNetWorthDataQuery but scoped to one
+ * account instead of the Assets/Liabilities regex.
+ */
+export function getAccountBalanceHistoryQuery(account: string, interval: 'month' | 'week' = 'month', currency: string): string {
+	const safeAccount = escapeBqlString(account);
+	if (interval === 'week') {
+		return `SELECT last(date_add(date_trunc('week', date), 6)) AS week_end, number(only('${currency}', convert(last(balance), '${currency}', last(date_add(date_trunc('week', date), 6))))) WHERE account = '${safeAccount}' GROUP BY date_trunc('week', date) ORDER BY week_end`;
+	}
+	return `SELECT year, month, number(only('${currency}', convert(last(balance), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1))))) WHERE account = '${safeAccount}' GROUP BY year, month ORDER BY year, month`;
+}

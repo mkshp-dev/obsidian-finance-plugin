@@ -313,3 +313,81 @@ export function parseCommodityPriceHistoryCSV(csv: string): Array<{ date: string
         return rows;
     }
 }
+
+/**
+ * Parses CSV from getAccountBalanceHistoryQuery's monthly form (year, month, value).
+ */
+export function parseAccountBalanceHistoryMonthlyCSV(csv: string): Array<{ date: string; label: string; value: number }> {
+    const rows: Array<{ date: string; label: string; value: number }> = [];
+
+    try {
+        const cleanCsv = csv.replace(/\r/g, '').trim();
+        if (!cleanCsv) return rows;
+
+        const records: string[][] = parseCsv(cleanCsv, {
+            columns: false,
+            skip_empty_lines: true,
+            relax_column_count: true,
+        });
+
+        for (let i = 1; i < records.length; i++) {
+            const row = records[i];
+            if (row.length < 3) continue;
+
+            const year = parseInt(row[0]?.trim(), 10);
+            const month = parseInt(row[1]?.trim(), 10);
+            if (!year || !month) continue;
+            const value = parseFloat(row[2]?.trim() || '0') || 0;
+
+            rows.push({
+                date: `${year}-${String(month).padStart(2, '0')}-01`,
+                label: new Date(year, month - 1).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+                value,
+            });
+        }
+
+        return rows;
+    } catch (e) {
+        Logger.error('Error parsing account balance history CSV:', e, 'CSV:', csv);
+        return rows;
+    }
+}
+
+/**
+ * Parses CSV from getAccountBalanceHistoryQuery's weekly form (week_end date, value).
+ */
+export function parseAccountBalanceHistoryWeeklyCSV(csv: string): Array<{ date: string; label: string; value: number }> {
+    const rows: Array<{ date: string; label: string; value: number }> = [];
+
+    try {
+        const cleanCsv = csv.replace(/\r/g, '').trim();
+        if (!cleanCsv) return rows;
+
+        const records: string[][] = parseCsv(cleanCsv, {
+            columns: false,
+            skip_empty_lines: true,
+            relax_column_count: true,
+        });
+
+        for (let i = 1; i < records.length; i++) {
+            const row = records[i];
+            if (row.length < 2) continue;
+
+            const dateStr = row[0]?.trim();
+            const d = dateStr ? new Date(`${dateStr}T00:00:00`) : null;
+            if (!dateStr || !d || isNaN(d.getTime())) continue;
+            const value = parseFloat(row[1]?.trim() || '0') || 0;
+
+            rows.push({
+                date: dateStr,
+                label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
+                value,
+            });
+        }
+
+        return rows;
+    } catch (e) {
+        Logger.error('Error parsing account weekly balance history CSV:', e, 'CSV:', csv);
+        return rows;
+    }
+}
