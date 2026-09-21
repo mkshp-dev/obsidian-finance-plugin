@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+## 2.4.3 - 2026-09-21
+
 - **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.
 
 - **Account Details modal: Balance History tab** — Added a second tab (alongside the renamed **Metadata** tab) showing the account's balance trend as a line chart or table, with Monthly/Weekly and Chart/Table pill toggles.
+
 
 ## 2.4.2 - 2026-09-04
 
