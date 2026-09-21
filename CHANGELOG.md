@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.
+
+- **Account Details modal: Balance History tab** — Added a second tab (alongside the renamed **Metadata** tab) showing the account's balance trend as a line chart or table, with Monthly/Weekly and Chart/Table pill toggles.
+
+## 2.4.2 - 2026-09-04
+
 - **Budgets/Targets: Multi-account selection** — Add Budget/Add Target now let you pick multiple accounts (e.g. `Expenses:(Rent|Utility)`) via a "+ Add another account" button, instead of hand-typing the pattern. Editing correctly splits an existing multi-account query back into rows.
 
 - **Fixed: Transactions tab freezing on large ledgers** — The default view no longer requests a running `balance` column for every row (a multi-commodity ledger could produce a huge CSV response and freeze the UI). It's now only fetched once a specific account is selected. Also fixed a layout bug where the Amount column could visually shift under the Balance header.
@@ -20,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upcoming tab: Filter by period** — Added a Today / This Week / This Month / All dropdown to the Snapshot sidebar's Upcoming tab. Overdue transactions still show under every period.
 
 - **Account Details modal: Clearer labels** — Reconciliation interval field now reads "Reconciliation interval (days)", and the Balance button was renamed to Add Balance.
+
 
 ## 2.4.1 - 2026-08-29
 

@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
+	import type { ChartConfiguration } from "chart.js/auto";
 	import type { AccountDetail } from "../../services/accountDetail.service";
+	import ChartComponent from "../common/ChartComponent.svelte";
+	import CustomSelect from "../common/CustomSelect.svelte";
+	import TabBar from "../common/TabBar.svelte";
 
 	export let account: string;
 	export let detail: AccountDetail;
@@ -9,6 +13,9 @@
 
 	let reconcileInput = "";
 	let errorMessage = "";
+	let activeTab: "details" | "balance-history" = "details";
+	let balanceHistoryView: "chart" | "table" = "chart";
+	let balanceHistoryInterval: "month" | "week" = "month";
 
 	// Re-sync local edit state whenever a fresh `detail` arrives (initial load,
 	// or after this modal's own save/balance/force-reconcile actions refresh it).
@@ -49,6 +56,67 @@
 	function close() {
 		dispatch("close");
 	}
+
+	$: balanceHistory = (balanceHistoryInterval === "week" ? detail.balanceHistoryWeekly : detail.balanceHistoryMonthly) || [];
+	$: balanceHistoryChartConfig = buildBalanceHistoryChart(balanceHistory, detail.balanceHistoryCurrency);
+
+	function formatBalanceAmount(value: number): string {
+		return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+	}
+
+	function buildBalanceHistoryChart(
+		history: Array<{ date: string; label: string; value: number }>,
+		currency: string,
+	): ChartConfiguration | null {
+		if (!history.length) return null;
+
+		return {
+			type: "line",
+			data: {
+				labels: history.map((point) => point.label),
+				datasets: [
+					{
+						label: `Balance (${currency})`,
+						data: history.map((point) => point.value),
+						borderColor: "rgb(75, 192, 192)",
+						backgroundColor: "rgba(75, 192, 192, 0.12)",
+						tension: 0.25,
+						fill: true,
+						pointRadius: history.length > 60 ? 0 : 3,
+						pointHoverRadius: 5,
+					},
+				],
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					legend: { display: true, position: "top" },
+					tooltip: {
+						mode: "index",
+						intersect: false,
+						callbacks: {
+							label: (context) => `Balance: ${formatBalanceAmount(context.parsed.y)} ${currency}`,
+						},
+					},
+				},
+				scales: {
+					x: {
+						display: true,
+						ticks: { maxTicksLimit: 8 },
+						grid: { display: false },
+					},
+					y: {
+						display: true,
+						ticks: {
+							callback: (value) => (typeof value === "number" ? formatBalanceAmount(value) : value),
+						},
+					},
+				},
+				interaction: { mode: "nearest", axis: "x", intersect: false },
+			},
+		};
+	}
 </script>
 
 <div class="modal-body">
@@ -64,69 +132,141 @@
 		{/if}
 	</div>
 
-	<div class="section">
-		<p class="section-title">Details</p>
-		<div class="section-card">
-			<div class="kv-row">
-				<span class="kv-key">Open date</span>
-				<span class="kv-value">{detail.openDate || "—"}</span>
-			</div>
-			{#if detail.isClosed}
-				<div class="kv-row">
-					<span class="kv-key">Close date</span>
-					<span class="kv-value">{detail.closeDate}</span>
-				</div>
-			{/if}
-			<div class="kv-row">
-				<span class="kv-key">Currencies</span>
-				<span class="kv-value">{detail.currencies.length ? detail.currencies.join(", ") : "—"}</span>
-			</div>
-		</div>
+	<div class="tab-bar-row">
+		<TabBar
+			tabs={[
+				{ value: 'details', label: 'Metadata' },
+				{ value: 'balance-history', label: 'Balance History' },
+			]}
+			bind:value={activeTab}
+			fullWidth={false}
+			ariaLabel="Account detail sections"
+		/>
 	</div>
 
-	<div class="section">
-		<p class="section-title">Reconciliation</p>
-		<div class="section-card">
-			<div class="kv-row">
-				<span class="kv-key">Status</span>
-				<span class="kv-value">
-					{#if detail.isFailing}
-						<span class="badge badge-error"
-							>Failing{#if detail.failingDiscrepancy} — off by {detail.failingDiscrepancy}{/if}{#if detail.failingDate} as of {detail.failingDate}{/if}</span
-						>
-					{:else if !detail.reconcileDays}
-						<span class="text-muted">No interval set</span>
-					{:else if detail.lastBalanceDate}
-						<span class="badge" class:badge-warning={detail.isOverdue} class:badge-ok={!detail.isOverdue}
-							>{detail.isOverdue ? "Overdue" : "Up to date"}</span
-						>
-						<span class="status-detail">last reconciled {detail.lastBalanceDate} ({detail.daysSinceLastBalance}d ago)</span>
-					{:else}
-						<span class="badge badge-warning">Never reconciled</span>
+	{#if activeTab === "balance-history"}
+		<div class="section">
+			<div class="section-heading">
+				<p class="section-title">Balance History</p>
+				<div class="pill-dropdown-group">
+					<CustomSelect
+						variant="primary"
+						position={balanceHistory.length > 0 ? 'left' : 'single'}
+						options={[
+							{ value: 'month', label: 'Monthly', icon: 'calendar' },
+							{ value: 'week', label: 'Weekly', icon: 'clock' },
+						]}
+						bind:value={balanceHistoryInterval}
+						ariaLabel="Balance history interval"
+					/>
+					{#if balanceHistory.length > 0}
+						<CustomSelect
+							variant="secondary"
+							position="right"
+							options={[
+								{ value: 'chart', label: 'Chart', icon: 'trend' },
+								{ value: 'table', label: 'Table', icon: 'table' },
+							]}
+							bind:value={balanceHistoryView}
+							ariaLabel="Balance history view"
+						/>
 					{/if}
-				</span>
-			</div>
-
-			{#if detail.isClosed}
-				<div class="kv-row">
-					<span class="kv-key">Reconciliation interval (days)</span>
-					<span class="kv-value">{detail.reconcileDays ? `${detail.reconcileDays} days (account closed)` : "—"}</span>
 				</div>
-			{:else}
+			</div>
+			<div class="section-card history-card">
+				{#if balanceHistory.length === 0}
+					<div class="empty-history">No balance history found for this account.</div>
+				{:else if balanceHistoryView === "chart" && balanceHistoryChartConfig}
+					<div class="balance-history-chart">
+						<ChartComponent config={balanceHistoryChartConfig} height="240px" />
+					</div>
+				{:else}
+					<div class="balance-history-table-wrap">
+						<table class="balance-history-table">
+							<thead>
+								<tr>
+									<th>{balanceHistoryInterval === "week" ? "Week ending" : "Month"}</th>
+									<th>Balance ({detail.balanceHistoryCurrency})</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each balanceHistory.slice().reverse() as point}
+									<tr>
+										<td>{point.label}</td>
+										<td>{formatBalanceAmount(point.value)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</div>
+		</div>
+	{:else}
+		<div class="section">
+			<p class="section-title">Details</p>
+			<div class="section-card">
 				<div class="kv-row">
-					<span class="kv-key">Reconciliation interval (days)</span>
+					<span class="kv-key">Open date</span>
+					<span class="kv-value">{detail.openDate || "—"}</span>
+				</div>
+				{#if detail.isClosed}
+					<div class="kv-row">
+						<span class="kv-key">Close date</span>
+						<span class="kv-value">{detail.closeDate}</span>
+					</div>
+				{/if}
+				<div class="kv-row">
+					<span class="kv-key">Currencies</span>
+					<span class="kv-value">{detail.currencies.length ? detail.currencies.join(", ") : "—"}</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="section">
+			<p class="section-title">Reconciliation</p>
+			<div class="section-card">
+				<div class="kv-row">
+					<span class="kv-key">Status</span>
 					<span class="kv-value">
-						<div class="edit-area">
-							<input type="number" min="1" bind:value={reconcileInput} placeholder="e.g. 30 (blank to clear)" />
-							{#if errorMessage}
-								<span class="error-text">{errorMessage}</span>
-							{/if}
-						</div>
+						{#if detail.isFailing}
+							<span class="badge badge-error"
+								>Failing{#if detail.failingDiscrepancy} — off by {detail.failingDiscrepancy}{/if}{#if detail.failingDate} as of {detail.failingDate}{/if}</span
+							>
+						{:else if !detail.reconcileDays}
+							<span class="text-muted">No interval set</span>
+						{:else if detail.lastBalanceDate}
+							<span class="badge" class:badge-warning={detail.isOverdue} class:badge-ok={!detail.isOverdue}
+								>{detail.isOverdue ? "Overdue" : "Up to date"}</span
+							>
+							<span class="status-detail">last reconciled {detail.lastBalanceDate} ({detail.daysSinceLastBalance}d ago)</span>
+						{:else}
+							<span class="badge badge-warning">Never reconciled</span>
+						{/if}
 					</span>
 				</div>
-			{/if}
+
+				{#if detail.isClosed}
+					<div class="kv-row">
+						<span class="kv-key">Reconciliation interval (days)</span>
+						<span class="kv-value">{detail.reconcileDays ? `${detail.reconcileDays} days (account closed)` : "—"}</span>
+					</div>
+				{:else}
+					<div class="kv-row">
+						<span class="kv-key">Reconciliation interval (days)</span>
+						<span class="kv-value">
+							<div class="edit-area">
+								<input type="number" min="1" bind:value={reconcileInput} placeholder="e.g. 30 (blank to clear)" />
+								{#if errorMessage}
+									<span class="error-text">{errorMessage}</span>
+								{/if}
+							</div>
+						</span>
+					</div>
+				{/if}
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	<div class="footer">
 		<div class="footer-group">
@@ -185,10 +325,28 @@
 		overflow-wrap: anywhere;
 	}
 
+	.tab-bar-row {
+		display: flex;
+		justify-content: flex-start;
+	}
+
 	.section {
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+	}
+
+	.section-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.pill-dropdown-group {
+		display: inline-flex;
+		align-items: center;
+		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
 	}
 
 	.section-title {
@@ -205,6 +363,52 @@
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 8px;
 		overflow: hidden;
+	}
+
+	.history-card {
+		min-height: 72px;
+	}
+
+	.balance-history-chart {
+		height: 240px;
+		padding: 12px;
+	}
+
+	.balance-history-table-wrap {
+		max-height: 280px;
+		overflow: auto;
+	}
+
+	.balance-history-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 12px;
+	}
+
+	.balance-history-table th,
+	.balance-history-table td {
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--background-modifier-border);
+		text-align: left;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.balance-history-table th {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background: var(--background-secondary);
+		color: var(--text-muted);
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+
+	.empty-history {
+		padding: 16px;
+		color: var(--text-muted);
+		font-size: 13px;
 	}
 
 	.kv-row {
