@@ -7,6 +7,7 @@ import { getTargetFile, ensureTransactionFile } from '../structuredLayout';
 import { atomicFileWrite, createBackupFile, convertWslPathToWindows, getNewlineCharacter, readFileContent } from '../fileEditor';
 import { runQuery } from '../queryRunner';
 import { Logger } from '../logger';
+import { quote } from './directiveText';
 
 export function generateTransactionText(transactionData: TransactionData, newline = '\n'): string {
 	const date = transactionData.date;
@@ -17,9 +18,9 @@ export function generateTransactionText(transactionData: TransactionData, newlin
 	const links: string[] = transactionData.links || [];
 
 	let payeeNarration = '';
-	if (payee && narration) payeeNarration = `"${payee}" "${narration}"`;
-	else if (payee) payeeNarration = `"${payee}" ""`;
-	else if (narration) payeeNarration = `"${narration}"`;
+	if (payee && narration) payeeNarration = `${quote(payee)} ${quote(narration)}`;
+	else if (payee) payeeNarration = `${quote(payee)} ""`;
+	else if (narration) payeeNarration = quote(narration);
 	else payeeNarration = '""';
 
 	const headerParts = [date, flag, payeeNarration];
@@ -29,7 +30,7 @@ export function generateTransactionText(transactionData: TransactionData, newlin
 	const lines = [headerParts.join(' ')];
 
 	for (const [key, value] of Object.entries(transactionData.metadata || {})) {
-		if (key !== 'filename' && key !== 'lineno') lines.push(`  ${key}: "${value}"`);
+		if (key !== 'filename' && key !== 'lineno') lines.push(`  ${key}: ${quote(String(value))}`);
 	}
 
 	for (const posting of (transactionData.postings || [])) {
@@ -45,12 +46,12 @@ export function generateTransactionText(transactionData: TransactionData, newlin
 				const cb = posting.cost.isTotal ? '}}' : '}';
 				postingLine += ` ${ob}${posting.cost.number} ${posting.cost.currency}`;
 				if (posting.cost.date) postingLine += `, ${posting.cost.date}`;
-				if (posting.cost.label) postingLine += `, "${posting.cost.label}"`;
+				if (posting.cost.label) postingLine += `, ${quote(posting.cost.label)}`;
 				postingLine += cb;
 			} else if (posting.cost?.date) {
 				postingLine += ` {${posting.cost.date}}`;
 			} else if (posting.cost?.label) {
-				postingLine += ` {"${posting.cost.label}"}`;
+				postingLine += ` {${quote(posting.cost.label)}}`;
 			}
 
 			if (posting.price?.amount && posting.price?.currency) {
@@ -62,7 +63,7 @@ export function generateTransactionText(transactionData: TransactionData, newlin
 		lines.push(postingLine);
 
 		for (const [key, value] of Object.entries(posting.metadata || {})) {
-			lines.push(`    ${key}: "${value}"`);
+			lines.push(`    ${key}: ${quote(String(value))}`);
 		}
 	}
 
@@ -135,6 +136,30 @@ function findTransactionBlock(lines: string[], lineIndex: number): { startIndex:
 	}
 
 	return { startIndex, endIndex };
+}
+
+/**
+ * The exact source text of the transaction starting at `lineno` (1-based) in
+ * `filename` (as reported by bean-query). Unlike the Journal's BQL view, this
+ * keeps everything written in the ledger: posting flags, comments, metadata,
+ * cost labels, `{{}}`/`@@`, and which posting was left blank to auto-balance.
+ */
+export async function readTransactionText(
+	plugin: BeancountPlugin,
+	filename: string,
+	lineno: number
+): Promise<{ success: true; text: string } | { success: false; error: string }> {
+	try {
+		const content = await readFileContent(plugin, convertWslPathToWindows(filename));
+		const lines = content.split(/\r?\n/);
+		if (!Number.isInteger(lineno) || lineno < 1 || lineno > lines.length)
+			return { success: false, error: `Invalid line number ${lineno}` };
+		const { startIndex, endIndex } = findTransactionBlock(lines, lineno - 1);
+		return { success: true, text: lines.slice(startIndex, endIndex + 1).join('\n') };
+	} catch (error) {
+		Logger.error('[readTransactionText] Error:', error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
 }
 
 export async function updateTransaction(

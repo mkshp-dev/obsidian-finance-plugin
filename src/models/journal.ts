@@ -74,6 +74,10 @@ export interface JournalNote extends JournalBaseEntry {
     account: string;
     /** The note content. */
     comment: string;
+    /** Tags on the note directive. */
+    tags?: string[];
+    /** Links on the note directive. */
+    links?: string[];
 }
 
 /**

@@ -14,6 +14,8 @@ interface BalanceRow {
     amount: string;
     tolerance: string;
     discrepancy: string;
+    filename: string;
+    lineno: string;
 }
 
 /** Shape of a note row returned by BQL. */
@@ -23,7 +25,8 @@ interface NoteRow {
     comment: string;
     tags: string;
     links: string;
-    meta: string;
+    filename: string;
+    lineno: string;
 }
 
 /** Shape of a posting row returned by BQL. */
@@ -47,6 +50,20 @@ interface PostingRow {
     entry_meta: string;
 }
 
+/** bean-query prints tag/link sets as Python reprs: `frozenset({'a', 'b'})` or `frozenset()`. */
+function parseBqlSet(value: string | undefined): string[] {
+    return [...(value || '').matchAll(/'([^']*)'/g)].map((m) => m[1]).sort();
+}
+
+/** Where an entry lives, kept in its metadata (as for transactions) so edits and deletes target that exact line. */
+function locationMetadata(row: { filename: string; lineno: string }): Record<string, unknown> {
+    const metadata: Record<string, unknown> = {};
+    if (row.filename) metadata['filename'] = row.filename;
+    const lineno = parseInt(row.lineno);
+    if (!isNaN(lineno)) metadata['lineno'] = lineno;
+    return metadata;
+}
+
 // --- BALANCE ENTRIES ---
 
 /**
@@ -67,7 +84,7 @@ export async function getBalanceEntries(
         if (filters.account) whereConditions.push(`account ~ "${filters.account}"`);
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-        const query = `SELECT date, account, amount, tolerance, discrepancy FROM #balances ${whereClause} ORDER BY date DESC, account`;
+        const query = `SELECT date, account, amount, tolerance, discrepancy, meta['filename'] AS filename, meta['lineno'] AS lineno FROM #balances ${whereClause} ORDER BY date DESC, account`;
 
         Logger.log('[getBalanceEntries] Running BQL query:', query);
         const csv = await runQuery(plugin, query);
@@ -86,7 +103,8 @@ export async function getBalanceEntries(
             const amount = amountParts.length >= 2 ? amountParts[0] : '';
             const currency = amountParts.length >= 2 ? amountParts[1] : '';
             return {
-                id: `balance_${row.date}_${row.account.replace(/:/g, '_')}`,
+                // Unique even for several assertions on one account and day (e.g. one per currency).
+                id: `balance|${row.filename}|${row.lineno}`,
                 type: 'balance' as const,
                 date: row.date,
                 account: row.account,
@@ -94,7 +112,7 @@ export async function getBalanceEntries(
                 currency,
                 tolerance: row.tolerance || null,
                 diff_amount: row.discrepancy || null,
-                metadata: {},
+                metadata: locationMetadata(row),
             };
         });
 
@@ -156,7 +174,7 @@ export async function getNoteEntries(
         if (filters.account) whereConditions.push(`account ~ "${filters.account}"`);
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-        const query = `SELECT date, account, comment, tags, links, meta FROM #notes ${whereClause} ORDER BY date DESC, account`;
+        const query = `SELECT date, account, comment, tags, links, meta['filename'] AS filename, meta['lineno'] AS lineno FROM #notes ${whereClause} ORDER BY date DESC, account`;
 
         Logger.log('[getNoteEntries] Running BQL query:', query);
         const csv = await runQuery(plugin, query);
@@ -169,35 +187,24 @@ export async function getNoteEntries(
 
         Logger.log(`[getNoteEntries] Parsed ${records.length} note rows`);
 
-        let notes: JournalNote[] = records.map((row) => {
-            const metaStr = row.meta || '{}';
-            let metadata: Record<string, unknown> = {};
-            try {
-                metadata = JSON.parse(metaStr) as Record<string, unknown>;
-            } catch {
-                metadata = { raw: metaStr };
-            }
-            return {
-                id: `note_${row.date}_${row.account.replace(/:/g, '_')}`,
-                type: 'note' as const,
-                date: row.date,
-                account: row.account,
-                comment: row.comment || '',
-                metadata,
-            };
-        });
+        let notes: JournalNote[] = records.map((row) => ({
+            id: `note|${row.filename}|${row.lineno}`,
+            type: 'note' as const,
+            date: row.date,
+            account: row.account,
+            comment: row.comment || '',
+            tags: parseBqlSet(row.tags),
+            links: parseBqlSet(row.links),
+            metadata: locationMetadata(row),
+        }));
 
         // In-memory filters
         if (filters.payee) {
             notes = [];
         } else {
             if (filters.tag) {
-                notes = notes.filter((note, idx) => {
-                    const row = records[idx];
-                    const rowTags = row.tags || '';
-                    const tags = rowTags.split(',').map(t => t.trim().toLowerCase());
-                    return tags.includes(filters.tag!.toLowerCase());
-                });
+                const tag = filters.tag.toLowerCase();
+                notes = notes.filter((note) => (note.tags ?? []).some((t) => t.toLowerCase() === tag));
             }
             if (filters.searchTerm) {
                 const q = filters.searchTerm.toLowerCase();

@@ -71,15 +71,22 @@ export interface IndicatorDirectiveParams {
 }
 
 /**
- * A single account/amount/currency leg of a scheduled transaction template.
+ * A single leg of a scheduled transaction template — everything a real
+ * transaction posting can carry, so any transaction can be scheduled.
  * `amount`/`currency` are omitted for an elided posting — the beancount
  * idiom of leaving (at most) one posting's amount blank so it's inferred to
- * balance the rest of the transaction.
+ * balance the rest of the transaction. An elided posting can't carry a cost
+ * or price (generateTransactionText() only writes them after an amount).
  */
 export interface PostingStub {
 	account: string;
 	amount?: number;
 	currency?: string;
+	flag?: string;
+	comment?: string;
+	cost?: CostData;
+	price?: PriceDataPayload;
+	metadata?: Record<string, string>;
 }
 
 export interface ScheduleDirectiveParams {
@@ -94,6 +101,8 @@ export interface ScheduleDirectiveParams {
 	flag?: string;
 	tags?: string[];
 	links?: string[];
+	/** Transaction-level metadata copied onto every materialized transaction. */
+	metadata?: Record<string, string>;
 	postings: PostingStub[];
 	/** Sum of positive-amount postings (in the currency of the first positive
 	 * leg), computed and persisted at save time — a single representative

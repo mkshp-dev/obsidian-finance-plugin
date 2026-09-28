@@ -1,7 +1,10 @@
 <script lang="ts">
     import HelpTip from '../../common/HelpTip.svelte';
     import { onMount, onDestroy } from 'svelte';
-    import { debounce, getOpenAccounts, getPayees, getTags, deleteTransaction, deleteBalance, deleteNote, createSnippet, type TransactionData, type CostData, type PriceDataPayload } from '../../../utils/index';
+    import { debounce, getOpenAccounts, getPayees, getTags, deleteTransaction, deleteBalance, deleteNote, createSnippet, readTransactionText, scheduleFromTransaction, type TransactionData, type CostData, type PriceDataPayload } from '../../../utils/index';
+    import { parseTransactionText } from '../../../utils/transactionText';
+    import { MAX_SCHEDULE_POSTINGS } from '../../../queries';
+    import { AddScheduleModal } from '../../modals/AddScheduleModal';
     import SkeletonLoader from '../../common/SkeletonLoader.svelte';
     import ErrorBanner from '../../common/ErrorBanner.svelte';
     import EmptyState from '../../common/EmptyState.svelte';
@@ -12,7 +15,7 @@
     import { ConfirmModal } from '../../modals/ConfirmModal';
     import { SnippetNameModal } from '../../modals/SnippetNameModal';
     import { Notice } from 'obsidian';
-    import type { JournalEntry } from '../../../models/journal';
+    import type { JournalEntry, JournalTransaction } from '../../../models/journal';
     import { Logger } from '../../../utils/logger';
     import { nativeDatePicker } from '../../actions/nativeDatePicker';
 
@@ -223,9 +226,9 @@
                     if (entry.type === 'transaction') {
                         result = await deleteTransaction(plugin, entry.id);
                     } else if (entry.type === 'balance') {
-                        result = await deleteBalance(plugin, entry.id);
+                        result = await deleteBalance(plugin, entry);
                     } else if (entry.type === 'note') {
-                        result = await deleteNote(plugin, entry.id);
+                        result = await deleteNote(plugin, entry);
                     } else {
                         new Notice(`Deleting ${entry.type} entries is not supported.`);
                         return;
@@ -243,6 +246,32 @@
                 }
             }
         ).open();
+    }
+
+    // Copies from the transaction's own text in the ledger rather than this
+    // card's BQL data, which lacks posting flags, comments, metadata, cost
+    // labels and which posting was left blank to auto-balance.
+    async function handleMakeRecurring(entry: JournalTransaction) {
+        if (!plugin) {
+            console.error("Plugin instance not found");
+            return;
+        }
+        const { filename, lineno } = entry.metadata;
+        if (typeof filename !== 'string' || typeof lineno !== 'number') {
+            new Notice("Couldn't find this transaction in your ledger files.");
+            return;
+        }
+        const source = await readTransactionText(plugin, filename, lineno);
+        if (!source.success) {
+            new Notice(`Couldn't read the transaction: ${source.error}`);
+            return;
+        }
+        const result = scheduleFromTransaction(parseTransactionText(source.text), MAX_SCHEDULE_POSTINGS);
+        if (!result.success) {
+            new Notice(`Can't make this recurring: ${result.error}`);
+            return;
+        }
+        new AddScheduleModal(plugin.app, plugin, undefined, undefined, result.prefill).open();
     }
 
     function handleCreateSnippet(entry: any) {
@@ -554,6 +583,7 @@
                         on:edit={() => handleEdit(entry)}
                         on:delete={() => handleDelete(entry)}
                         on:create-snippet={(e) => handleCreateSnippet(e.detail)}
+                        on:make-recurring={(e) => handleMakeRecurring(e.detail)}
                         on:account-click={(e) => handleAccountClick(e.detail?.account, e.detail?.ctrlKey)}
                         on:payee-click={(e) => handlePayeeClick(typeof e.detail === 'string' ? e.detail : e.detail?.payee)}
                         on:view-transactions={(e) => handlePayeeClick(e.detail?.payee)}

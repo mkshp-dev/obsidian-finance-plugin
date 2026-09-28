@@ -111,6 +111,7 @@ export const HELP_TOPICS = {
 			{ label: 'Search & filters', text: 'Narrow by text, entry type, account, dates, payee or tag. Fields suggest values as you type.' },
 			{ label: 'Accounts / tags on a card', text: 'Click to open in Transactions. Ctrl/Cmd+click filters the Journal instead.' },
 			{ label: 'Edit / Delete', text: 'Change or remove the entry in your ledger file.' },
+			{ label: '🔁', text: 'Makes a transaction recurring: opens a new schedule copied from it, starting one cycle after its date.' },
 			{ label: '📋', text: 'Saves a transaction as a reusable snippet (enable User-defined snippets in settings).' },
 		],
 	},

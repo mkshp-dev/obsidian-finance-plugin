@@ -1,12 +1,12 @@
 // src/utils/directives/balanceDirectives.ts
 
-import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../../main';
-import type { BalanceData, FileLineRow } from './types';
+import type { BalanceData } from './types';
+import type { JournalBalance } from '../../models/journal';
 import { getTargetFile } from '../structuredLayout';
 import { atomicFileWrite, createBackupFile, convertWslPathToWindows, getNewlineCharacter, readFileContent } from '../fileEditor';
-import { runQuery } from '../queryRunner';
 import { Logger } from '../logger';
+import { blockEndIndex, formatBalanceHeader, loadDirective, locationFromMetadata, parseBalanceHeader, type BalanceHeader, type LoadedDirective } from './directiveText';
 
 export async function createBalanceAssertion(
 	plugin: BeancountPlugin,
@@ -22,8 +22,7 @@ export async function createBalanceAssertion(
 		if (!filePath) return { success: false, error: 'Beancount file path not set' };
 
 		const normalizedPath = convertWslPathToWindows(filePath);
-		let directiveText = `${date} balance ${account}  ${amount} ${currency}`;
-		if (tolerance) directiveText += ` ~ ${tolerance}`;
+		const directiveText = formatBalanceHeader({ date, account, amount, tolerance: tolerance || null, currency, rest: '' });
 
 		await createBackupFile(plugin, normalizedPath, createBackup, 'createBalanceAssertion');
 		const content = await readFileContent(plugin, normalizedPath);
@@ -39,49 +38,50 @@ export async function createBalanceAssertion(
 	}
 }
 
+/**
+ * Loads the balance assertion a Journal entry was read from, checking the
+ * line still holds that assertion — the file may have changed since the
+ * Journal loaded, and a stale line number must never rewrite another line.
+ */
+async function loadBalance(
+	plugin: BeancountPlugin,
+	entry: Pick<JournalBalance, 'date' | 'account' | 'metadata'>
+): Promise<{ directive: LoadedDirective; parsed: BalanceHeader }> {
+	const location = locationFromMetadata(entry.metadata);
+	if (!location) throw new Error("Couldn't find this balance assertion in your ledger files. Refresh and try again.");
+	const directive = await loadDirective(plugin, location);
+	const parsed = parseBalanceHeader(directive.header);
+	if (!parsed || parsed.date !== entry.date || parsed.account !== entry.account)
+		throw new Error('This balance assertion has changed in your ledger since it was loaded. Refresh and try again.');
+	return { directive, parsed };
+}
+
+/**
+ * Rewrites date/account/amount/currency in place. The tolerance (unless
+ * given), trailing comment and metadata lines are kept as written.
+ */
 export async function updateBalance(
 	plugin: BeancountPlugin,
-	balanceId: string,
+	entry: Pick<JournalBalance, 'date' | 'account' | 'metadata'>,
 	balanceData: BalanceData
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		if (!plugin.settings.structuredFolderName)
-			return { success: false, error: 'Beancount folder not configured' };
+		const { directive, parsed } = await loadBalance(plugin, entry);
+		const { path, lines, newline, start, headerEnd } = directive;
 
-		const parts = balanceId.split('_');
-		if (parts.length < 3 || parts[0] !== 'balance')
-			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
+		const header = formatBalanceHeader({
+			...parsed,
+			date: balanceData.date,
+			account: balanceData.account,
+			amount: String(balanceData.amount),
+			currency: balanceData.currency,
+			tolerance: balanceData.tolerance !== undefined ? String(balanceData.tolerance) : parsed.tolerance,
+		});
 
-		const date = parts[1];
-		const account = parts.slice(2).join(':');
-
-		const csv = await runQuery(plugin, `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`);
-		const records = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as unknown as FileLineRow[];
-
-		if (records.length === 0)
-			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
-
-		const actualFilePath = records[0].filename;
-		const lineno = parseInt(records[0].lineno);
-		if (!actualFilePath) return { success: false, error: 'Filename not returned from query' };
-
-		const normalizedPath = convertWslPathToWindows(actualFilePath);
-		Logger.log(`[updateBalance] ${actualFilePath} → ${normalizedPath}, line ${lineno}`);
-
-		await createBackupFile(plugin, normalizedPath, plugin.settings.createBackups ?? true, 'updateBalance');
-		const _rawContent = await readFileContent(plugin, normalizedPath);
-		const newline = getNewlineCharacter(_rawContent);
-		const lines = _rawContent.split(/\r?\n/);
-
-		if (isNaN(lineno) || lineno < 1 || lineno > lines.length)
-			return { success: false, error: `Invalid line number ${lineno}` };
-
-		let newBalanceText = `${balanceData.date} balance ${balanceData.account}  ${balanceData.amount} ${balanceData.currency}`;
-		if (balanceData.tolerance) newBalanceText += ` ~ ${balanceData.tolerance}`;
-
-		lines[lineno - 1] = newBalanceText;
-		await atomicFileWrite(plugin, normalizedPath, lines.join(newline));
-		Logger.log(`[updateBalance] Updated ${balanceId}`);
+		await createBackupFile(plugin, path, plugin.settings.createBackups ?? true, 'updateBalance');
+		lines.splice(start, headerEnd - start + 1, ...header.split('\n'));
+		await atomicFileWrite(plugin, path, lines.join(newline));
+		Logger.log(`[updateBalance] Updated ${path}:${start + 1}`);
 		return { success: true };
 	} catch (error) {
 		Logger.error('[updateBalance] Error:', error);
@@ -89,45 +89,19 @@ export async function updateBalance(
 	}
 }
 
+/** Removes the assertion together with its metadata lines. */
 export async function deleteBalance(
 	plugin: BeancountPlugin,
-	balanceId: string
+	entry: Pick<JournalBalance, 'date' | 'account' | 'metadata'>
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		if (!plugin.settings.structuredFolderName)
-			return { success: false, error: 'Beancount folder not configured' };
+		const { directive } = await loadBalance(plugin, entry);
+		const { path, lines, newline, start } = directive;
 
-		const parts = balanceId.split('_');
-		if (parts.length < 3 || parts[0] !== 'balance')
-			return { success: false, error: `Invalid balance ID format: ${balanceId}` };
-
-		const date = parts[1];
-		const account = parts.slice(2).join(':');
-
-		const csv = await runQuery(plugin, `SELECT filename, lineno FROM #entries WHERE type='balance' AND date=${date} AND '${account}' IN accounts`);
-		const records = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as unknown as FileLineRow[];
-
-		if (records.length === 0)
-			return { success: false, error: `Balance assertion not found for ${account} on ${date}` };
-
-		const actualFilePath = records[0].filename;
-		const lineno = parseInt(records[0].lineno);
-		if (!actualFilePath) return { success: false, error: 'Filename not returned from query' };
-
-		const normalizedPath = convertWslPathToWindows(actualFilePath);
-		Logger.log(`[deleteBalance] ${actualFilePath} → ${normalizedPath}, line ${lineno}`);
-
-		await createBackupFile(plugin, normalizedPath, plugin.settings.createBackups ?? true, 'deleteBalance');
-		const _rawContent = await readFileContent(plugin, normalizedPath);
-		const newline = getNewlineCharacter(_rawContent);
-		const lines = _rawContent.split(/\r?\n/);
-
-		if (isNaN(lineno) || lineno < 1 || lineno > lines.length)
-			return { success: false, error: `Invalid line number ${lineno}` };
-
-		lines.splice(lineno - 1, 1);
-		await atomicFileWrite(plugin, normalizedPath, lines.join(newline));
-		Logger.log(`[deleteBalance] Deleted ${balanceId}`);
+		await createBackupFile(plugin, path, plugin.settings.createBackups ?? true, 'deleteBalance');
+		lines.splice(start, blockEndIndex(lines, start) - start + 1);
+		await atomicFileWrite(plugin, path, lines.join(newline));
+		Logger.log(`[deleteBalance] Deleted ${path}:${start + 1}`);
 		return { success: true };
 	} catch (error) {
 		Logger.error('[deleteBalance] Error:', error);

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **In-app help icons** — Each Snapshot sidebar tab and dashboard section now has a small ⓘ icon. Hover to preview, or click to pin, a short guide to that section's workflow and buttons. You can hide the icons with **Settings → Show help icons**.
 
+- **Scheduled transactions: full posting support** — Schedules can now carry cost `{}`, price `@`/`@@`, posting flags, comments, and posting- or transaction-level metadata (the toggle buttons were previously shown but did nothing), so any transaction can be scheduled. Also fixed payees, narrations, metadata values, and cost labels containing `"` or `\` producing an invalid ledger.
+
+- **Journal: Make recurring** — A new 🔁 button on transaction cards opens Add Scheduled Transaction pre-filled from that transaction exactly as written in your ledger, with the first occurrence one cycle after its date.
+
+- **Fixed: Editing a transaction lost data** — Saving an edit from the Journal replaced its metadata with a `raw:` line, dropped posting comments, flags, metadata and cost labels, and filled in the amount of the auto-balanced posting. The edit form now loads the transaction as written in your ledger file.
+
+- **Fixed: Balance assertions and notes editing or deleting the wrong entry** — With several assertions or notes on the same account and day (e.g. one per currency), editing or deleting one could change another; edits also dropped a balance's tolerance, a note's tags and links, and trailing comments, and deletes left metadata lines behind. Balance tolerances are now written in valid syntax (`100 ~ 0.01 USD`), quotes in notes are escaped, and the Journal's tag filter now finds tagged notes.
+
 ## 2.4.3 - 2026-09-21
 
 - **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.

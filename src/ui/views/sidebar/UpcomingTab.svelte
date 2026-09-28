@@ -2,10 +2,9 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { parse as parseCsv } from 'csv-parse/sync';
-	import { runQuery, deleteScheduleDirective, computeDueOccurrences } from '../../../utils';
+	import { runQuery, deleteScheduleDirective, computeDueOccurrences, parseScheduleRow } from '../../../utils';
 	import { getScheduleListQuery, MAX_SCHEDULE_POSTINGS } from '../../../queries';
-	import type { ScheduledTransactionItem, DueOccurrence } from '../../../models/schedule';
-	import type { PostingStub } from '../../../utils/directives/types';
+	import { SCHEDULES_CHANGED_EVENT, type ScheduledTransactionItem, type DueOccurrence } from '../../../models/schedule';
 	import { AddScheduleModal } from '../../modals/AddScheduleModal';
 	import { ConfirmDueSchedulesModal } from '../../modals/ConfirmDueSchedulesModal';
 	import { Notice } from 'obsidian';
@@ -41,28 +40,6 @@
 	);
 	$: dispatch('due-count', dueCount);
 
-	function col(row: any, name: string): any {
-		const lower = name.toLowerCase();
-		if (row[lower] !== undefined) return row[lower];
-		if (row[name] !== undefined) return row[name];
-		const bare = name.startsWith('_') ? name.slice(1) : name;
-		const bareLower = bare.toLowerCase();
-		if (row[bareLower] !== undefined) return row[bareLower];
-		return row[bare];
-	}
-
-	function parseBool(val: any): boolean {
-		if (typeof val === 'boolean') return val;
-		const s = String(val).toLowerCase();
-		return s === 'true' || s === '1';
-	}
-
-	function parseNumericValue(val: any): number {
-		if (val === null || val === undefined || val === '') return 0;
-		if (typeof val === 'number') return val;
-		const match = String(val).match(/[+-]?[\d.]+/);
-		return match ? parseFloat(match[0]) : 0;
-	}
 
 	function toISO(d: Date): string {
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -104,46 +81,11 @@
 		loadError = null;
 		try {
 			const csv = await runQuery(plugin, getScheduleListQuery());
-			const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as any[];
+			const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, unknown>[];
 			const today = todayISO();
-			items = rows.map((r: any) => {
-				const postings: PostingStub[] = [];
-				for (let i = 1; i <= MAX_SCHEDULE_POSTINGS; i++) {
-					const account = col(r, `_p${i}account`);
-					if (!account) continue;
-					const amountRaw = col(r, `_p${i}amount`);
-					const hasAmount = amountRaw !== undefined && amountRaw !== null && amountRaw !== '';
-					postings.push({
-						account,
-						amount: hasAmount ? parseNumericValue(amountRaw) : undefined,
-						currency: hasAmount ? (col(r, `_p${i}currency`) || '') : undefined,
-					});
-				}
-				const tagsRaw = col(r, '_tags') || '';
-				const linksRaw = col(r, '_links') || '';
-				const active = parseBool(col(r, '_active'));
-				const nextDate = col(r, '_nextDate') || '';
-				const displayAmountRaw = col(r, '_displayAmount');
-				return {
-					name: col(r, '_name') || '',
-					frequency: col(r, '_frequency') || 'Monthly',
-					startDate: col(r, '_startDate') || '',
-					nextDate,
-					lastGenerated: col(r, '_lastGenerated') || undefined,
-					active,
-					payee: col(r, '_payee') || undefined,
-					narration: col(r, '_narration') || undefined,
-					flag: col(r, '_flag') || '*',
-					tags: tagsRaw ? tagsRaw.split(',').filter(Boolean) : [],
-					links: linksRaw ? linksRaw.split(',').filter(Boolean) : [],
-					postings,
-					displayAmount: displayAmountRaw !== undefined && displayAmountRaw !== null && displayAmountRaw !== '' ? parseNumericValue(displayAmountRaw) : undefined,
-					displayCurrency: col(r, '_displayCurrency') || undefined,
-					filename: col(r, '_filename') || '',
-					lineno: parseNumericValue(col(r, '_lineno')) || 0,
-					isDue: active && !!nextDate && nextDate <= today,
-				} as ScheduledTransactionItem;
-			}).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+			items = rows
+				.map((r) => parseScheduleRow(r, MAX_SCHEDULE_POSTINGS, today))
+				.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -151,16 +93,22 @@
 		}
 	}
 
-	onMount(() => { if (plugin) loadAll(); });
+	onMount(() => {
+		if (!plugin) return;
+		loadAll();
+		// Reload when a schedule is saved from anywhere (e.g. Journal → Make recurring).
+		const ref = plugin.app.workspace.on(SCHEDULES_CHANGED_EVENT, () => loadAll());
+		return () => plugin.app.workspace.offref(ref);
+	});
 
 	function handleAdd() {
 		if (!plugin) return;
-		new AddScheduleModal(plugin.app, plugin, undefined, () => loadAll()).open();
+		new AddScheduleModal(plugin.app, plugin).open();
 	}
 
 	function handleEdit(item: ScheduledTransactionItem) {
 		if (!plugin) return;
-		new AddScheduleModal(plugin.app, plugin, item, () => loadAll()).open();
+		new AddScheduleModal(plugin.app, plugin, item).open();
 	}
 
 	async function handleDelete(item: ScheduledTransactionItem, event: MouseEvent) {

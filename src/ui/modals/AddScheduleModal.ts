@@ -7,8 +7,9 @@ import { getOpenAccounts, getPayees, runQuery, createScheduleDirective, updateSc
 import { getAllCurrenciesQuery } from '../../queries';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { Logger } from '../../utils/logger';
-import type { ScheduledTransactionItem } from '../../models/schedule';
+import { SCHEDULES_CHANGED_EVENT, type ScheduledTransactionItem } from '../../models/schedule';
 import type { PostingStub } from '../../utils/directives/types';
+import type { SchedulePrefill } from '../../utils/directives/scheduleDirectives';
 import { SvelteComponent } from 'svelte';
 
 interface CurrencyRow {
@@ -24,6 +25,7 @@ interface ScheduleSavePayload {
 	flag: string;
 	tags: string[];
 	links: string[];
+	metadata?: Record<string, string>;
 	postings: PostingStub[];
 }
 
@@ -32,12 +34,15 @@ export class AddScheduleModal extends Modal {
 	private component: SvelteComponent | null = null;
 	private editingSchedule?: ScheduledTransactionItem;
 	private onSuccess?: () => void;
+	private prefill?: SchedulePrefill;
 
-	constructor(app: App, plugin: BeancountPlugin, editingSchedule?: ScheduledTransactionItem, onSuccess?: () => void) {
+	/** `prefill` starts a new schedule from an existing transaction; ignored when editing. */
+	constructor(app: App, plugin: BeancountPlugin, editingSchedule?: ScheduledTransactionItem, onSuccess?: () => void, prefill?: SchedulePrefill) {
 		super(app);
 		this.plugin = plugin;
 		this.editingSchedule = editingSchedule;
 		this.onSuccess = onSuccess;
+		this.prefill = prefill;
 	}
 
 	async onOpen() {
@@ -76,12 +81,13 @@ export class AddScheduleModal extends Modal {
 				currencies,
 				defaultCurrency: operatingCurrency,
 				editingSchedule: this.editingSchedule,
+				prefill: this.editingSchedule ? null : this.prefill ?? null,
 			},
 		});
 
 		this.component.$on('save', (e: CustomEvent<ScheduleSavePayload>) => {
 			void (async () => {
-				const { name, frequency, startDate, payee, narration, flag, tags, links, postings } = e.detail;
+				const { name, frequency, startDate, payee, narration, flag, tags, links, metadata, postings } = e.detail;
 				Logger.log('[AddScheduleModal] save event', e.detail);
 
 				const display = computeScheduleDisplayAmount(postings);
@@ -101,6 +107,7 @@ export class AddScheduleModal extends Modal {
 							flag,
 							tags,
 							links,
+							metadata,
 							postings,
 							displayAmount: display?.amount,
 							displayCurrency: display?.currency,
@@ -117,6 +124,7 @@ export class AddScheduleModal extends Modal {
 							flag,
 							tags,
 							links,
+							metadata,
 							postings,
 							displayAmount: display?.amount,
 							displayCurrency: display?.currency,
@@ -126,6 +134,7 @@ export class AddScheduleModal extends Modal {
 					if (result.success) {
 						new Notice(this.editingSchedule ? `Schedule "${name}" updated successfully` : `Schedule "${name}" created successfully`);
 						this.close();
+						this.app.workspace.trigger(SCHEDULES_CHANGED_EVENT);
 						if (this.onSuccess) this.onSuccess();
 					} else {
 						new Notice(`Failed to save schedule: ${result.error || 'Unknown error'}`);

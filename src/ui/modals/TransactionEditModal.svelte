@@ -27,6 +27,7 @@
 	export let initialAccount: string | null = null;
 
 	import { SnippetSuggestModal } from "./SnippetSuggestModal";
+	import { parseTransactionText } from "../../utils/transactionText";
 	import { Notice } from "obsidian";
 
 	import PostingRow from "./transaction-edit/PostingRow.svelte";
@@ -711,218 +712,31 @@
 	}
 
 	// Parse Beancount transaction text into fields
+	// Snippet text → form state. Parsing lives in parseTransactionText(); this
+	// adds the form's default cost/price objects and drops the "Snippet" key
+	// that createSnippet() writes to name the snippet.
 	function parseBeancountTransaction(text: string) {
-		const lines = text.split(/\r?\n/);
-		let payee = '';
-		let narration = '';
-		let flag = '*';
-		const tags: string[] = [];
-		const links: string[] = [];
-		const metadata: Record<string, string> = {};
-		const postings: any[] = [];
-
-		if (lines.length === 0) return { payee, narration, flag, tags, links, metadata, postings };
-
-		// Header parse
-		const header = lines[0].trim();
-		const dateMatch = header.match(/^\d{4}-\d{2}-\d{2}\s+([*!])/);
-		if (dateMatch) {
-			flag = dateMatch[1];
-		}
-
-		// Extract tags from header
-		const tagMatches = header.matchAll(/#([A-Za-z0-9_-]+)/g);
-		for (const match of tagMatches) {
-			tags.push(match[1]);
-		}
-
-		// Extract links from header
-		const linkMatches = header.matchAll(/\^([A-Za-z0-9_-]+)/g);
-		for (const match of linkMatches) {
-			links.push(match[1]);
-		}
-
-		// Extract payee and narration quotes
-		const quotes: string[] = [];
-		let inQuote = false;
-		let currentQuote = '';
-		for (let i = 0; i < header.length; i++) {
-			const char = header[i];
-			if (char === '"' && (i === 0 || header[i - 1] !== '\\')) {
-				if (inQuote) {
-					quotes.push(currentQuote);
-					currentQuote = '';
-					inQuote = false;
-				} else {
-					inQuote = true;
-				}
-			} else if (inQuote) {
-				currentQuote += char;
-			}
-		}
-
-		if (quotes.length >= 2) {
-			payee = quotes[0];
-			narration = quotes[1];
-		} else if (quotes.length === 1) {
-			narration = quotes[0];
-		}
-
-		let hasSeenPostings = false;
-		let currentPosting: any = null;
-
-		for (let i = 1; i < lines.length; i++) {
-			const line = lines[i];
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith(';')) continue;
-
-			// Check if metadata line
-			const metadataMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s+(.+)/);
-			if (metadataMatch) {
-				const key = metadataMatch[1];
-				const value = metadataMatch[2].replace(/^["']|["']$/g, '');
-				if (key.toLowerCase() === 'snippet') continue;
-
-				if (!hasSeenPostings) {
-					metadata[key] = value;
-				} else if (currentPosting) {
-					if (!currentPosting.metadata) currentPosting.metadata = {};
-					currentPosting.metadata[key] = value;
-				}
-				continue;
-			}
-
-			// Clean inline comment from posting line
-			const commentIdx = trimmed.indexOf(';');
-			let mainLine = commentIdx >= 0 ? trimmed.substring(0, commentIdx).trim() : trimmed;
-			let comment = commentIdx >= 0 ? trimmed.substring(commentIdx + 1).trim() : '';
-
-			// Extract posting flag if present
-			let postingFlag: string | null = null;
-			if (mainLine.startsWith('* ') || mainLine.startsWith('! ')) {
-				postingFlag = mainLine[0];
-				mainLine = mainLine.substring(2).trim();
-			}
-
-			const accountMatch = mainLine.match(/^([A-Z0-9][A-Za-z0-9:-]+)/);
-			if (accountMatch) {
-				hasSeenPostings = true;
-				const account = accountMatch[1];
-				let rest = mainLine.substring(account.length).trim();
-
-				let amount = '';
-				let currency = '';
-				let cost: any = null;
-				let price: any = null;
-
-				if (rest) {
-					// Price (starts with @ or @@)
-					const priceIdx = rest.search(/@@?/);
-					let priceStr = '';
-					if (priceIdx >= 0) {
-						priceStr = rest.substring(priceIdx).trim();
-						rest = rest.substring(0, priceIdx).trim();
-					}
-
-					// Cost (starts with { or {{, ends with } or }})
-					const costStartIdx = rest.indexOf('{');
-					let costStr = '';
-					if (costStartIdx >= 0) {
-						const costEndIdx = rest.lastIndexOf('}');
-						if (costEndIdx > costStartIdx) {
-							costStr = rest.substring(costStartIdx, costEndIdx + 1);
-							rest = rest.substring(0, costStartIdx).trim();
-						}
-					}
-
-					// Amount Currency
-					if (rest) {
-						const parts = rest.split(/\s+/);
-						if (parts.length >= 1) amount = parts[0];
-						if (parts.length >= 2) currency = parts[1];
-					}
-
-					// Cost parse
-					if (costStr) {
-						const isTotal = costStr.startsWith('{{');
-						const costInner = costStr.replace(/^\{+/, '').replace(/\}+$/, '').trim();
-						const costParts = costInner.split(',').map(s => s.trim());
-						let costNum = '';
-						let costCurr = currency || '';
-						let costDate = '';
-						let costLabel = '';
-
-						if (costParts.length >= 1) {
-							const firstPart = costParts[0].split(/\s+/);
-							costNum = firstPart[0];
-							if (firstPart.length >= 2) costCurr = firstPart[1];
-						}
-						if (costParts.length >= 2) {
-							if (/^\d{4}-\d{2}-\d{2}/.test(costParts[1])) {
-								costDate = costParts[1];
-							} else if (costParts[1].startsWith('"')) {
-								costLabel = costParts[1].replace(/^"/, '').replace(/"$/, '');
-							}
-						}
-						if (costParts.length >= 3) {
-							if (costParts[2].startsWith('"')) {
-								costLabel = costParts[2].replace(/^"/, '').replace(/"$/, '');
-							}
-						}
-
-						cost = {
-							number: costNum,
-							currency: costCurr,
-							date: costDate,
-							label: costLabel,
-							isTotal
-						};
-					}
-
-					// Price parse
-					if (priceStr) {
-						const isTotal = priceStr.startsWith('@@');
-						const priceInner = priceStr.replace(/^@@?/, '').trim();
-						const priceParts = priceInner.split(/\s+/);
-						let priceAmt = '';
-						let priceCurr = '';
-
-						if (priceParts.length >= 1) priceAmt = priceParts[0];
-						if (priceParts.length >= 2) priceCurr = priceParts[1];
-
-						price = {
-							amount: priceAmt,
-							currency: priceCurr,
-							isTotal
-						};
-					}
-				}
-
-				currentPosting = {
-					account,
-					amount,
-					currency,
-					flag: postingFlag,
-					comment,
-					metadata: {},
-					cost: cost || {
-						number: '',
-						currency: currency || 'USD',
-						date: '',
-						label: '',
-						isTotal: false
-					},
-					price: price || {
-						amount: '',
-						currency: currency || 'USD',
-						isTotal: false
-					}
-				};
-				postings.push(currentPosting);
-			}
-		}
-
-		return { payee, narration, flag, tags, links, metadata, postings };
+		const parsed = parseTransactionText(text);
+		const withoutSnippetKey = (map: Record<string, string>) =>
+			Object.fromEntries(Object.entries(map).filter(([key]) => key.toLowerCase() !== 'snippet'));
+		return {
+			payee: parsed.payee,
+			narration: parsed.narration,
+			flag: parsed.flag,
+			tags: parsed.tags,
+			links: parsed.links,
+			metadata: withoutSnippetKey(parsed.metadata),
+			postings: parsed.postings.map((p) => ({
+				account: p.account,
+				amount: p.amount,
+				currency: p.currency,
+				flag: p.flag,
+				comment: p.comment,
+				metadata: withoutSnippetKey(p.metadata),
+				cost: p.cost ?? { number: '', currency: p.currency || 'USD', date: '', label: '', isTotal: false },
+				price: p.price ?? { amount: '', currency: p.currency || 'USD', isTotal: false },
+			})),
+		};
 	}
 
 	// Open load snippet suggest modal

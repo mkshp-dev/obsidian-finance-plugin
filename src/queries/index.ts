@@ -178,19 +178,27 @@ export function getTargetListQuery(): string {
 // --- Scheduled/Recurring Transactions Query ---
 
 /** Max postings a single schedule can carry — the SELECT enumerates this many
- * posting{N}Account/Amount/Currency meta columns unconditionally (most are
- * NULL for schedules with fewer postings), since BQL can't select a dynamic
- * number of columns in one query. */
+ * posting{N}* meta columns unconditionally (most are NULL for schedules with
+ * fewer postings), since BQL can't select a dynamic number of columns in one
+ * query. */
 export const MAX_SCHEDULE_POSTINGS = 8;
+
+/** Per-posting meta key suffixes written by buildDirectiveLines() — each is
+ * selected as `_p{N}{suffix.toLowerCase()}` and read by parseScheduleRow(). */
+const SCHEDULE_POSTING_FIELDS = [
+	'Account', 'Amount', 'Currency', 'Flag', 'Comment',
+	'CostNumber', 'CostCurrency', 'CostDate', 'CostLabel', 'CostTotal',
+	'PriceAmount', 'PriceCurrency', 'PriceTotal', 'Meta',
+];
 
 export function getScheduleListQuery(): string {
 	const postingCols: string[] = [];
 	for (let i = 1; i <= MAX_SCHEDULE_POSTINGS; i++) {
-		postingCols.push(`meta('posting${i}Account') AS _p${i}account`);
-		postingCols.push(`meta('posting${i}Amount') AS _p${i}amount`);
-		postingCols.push(`meta('posting${i}Currency') AS _p${i}currency`);
+		for (const field of SCHEDULE_POSTING_FIELDS) {
+			postingCols.push(`meta('posting${i}${field}') AS _p${i}${field.toLowerCase()}`);
+		}
 	}
-	return `SELECT date AS _startDateCol, description AS _name, meta('frequency') AS _frequency, meta('startDate') AS _startDate, meta('nextDate') AS _nextDate, meta('lastGenerated') AS _lastGenerated, bool(meta('active')) AS _active, meta('payee') AS _payee, meta('narration') AS _narration, meta('flag') AS _flag, meta('tags') AS _tags, meta('links') AS _links, meta('displayAmount') AS _displayAmount, meta('displayCurrency') AS _displayCurrency, meta('postingCount') AS _postingCount, ${postingCols.join(', ')}, meta('filename') AS _filename, meta('lineno') AS _lineno FROM events WHERE type='Recurring'`;
+	return `SELECT date AS _startDateCol, description AS _name, meta('frequency') AS _frequency, meta('startDate') AS _startDate, meta('nextDate') AS _nextDate, meta('lastGenerated') AS _lastGenerated, bool(meta('active')) AS _active, meta('payee') AS _payee, meta('narration') AS _narration, meta('flag') AS _flag, meta('tags') AS _tags, meta('links') AS _links, meta('txnMeta') AS _txnMeta, meta('displayAmount') AS _displayAmount, meta('displayCurrency') AS _displayCurrency, meta('postingCount') AS _postingCount, ${postingCols.join(', ')}, meta('filename') AS _filename, meta('lineno') AS _lineno FROM events WHERE type='Recurring'`;
 }
 
 /**
