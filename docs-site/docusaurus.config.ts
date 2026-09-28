@@ -15,7 +15,7 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://mkshp-dev.github.io',
+  url: 'https://docs.mkshp.dev',
   // Set the /<baseUrl>/ pathname under which your site is served
   baseUrl: '/obsidian-finance-plugin/',
 
