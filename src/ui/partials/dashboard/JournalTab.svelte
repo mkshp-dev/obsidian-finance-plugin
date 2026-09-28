@@ -1,4 +1,5 @@
 <script lang="ts">
+    import HelpTip from '../../common/HelpTip.svelte';
     import { onMount, onDestroy } from 'svelte';
     import { debounce, getOpenAccounts, getPayees, getTags, deleteTransaction, deleteBalance, deleteNote, createSnippet, type TransactionData, type CostData, type PriceDataPayload } from '../../../utils/index';
     import SkeletonLoader from '../../common/SkeletonLoader.svelte';
@@ -524,6 +525,7 @@
             <div class="filter-actions">
                  <button class="btn" on:click={handleClear} disabled={isLoading}>Clear</button>
                  <button class="btn btn-primary" on:click={() => refresh()} disabled={isLoading}>Refresh</button>
+                 <HelpTip topic="journal" />
             </div>
         </div>
     </div>

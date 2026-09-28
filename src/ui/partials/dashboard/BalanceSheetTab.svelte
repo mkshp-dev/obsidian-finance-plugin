@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { createEventDispatcher } from 'svelte';
 	// --- REMOVED onMount, parseCsv, queries, plugin imports ---
 	import { writable, type Writable } from 'svelte/store';
@@ -242,7 +243,7 @@
 <div class="balance-sheet-container">
 	<!-- Header: Title + Account Management buttons + Refresh -->
 	<div class="balance-sheet-header">
-		<h2>Accounts and Balances</h2>
+		<h2>Accounts and Balances <HelpTip topic="balances" /></h2>
 		<div class="header-controls">
 			<div class="account-management-section">
 				<button class="account-action-btn open-account-btn" on:click={handleOpenAccount}>

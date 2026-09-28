@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **In-app help icons** — Each Snapshot sidebar tab and dashboard section now has a small ⓘ icon. Hover to preview, or click to pin, a short guide to that section's workflow and buttons. You can hide the icons with **Settings → Show help icons**.
+
 ## 2.4.3 - 2026-09-21
 
 - **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { onMount, createEventDispatcher } from 'svelte';
 	import type { AccountNode } from '../../../models/account';
 	import { debounce } from '../../../utils/index';
@@ -186,6 +187,7 @@
 			<div>
 				<button class="btn" on:click={handleClear} disabled={state.isLoading || state.isLoadingFilters}>Clear</button>
 				<button class="btn btn-primary" on:click={handleRefresh} disabled={state.isLoading || state.isLoadingFilters}>Refresh</button>
+				<HelpTip topic="transactions" />
 			</div>
 		</div>
 

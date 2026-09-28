@@ -59,6 +59,8 @@ export interface BeancountPluginSettings {
     formatOnSave: boolean;
     /** Lint mode for inline bean-check diagnostics: 'off' | 'on-save' | 'on-change'. */
     lintMode: LintMode;
+    /** Whether to show the "i" help icons on sidebar and dashboard sections. */
+    showHelpTips: boolean;
     /** Whether the user has completed the onboarding wizard. */
     onboardingCompleted: boolean;
 }
@@ -91,6 +93,7 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     enableUserSnippets: false,
     formatOnSave: false,
     lintMode: 'on-save',
+    showHelpTips: true,
     onboardingCompleted: false,
 }
 
@@ -115,6 +118,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         return {
             operatingCurrency: { name: 'Operating currency', description: 'The currency to use for transaction defaults and for consolidating totals.' },
             dashboardDefaultPeriod: { name: 'Default dashboard period', description: 'Choose the period shown by dashboard summaries when the dashboard first loads.' },
+            showHelpTips: { name: 'Show help icons', description: 'Show the ⓘ icon on sidebar and dashboard sections. Hover or click it to see how that section works.' },
             structuredFolderName: { name: 'Base folder name', description: 'The name of the root folder in your vault where Beancount files will be stored.' },
             fileOrganization: { name: 'File organization', description: 'How transactions should be split into separate files.' },
             accountAutocomplete: { name: 'Editor autocomplete', description: 'Show context-aware completions in .beancount files.' },
@@ -262,6 +266,17 @@ export class BeancountSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.dashboardDefaultPeriod = value as DashboardDefaultPeriod;
                     await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Show help icons')
+            .setDesc('Show the ⓘ icon on sidebar and dashboard sections. Hover or click it to see how that section works.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showHelpTips)
+                .onChange(async (value) => {
+                    this.plugin.settings.showHelpTips = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.applyHelpTipVisibility();
                 }));
 
         new Setting(containerEl)

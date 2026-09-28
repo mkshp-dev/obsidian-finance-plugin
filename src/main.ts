@@ -60,6 +60,10 @@ export default class BeancountPlugin extends Plugin {
 		// Initialize Logger
 		Logger.setDebugMode(this.settings.debugMode);
 		Logger.log('Plugin loading...');
+		this.applyHelpTipVisibility();
+		this.registerEvent(this.app.workspace.on('window-open', (_win, popout) => {
+			popout.document.body.toggleClass('beancount-hide-help', !this.settings.showHelpTips);
+		}));
 
 		// Load snippets if enabled
 		if (this.settings.enableUserSnippets) {
@@ -403,6 +407,7 @@ export default class BeancountPlugin extends Plugin {
 	 */
 	onunload() {
 		Logger.log('Plugin unloading...');
+		for (const doc of this.getOpenDocuments()) doc.body.removeClass('beancount-hide-help');
 		// Cleanup is handled automatically by registerInterval
 	}
 
@@ -443,6 +448,22 @@ export default class BeancountPlugin extends Plugin {
 			this.settings.onboardingCompleted = true;
 			await this.saveSettings();
 		}
+	}
+
+	/** Show/hide the "i" help icons on plugin surfaces (see HelpTip.svelte). */
+	applyHelpTipVisibility() {
+		for (const doc of this.getOpenDocuments()) {
+			doc.body.toggleClass('beancount-hide-help', !this.settings.showHelpTips);
+		}
+	}
+
+	/** Main window document plus any popout windows currently hosting a leaf. */
+	private getOpenDocuments(): Set<Document> {
+		const docs = new Set<Document>([this.app.workspace.containerEl.ownerDocument]);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			docs.add(leaf.view.containerEl.ownerDocument);
+		});
+		return docs;
 	}
 
 	async saveSettings() {

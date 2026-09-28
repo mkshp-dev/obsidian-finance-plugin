@@ -3,6 +3,7 @@
 	import { Notice } from 'obsidian'; // Ensure Notice is imported
 	import UpcomingTab from './UpcomingTab.svelte';
 	import TabBar from '../../common/TabBar.svelte';
+	import HelpTip from '../../common/HelpTip.svelte';
 
 	export let plugin: any = null;
 	export let isLoading = true;
@@ -145,7 +146,8 @@
 </div>
 
 <!-- Upper-region toggle: Key Metrics / Upcoming -->
-<div class="upper-tab-strip">
+<div class="upper-tab-strip tab-strip-with-help">
+	<div class="tab-strip-bar">
 	<TabBar
 		tabs={[
 			{ value: 'metrics', label: 'Key Metrics' },
@@ -155,6 +157,8 @@
 		on:change={(e) => switchUpperTab(e.detail)}
 		ariaLabel="Snapshot upper section"
 	/>
+	</div>
+	<HelpTip topic={activeUpperTab === 'metrics' ? 'snapshotMetrics' : 'upcoming'} />
 </div>
 
 <div class="upper-tab-content" class:hidden={activeUpperTab !== 'metrics'}>
@@ -192,7 +196,8 @@
 
 <!-- Tabbed bottom section -->
 <hr class="tab-separator">
-<div class="bottom-tab-strip">
+<div class="bottom-tab-strip tab-strip-with-help">
+	<div class="tab-strip-bar">
 	<TabBar
 		tabs={[
 			{ value: 'errors', label: 'Errors', ...(errorCount > 0 ? { count: errorCount, tone: 'error' } : {}) },
@@ -202,6 +207,8 @@
 		on:change={(e) => switchTab(e.detail)}
 		ariaLabel="Snapshot bottom section"
 	/>
+	</div>
+	<HelpTip topic={activeTab === 'errors' ? 'errors' : 'reconciliation'} />
 </div>
 
 <!-- Tab content -->
@@ -512,6 +519,17 @@
 
 	.bottom-tab-strip {
 		margin: var(--size-4-3) 0 var(--size-4-2) 0;
+	}
+
+	.tab-strip-with-help {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-1);
+	}
+
+	.tab-strip-bar {
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 
 	.upper-tab-content.hidden {

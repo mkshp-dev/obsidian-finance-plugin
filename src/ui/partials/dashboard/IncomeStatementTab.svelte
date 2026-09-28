@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { createEventDispatcher } from 'svelte';
 	import { writable, type Writable } from 'svelte/store';
 	import type { IncomeStatementController, IncomeStatementState } from '../../../controllers/IncomeStatementController';
@@ -161,7 +162,7 @@
 <div class="income-statement-container">
 	<!-- Header -->
 	<div class="income-statement-header">
-		<h2>Income Statement</h2>
+		<h2>Income Statement <HelpTip topic="incomeStatement" /></h2>
 		<div class="header-controls">
 			<button class="btn btn-primary" on:click={handleRefresh} disabled={state.isLoading}>Refresh</button>
 		</div>
