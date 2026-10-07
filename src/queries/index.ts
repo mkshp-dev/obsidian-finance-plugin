@@ -425,3 +425,26 @@ export function getAccountBalanceHistoryQuery(account: string, interval: 'month'
 	}
 	return `SELECT year, month, number(only('${currency}', convert(last(balance), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1))))) WHERE account = '${safeAccount}' GROUP BY year, month ORDER BY year, month`;
 }
+
+// --- Import Queries ---
+
+/** Open accounts with `aliases` metadata on their open directive, for matching statement rows. */
+export function getAliasAccountsQuery(): string {
+	return `SELECT account, open.meta['aliases'] AS aliases FROM #accounts WHERE NOT bool(close) AND open.meta['aliases'] IS NOT NULL`;
+}
+
+/** `import-ref` values already in the ledger between two dates (inclusive). */
+export function getImportRefsQuery(from: string, to: string): string {
+	return `SELECT DISTINCT entry_meta('import-ref') AS ref FROM postings WHERE date >= ${from} AND date <= ${to} AND entry_meta('import-ref') IS NOT NULL`;
+}
+
+/** Postings on one account between two dates (inclusive), to spot rows already entered. */
+export function getImportCandidatePostingsQuery(account: string, from: string, to: string): string {
+	const safeAccount = escapeBqlString(account);
+	return `SELECT date, number, currency, payee, narration, entry_meta('import-ref') AS ref, filename, lineno FROM postings WHERE account = '${safeAccount}' AND date >= ${from} AND date <= ${to}`;
+}
+
+/** The account's balance in one currency before `date`, to compare with a statement's opening balance. */
+export function getBalanceBeforeQuery(account: string, currency: string, date: string): string {
+	return `SELECT sum(number) AS balance FROM postings WHERE account = '${escapeBqlString(account)}' AND currency = '${escapeBqlString(currency)}' AND date < ${date}`;
+}

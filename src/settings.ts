@@ -5,6 +5,7 @@ import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 import { updateOperatingCurrency } from './utils/index';
 import type { LintMode } from './lang/beancount-lint';
+import type { ImportProfile } from './models/import';
 import { Logger } from './utils/logger';
 
 
@@ -63,6 +64,8 @@ export interface BeancountPluginSettings {
     showHelpTips: boolean;
     /** Whether the user has completed the onboarding wizard. */
     onboardingCompleted: boolean;
+    /** Saved column mappings for bank statement imports, one per bank format. */
+    importProfiles: ImportProfile[];
 }
 
 /**
@@ -95,6 +98,7 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     lintMode: 'on-save',
     showHelpTips: true,
     onboardingCompleted: false,
+    importProfiles: [],
 }
 
 /**

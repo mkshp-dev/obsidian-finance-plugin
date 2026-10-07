@@ -2,57 +2,36 @@
 // Turning statement rows into draft transactions using an ImportMapping.
 
 import {
+	FILE_NAME_FIELD,
 	IMPORT_REF_KEY,
 	type AccountMatcher,
-	type AmountSource,
 	type BalanceCheck,
+	type ColumnType,
+	type FieldValue,
 	type ImportDraft,
 	type ImportMapping,
 } from '../../models/import';
-import { addAmounts, amountsEqual, detectDateOrder, isAmountLike, negateAmount, parseAmount, parseDate } from './values';
+import type { PostingData } from '../directives/types';
+import { addAmounts, addDays, amountsEqual, negateAmount, parseAmount, parseDate } from './values';
+import { detectColumnTypes, readNumber } from './columns';
 
-const TEMPLATE_FIELD = /\{\{\s*(.+?)\s*\}\}/g;
+const COLUMN_REF = /^=\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/;
 
 /**
- * Replaces each `{{Column label}}` with that column's value and collapses
- * runs of whitespace (banks pad truncated names: "ASHISH   NARAY").
- * Unknown labels are reported in `missing` and left empty.
+ * Reads a template field: plain text is used as written, `={{Column}}`
+ * names a column. Anything else starting with `=` isn't supported yet.
  */
-export function renderTemplate(template: string, labels: string[], cells: string[]): { text: string; missing: string[] } {
-	const missing: string[] = [];
-	const text = template.replace(TEMPLATE_FIELD, (_, label: string) => {
-		const i = labels.indexOf(label);
-		if (i < 0) { missing.push(label); return ''; }
-		return cells[i] ?? '';
-	});
-	return { text: text.replace(/\s+/g, ' ').trim(), missing };
+export function parseField(value: FieldValue): { text: string } | { column: string } | { error: string } {
+	const v = value.trim();
+	if (!v.startsWith('=')) return { text: v };
+	const m = COLUMN_REF.exec(v);
+	return m ? { column: m[1] } : { error: `"${v}" isn't supported yet. Use ={{Column name}}` };
 }
 
-/** Reads a signed amount (positive = money in) from a row, or an error message. */
-export function readAmount(source: AmountSource, cells: string[], decimalMark: '.' | ','): { amount: string } | { error: string } {
-	const cell = (i: number) => cells[i] ?? '';
-
-	if (source.mode === 'signed') {
-		const a = parseAmount(cell(source.column), decimalMark);
-		if (a === null) return { error: `Can't read amount "${cell(source.column)}"` };
-		return { amount: source.invert ? negateAmount(a) : a };
-	}
-
-	if (source.mode === 'indicator') {
-		const a = parseAmount(cell(source.column), decimalMark);
-		if (a === null) return { error: `Can't read amount "${cell(source.column)}"` };
-		const ind = cell(source.indicatorColumn).toUpperCase();
-		if (ind === source.debitValue.toUpperCase()) return { amount: negateAmount(a) };
-		if (ind === source.creditValue.toUpperCase()) return { amount: a };
-		return { error: `Expected "${source.debitValue}" or "${source.creditValue}", found "${cell(source.indicatorColumn)}"` };
-	}
-
-	const debit = cell(source.debitColumn) ? parseAmount(cell(source.debitColumn), decimalMark) : '0';
-	const credit = cell(source.creditColumn) ? parseAmount(cell(source.creditColumn), decimalMark) : '0';
-	if (debit === null) return { error: `Can't read debit "${cell(source.debitColumn)}"` };
-	if (credit === null) return { error: `Can't read credit "${cell(source.creditColumn)}"` };
-	if (!cell(source.debitColumn) && !cell(source.creditColumn)) return { error: 'Both debit and credit are empty' };
-	return { amount: addAmounts(credit, negateAmount(debit)) };
+/** The column a field takes its value from, or null for plain text. */
+export function fieldColumn(value: FieldValue): string | null {
+	const f = parseField(value);
+	return 'column' in f ? f.column : null;
 }
 
 /**
@@ -123,83 +102,144 @@ export interface DraftResult {
 	closingBalance: { date: string; amount: string } | null;
 }
 
-function nextDay(date: string): string {
-	const d = new Date(`${date}T00:00:00Z`);
-	d.setUTCDate(d.getUTCDate() + 1);
-	return d.toISOString().slice(0, 10);
+export interface DraftContext {
+	/** Finds the account for text taken from a column, e.g. by aliases. */
+	matchAccount?: AccountMatcher;
+	/** Open accounts: column text that is exactly one of these is used as the account. */
+	accounts?: string[];
+	/** The statement file's name, for `={{File name}}`. */
+	fileName?: string;
+}
+
+/** Tags and links can only hold letters, digits and `-_/.`. */
+function slug(text: string): string {
+	return text.replace(/^[#^]/, '').replace(/[^A-Za-z0-9\-_/.]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
 }
 
 /** Converts table rows (without the header) into draft transactions for review. */
-export function buildDrafts(
-	rows: string[][],
-	labels: string[],
-	mapping: ImportMapping,
-	matchAccount?: AccountMatcher,
-): DraftResult {
+export function buildDrafts(rows: string[][], labels: string[], mapping: ImportMapping, ctx: DraftContext = {}): DraftResult {
 	const seenRefs = new Map<string, number>();
 	const amounts: (string | null)[] = [];
 	const balances: (string | null)[] = [];
+	const types = mapping.columnTypes;
+	const fileName = (ctx.fileName ?? '').split('/').pop()!.replace(/\.[^.]+$/, '');
 
 	const drafts: (ImportDraft & { date: string })[] = rows.map((cells, sourceIndex) => {
 		const errors: string[] = [];
-		const render = (template: string) => {
-			const r = renderTemplate(template, labels, cells);
-			for (const m of r.missing) errors.push(`Unknown column "${m}"`);
-			return r.text;
+
+		/** A field's value for this row and the column it came from (-1 for plain text), or null after an error. */
+		const resolve = (value: FieldValue, what: string): [string, number] | null => {
+			const f = parseField(value);
+			if ('error' in f) { errors.push(`${what}: ${f.error}`); return null; }
+			if ('text' in f) return [f.text, -1];
+			const i = labels.indexOf(f.column);
+			if (i >= 0) return [(cells[i] ?? '').replace(/\s+/g, ' ').trim(), i];
+			if (f.column === FILE_NAME_FIELD) return [fileName, -1];
+			errors.push(`${what}: there's no column "${f.column}"`);
+			return null;
+		};
+		const text = (value: FieldValue, what: string) => resolve(value, what)?.[0] ?? '';
+
+		/** The number for this row, null when the field is empty, undefined after an error. */
+		const number = (value: FieldValue, what: string): string | null | undefined => {
+			const r = resolve(value, what);
+			if (!r) return undefined;
+			if (r[0] === '') return null;
+			const [raw, column] = r;
+			if (column < 0) {
+				const n = parseAmount(raw, mapping.decimalMark);
+				if (n === null) errors.push(`${what}: "${raw}" isn't a number`);
+				return n ?? undefined;
+			}
+			if (types[column]?.kind !== 'number') { errors.push(`${what}: "${labels[column]}" isn't a Number column`); return undefined; }
+			const n = readNumber(cells, column, types[column], mapping.decimalMark);
+			if ('error' in n) { errors.push(`${what}: ${n.error}`); return undefined; }
+			return n.amount;
 		};
 
-		const dateCell = cells[mapping.date.column] ?? '';
-		const date = parseDate(dateCell, mapping.date.order);
-		if (!date) errors.push(`Can't read date "${dateCell}"`);
+		const dateOf = (): string | null => {
+			const r = resolve(mapping.date, 'Date');
+			if (!r) return null;
+			const [raw, column] = r;
+			const type = column >= 0 ? types[column] : undefined;
+			if (column >= 0 && !(type && 'order' in type)) { errors.push(`Date: "${labels[column]}" isn't a Date column`); return null; }
+			const date = type && 'order' in type ? parseDate(raw, type.order) : /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+			if (!date) errors.push(`Date: can't read "${raw}"`);
+			return date;
+		};
 
-		const read = readAmount(mapping.amount, cells, mapping.decimalMark);
-		const amount = 'amount' in read ? read.amount : null;
-		if ('error' in read) errors.push(read.error);
+		const date = dateOf();
+		const narration = text(mapping.narration, 'Narration');
+		let payee = text(mapping.payee, 'Payee');
+
+		let matchedAlias: string | undefined;
+		let match: ImportDraft['match'];
+		let unmatched = false;
+		let emptyAmounts = 0;
+		const postings: PostingData[] = mapping.postings.map((p, i) => {
+			const what = `Posting ${i + 1}`;
+			const resolved = resolve(p.account, `${what} account`);
+			let account = resolved?.[0] ?? '';
+			// An account taken from a column (other than the statement's own) is looked up by name, then by alias.
+			if (resolved && resolved[1] >= 0 && i > 0 && !match) {
+				match = { posting: i, text: account };
+				if (!ctx.accounts?.includes(account)) {
+					const found = ctx.matchAccount?.(account) ?? null;
+					matchedAlias = found?.alias;
+					account = found?.account ?? mapping.unmatchedAccount;
+					unmatched = !found;
+				}
+			}
+			if (!account) errors.push(`${what} needs an account`);
+
+			const amount = number(p.amount, `${what} amount`);
+			const currency = text(p.currency, `${what} currency`);
+			if (amount === null) emptyAmounts++;
+			else if (amount !== undefined && !currency) errors.push(`${what} needs a currency`);
+			return amount == null ? { account } : { account, amount, currency };
+		});
+		if (emptyAmounts > 1) errors.push('Only one posting can be left without an amount');
+
+		const own = postings[0]?.amount;
+		const amount = own === undefined ? null : String(own);
 		amounts.push(amount);
 
 		let balance: string | null = null;
-		if (mapping.balance) {
-			const b = readAmount(mapping.balance, cells, mapping.decimalMark);
+		if (mapping.balanceColumn !== null) {
+			const b = readNumber(cells, mapping.balanceColumn, types[mapping.balanceColumn], mapping.decimalMark);
 			balance = 'amount' in b ? b.amount : null;
 		}
 		balances.push(balance);
 
-		const narration = render(mapping.narration);
-		const refCell = mapping.importRef.mode === 'column' ? (cells[mapping.importRef.column] ?? '') : '';
-		const importRef = refCell || generateImportRef([date ?? dateCell, amount ?? '', narration, balance ?? ''], seenRefs);
-
-		let counter: string;
-		let matchedAlias: string | undefined;
-		if (mapping.counterAccount.mode === 'fixed') {
-			counter = mapping.counterAccount.account;
-		} else {
-			const match = matchAccount?.(render(mapping.matchText)) ?? null;
-			counter = match?.account ?? mapping.counterAccount.fallback;
-			matchedAlias = match?.alias;
+		const metadata: Record<string, string> = {};
+		for (const [key, value] of Object.entries(mapping.metadata)) {
+			if (key !== IMPORT_REF_KEY && key.trim()) metadata[key.trim()] = text(value, `Metadata "${key}"`);
 		}
-		const payee = mapping.payeeFromAlias && matchedAlias ? matchedAlias : render(mapping.payee);
+		const importRef = text(mapping.metadata[IMPORT_REF_KEY] ?? '', IMPORT_REF_KEY)
+			|| generateImportRef([date ?? '', amount ?? '', narration, balance ?? ''], seenRefs);
 
-		const txn = date && amount !== null && errors.length === 0
+		if (mapping.payeeFromAlias && matchedAlias) payee = matchedAlias;
+		const tags = mapping.tags.map((t) => slug(text(t, 'Tag'))).filter(Boolean);
+		const links = mapping.links.map((l) => slug(text(l, 'Link'))).filter(Boolean);
+
+		const txn = date && errors.length === 0
 			? {
 				date,
-				flag: mapping.counterAccount.mode === 'aliases' && !matchedAlias ? '!' : '*',
+				flag: unmatched ? '!' : mapping.flag,
 				payee,
 				narration,
-				tags: mapping.tags ?? [],
-				links: [],
-				metadata: { [IMPORT_REF_KEY]: importRef },
-				postings: [
-					{ account: mapping.account, amount, currency: mapping.currency },
-					{ account: counter },
-				],
+				tags,
+				links,
+				metadata: { [IMPORT_REF_KEY]: importRef, ...metadata },
+				postings,
 			}
 			: null;
 
-		return { sourceIndex, cells, txn, importRef, matchedAlias, errors, date: date ?? '' };
+		return { sourceIndex, cells, txn, importRef, matchedAlias, match, errors, date: date ?? '' };
 	});
 
 	let balance: BalanceCheck | null = null;
-	if (mapping.balance) {
+	if (mapping.balanceColumn !== null) {
 		const unreadable = balances.findIndex((b, i) => b === null || amounts[i] === null);
 		balance = unreadable >= 0
 			? { ok: false, order: 'asc', breakAt: unreadable }
@@ -216,77 +256,64 @@ export function buildDrafts(
 
 	const lastDate = ordered.filter((d) => d.date).map((d) => d.date).pop();
 	const closingBalance = balance?.ok && balance.closing !== undefined && lastDate
-		? { date: nextDay(lastDate), amount: balance.closing }
+		? { date: addDays(lastDate, 1), amount: balance.closing }
 		: null;
 
 	return { drafts: ordered.map(({ date: _date, ...d }) => d), balance, closingBalance };
 }
 
-const DEBIT_WORDS = ['DR', 'D', 'DEBIT', 'WITHDRAWAL'];
-const CREDIT_WORDS = ['CR', 'C', 'CREDIT', 'DEPOSIT'];
-
 /**
- * A first guess at the mapping from the header and rows, for the user to
- * confirm. `account` is left empty; `currency` too unless given.
+ * A first guess at the template from the header, rows and column types,
+ * for the user to confirm. The statement account is left empty.
  */
-export function suggestMapping(labels: string[], rows: string[][], currency = ''): ImportMapping {
+export function suggestMapping(
+	labels: string[],
+	rows: string[][],
+	currency = '',
+	types: ColumnType[] = detectColumnTypes(rows, labels.length, labels),
+	decimalMark: '.' | ',' = '.',
+): ImportMapping {
 	const column = (i: number) => rows.map((r) => r[i] ?? '');
 	const filled = (i: number) => column(i).filter(Boolean);
 	const cols = labels.map((_, i) => i);
 	const named = (re: RegExp, among = cols) => among.find((i) => re.test(labels[i]));
+	const kind = (i: number) => types[i]?.kind;
+	const ref = (i: number | undefined) => (i === undefined ? '' : `={{${labels[i]}}}`);
 
-	const dateCols = cols.filter((i) => filled(i).length > 0 && detectDateOrder(filled(i)).order !== null);
-	const dateCol = named(/value\s*date/i, dateCols) ?? named(/date/i, dateCols) ?? dateCols[0] ?? 0;
+	const dateCols = cols.filter((i) => kind(i) === 'date' || kind(i) === 'datetime');
+	const dateCol = named(/value\s*date/i, dateCols) ?? named(/date/i, dateCols) ?? dateCols[0];
 
-	const indicatorOf = (i: number) => {
-		const vals = filled(i).map((v) => v.toUpperCase());
-		if (vals.length === 0) return null;
-		const debit = DEBIT_WORDS.find((w) => vals.includes(w));
-		const credit = CREDIT_WORDS.find((w) => vals.includes(w));
-		const allKnown = vals.every((v) => DEBIT_WORDS.includes(v) || CREDIT_WORDS.includes(v));
-		return allKnown ? { debitValue: debit ?? 'DR', creditValue: credit ?? 'CR' } : null;
-	};
 	const serial = (i: number) => /^(s\.?\s*no|sl|sr|serial|#)/i.test(labels[i]) || filled(i).every((v, n) => v === String(n + 1));
-	const numericCols = cols.filter((i) =>
-		!dateCols.includes(i) && !serial(i) && !indicatorOf(i) && filled(i).length > 0 && filled(i).every(isAmountLike));
+	const numberCols = cols.filter((i) => kind(i) === 'number' && !serial(i));
+	const fullNumberCols = numberCols.filter((i) => filled(i).length === rows.length);
+	const balanceCol = named(/balance/i, fullNumberCols);
+	const amountCols = fullNumberCols.filter((i) => i !== balanceCol);
+	const amountCol = named(/amount/i, amountCols) ?? amountCols[0] ?? numberCols.find((i) => i !== balanceCol);
 
-	// A number column followed by an indicator column, e.g. Kotak's "Amount","Dr / Cr".
-	const sourceFor = (i: number): AmountSource => {
-		const ind = indicatorOf(i + 1);
-		return ind ? { mode: 'indicator', column: i, indicatorColumn: i + 1, ...ind } : { mode: 'signed', column: i };
-	};
-
-	const balanceCol = named(/balance/i, numericCols);
-	const amountCols = numericCols.filter((i) => i !== balanceCol);
-	const amountLikeOrEmpty = cols.filter((i) => !dateCols.includes(i) && !indicatorOf(i) && column(i).every((v) => !v || isAmountLike(v)));
-	const debitCol = named(/debit|withdraw|paid out|money out/i, amountLikeOrEmpty);
-	const creditCol = named(/credit|deposit|paid in|money in/i, amountLikeOrEmpty);
-
-	const amount: AmountSource = debitCol !== undefined && creditCol !== undefined && debitCol !== creditCol
-		? { mode: 'split', debitColumn: debitCol, creditColumn: creditCol }
-		: sourceFor(named(/amount/i, amountCols) ?? amountCols[0] ?? 0);
-
-	const textCols = cols.filter((i) => !dateCols.includes(i) && !numericCols.includes(i) && !indicatorOf(i));
-	const avgLength = (i: number) => column(i).reduce((s, v) => s + v.length, 0) / Math.max(rows.length, 1);
+	const signColumns = new Set(types.flatMap((t) => (t.kind === 'number' && t.sign?.mode === 'indicator' ? [t.sign.column] : [])));
+	const textCols = cols.filter((i) => kind(i) === 'text' && !signColumns.has(i));
+	const avgLength = (i: number) => column(i).reduce((sum, v) => sum + v.length, 0) / Math.max(rows.length, 1);
 	const descCol = named(/desc|narration|particular|detail|remark|memo/i, textCols)
 		?? [...textCols].sort((a, b) => avgLength(b) - avgLength(a))[0];
 	const refCol = named(/ref|chq|cheque|utr|transaction id|txn id/i, textCols.filter((i) => i !== descCol));
 
-	const desc = descCol !== undefined ? `{{${labels[descCol]}}}` : '';
-	const dateValues = filled(dateCol);
-
 	return {
-		account: '',
-		currency,
-		decimalMark: '.',
-		date: { column: dateCol, order: detectDateOrder(dateValues).order ?? 'DMY' },
-		amount,
-		balance: balanceCol !== undefined ? sourceFor(balanceCol) : undefined,
+		version: 2,
+		decimalMark,
+		columnTypes: types,
+		date: ref(dateCol),
+		flag: '*',
 		payee: '',
-		narration: desc,
-		matchText: desc,
+		narration: ref(descCol),
+		tags: [],
+		links: [`={{${FILE_NAME_FIELD}}}`],
+		metadata: { [IMPORT_REF_KEY]: ref(refCol) },
+		postings: [
+			{ account: '', amount: ref(amountCol), currency },
+			{ account: ref(descCol), amount: '', currency: '' },
+		],
+		unmatchedAccount: 'Expenses:Uncategorized',
 		payeeFromAlias: true,
-		counterAccount: { mode: 'aliases', fallback: 'Expenses:Uncategorized' },
-		importRef: refCol !== undefined ? { mode: 'column', column: refCol } : { mode: 'generate' },
+		balanceColumn: balanceCol ?? null,
 	};
 }

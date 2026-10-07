@@ -57,6 +57,13 @@ describe('parseAmount', () => {
 
 	it('reads a comma decimal mark', () => {
 		expect(parseAmount('1.234,56', ',')).toBe('1234.56');
+		expect(parseAmount('1 234,5', ',')).toBe('1234.5');
+	});
+
+	it('rejects separators in the wrong places for the decimal mark', () => {
+		expect(parseAmount('1,234.56', ',')).toBeNull();
+		expect(parseAmount('12,5', '.')).toBeNull();
+		expect(parseAmount('1.2.3', '.')).toBeNull();
 	});
 
 	it('rejects text', () => {

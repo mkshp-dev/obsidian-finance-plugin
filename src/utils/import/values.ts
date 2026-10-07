@@ -37,6 +37,18 @@ export function parseDate(value: string, order: DateOrder): string | null {
 	return d.toISOString().slice(0, 10);
 }
 
+/** Shifts a `YYYY-MM-DD` date by `days` (negative to go back). */
+export function addDays(date: string, days: number): string {
+	const d = new Date(`${date}T00:00:00Z`);
+	d.setUTCDate(d.getUTCDate() + days);
+	return d.toISOString().slice(0, 10);
+}
+
+/** Whole days from `a` to `b`. */
+export function daysBetween(a: string, b: string): number {
+	return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+}
+
 const ORDERS: DateOrder[] = ['YMD', 'DMY', 'MDY'];
 
 export function isDateLike(value: string): boolean {
@@ -69,8 +81,12 @@ export function parseAmount(value: string, decimalMark: '.' | ',' = '.'): string
 	else if (s.startsWith('+')) s = s.slice(1);
 	else if (s.endsWith('-')) { negative = !negative; s = s.slice(0, -1); }
 
-	s = decimalMark === '.' ? s.replace(/[,'\s]/g, '') : s.replace(/[.'\s]/g, '').replace(',', '.');
-	if (!/^(\d+(\.\d*)?|\.\d+)$/.test(s)) return null;
+	// Thousands separators must sit between digit groups (2 or 3 digits for
+	// Indian "1,00,000"), so "1,234.56" isn't read as 1.23456 with a comma mark.
+	s = s.replace(/['\s]/g, '');
+	const grouped = decimalMark === '.' ? /^(\d+(,\d{2,3})*(\.\d*)?|\.\d+)$/ : /^(\d+(\.\d{3})*(,\d*)?|,\d+)$/;
+	if (!grouped.test(s)) return null;
+	s = decimalMark === '.' ? s.replace(/,/g, '') : s.replace(/\./g, '').replace(',', '.');
 	if (s.startsWith('.')) s = '0' + s;
 	if (s.endsWith('.')) s = s.slice(0, -1);
 

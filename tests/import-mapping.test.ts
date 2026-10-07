@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { readCsvRows, detectTable, columnLabels, headerSignature, detectCurrency } from '../src/utils/import/csvTable';
-import { buildDrafts, checkBalanceChain, readAmount, renderTemplate, suggestMapping } from '../src/utils/import/mapping';
+import { buildDrafts, checkBalanceChain, parseField, suggestMapping } from '../src/utils/import/mapping';
 import { generateTransactionText } from '../src/utils/directives/transactionDirectives';
 import type { AccountMatcher, ImportMapping } from '../src/models/import';
 
@@ -18,7 +18,9 @@ function loadKotak(text = KOTAK) {
 
 function kotakMapping(): ImportMapping {
 	const { rows, bounds, labels, data } = loadKotak();
-	return { ...suggestMapping(labels, data, detectCurrency(rows, bounds.headerRow) ?? ''), account: 'Assets:Bank:Kotak' };
+	const m = suggestMapping(labels, data, detectCurrency(rows, bounds.headerRow) ?? '');
+	m.postings[0].account = 'Assets:Bank:Kotak';
+	return m;
 }
 
 describe('finding the table', () => {
@@ -54,62 +56,50 @@ describe('finding the table', () => {
 	});
 });
 
-describe('suggestMapping', () => {
-	it('guesses the Kotak layout', () => {
-		expect(kotakMapping()).toMatchObject({
-			currency: 'INR',
-			date: { column: 2, order: 'DMY' },
-			amount: { mode: 'indicator', column: 5, indicatorColumn: 6, debitValue: 'DR', creditValue: 'CR' },
-			balance: { mode: 'indicator', column: 7, indicatorColumn: 8 },
-			narration: '{{Description}}',
-			importRef: { mode: 'column', column: 4 },
-			counterAccount: { mode: 'aliases', fallback: 'Expenses:Uncategorized' },
-		});
+describe('parseField', () => {
+	it('tells plain text from a column', () => {
+		expect(parseField(' Assets:Bank ')).toEqual({ text: 'Assets:Bank' });
+		expect(parseField('= {{ Value Date }}')).toEqual({ column: 'Value Date' });
+		expect(parseField('={{Dr / Cr (1)}}')).toEqual({ column: 'Dr / Cr (1)' });
 	});
 
-	it('detects separate withdrawal and deposit columns', () => {
+	it('rejects formulas beyond a single column for now', () => {
+		expect(parseField('={{A}} - {{B}}')).toHaveProperty('error');
+		expect(parseField('=SUM(A)')).toHaveProperty('error');
+	});
+});
+
+describe('suggestMapping', () => {
+	it('fills the Kotak template', () => {
+		const m = kotakMapping();
+		expect(m).toMatchObject({
+			version: 2,
+			date: '={{Value Date}}',
+			flag: '*',
+			payee: '',
+			narration: '={{Description}}',
+			tags: [],
+			links: ['={{File name}}'],
+			metadata: { 'import-ref': '={{Chq /Ref No.}}' },
+			postings: [
+				{ account: 'Assets:Bank:Kotak', amount: '={{Amount}}', currency: 'INR' },
+				{ account: '={{Description}}', amount: '', currency: '' },
+			],
+			unmatchedAccount: 'Expenses:Uncategorized',
+			balanceColumn: 7,
+		});
+		expect(m.columnTypes[5]).toEqual({ kind: 'number', sign: { mode: 'indicator', column: 6, debitValue: 'DR', creditValue: 'CR' } });
+	});
+
+	it('treats a withdrawal column as money out', () => {
 		const labels = ['Date', 'Narration', 'Withdrawal Amt.', 'Deposit Amt.', 'Closing Balance'];
 		const rows = [
 			['01/09/26', 'Coffee', '120.00', '', '880.00'],
 			['02/09/26', 'Salary', '', '5,000.00', '5,880.00'],
 		];
-		expect(suggestMapping(labels, rows)).toMatchObject({
-			date: { column: 0, order: 'DMY' },
-			amount: { mode: 'split', debitColumn: 2, creditColumn: 3 },
-			balance: { mode: 'signed', column: 4 },
-			narration: '{{Narration}}',
-			importRef: { mode: 'generate' },
-		});
-	});
-});
-
-describe('readAmount', () => {
-	it('signs amounts from an indicator column', () => {
-		const src = { mode: 'indicator', column: 0, indicatorColumn: 1, debitValue: 'DR', creditValue: 'CR' } as const;
-		expect(readAmount(src, ['889.00', 'DR'], '.')).toEqual({ amount: '-889.00' });
-		expect(readAmount(src, ['889.00', 'cr'], '.')).toEqual({ amount: '889.00' });
-		expect(readAmount(src, ['889.00', ''], '.')).toHaveProperty('error');
-	});
-
-	it('combines debit and credit columns', () => {
-		const src = { mode: 'split', debitColumn: 0, creditColumn: 1 } as const;
-		expect(readAmount(src, ['120.00', ''], '.')).toEqual({ amount: '-120.00' });
-		expect(readAmount(src, ['', '5,000.00'], '.')).toEqual({ amount: '5000.00' });
-		expect(readAmount(src, ['', ''], '.')).toHaveProperty('error');
-	});
-
-	it('can invert a signed column', () => {
-		expect(readAmount({ mode: 'signed', column: 0, invert: true }, ['250.00'], '.')).toEqual({ amount: '-250.00' });
-	});
-});
-
-describe('renderTemplate', () => {
-	it('fills columns and collapses padding', () => {
-		expect(renderTemplate('{{ Name }}: {{Note}}', ['Name', 'Note'], ['RAHUL   VERMA', 'rent'])).toEqual({ text: 'RAHUL VERMA: rent', missing: [] });
-	});
-
-	it('reports unknown columns', () => {
-		expect(renderTemplate('{{Nope}}', ['Name'], ['x']).missing).toEqual(['Nope']);
+		const m = suggestMapping(labels, rows);
+		expect(m.columnTypes[2]).toEqual({ kind: 'number', sign: { mode: 'negate' } });
+		expect(m).toMatchObject({ date: '={{Date}}', narration: '={{Narration}}', balanceColumn: 4, metadata: { 'import-ref': '' } });
 	});
 });
 
@@ -131,7 +121,7 @@ describe('buildDrafts on the Kotak statement', () => {
 		const alias = Object.keys(aliases).find((a) => text.includes(a));
 		return alias ? { account: aliases[alias], alias } : null;
 	};
-	const result = buildDrafts(data, labels, kotakMapping(), matcher);
+	const result = buildDrafts(data, labels, kotakMapping(), { matchAccount: matcher, fileName: 'Docs/Kotak Sep 2026.csv' });
 
 	it('confirms the balances add up and orders drafts oldest first', () => {
 		expect(result.balance).toEqual({ ok: true, order: 'desc', opening: '1500.00', closing: '49448.24' });
@@ -148,20 +138,19 @@ describe('buildDrafts on the Kotak statement', () => {
 		expect(result.closingBalance).toEqual({ date: '2026-09-23', amount: '49448.24' });
 	});
 
-	it('writes matched rows with the alias as payee', () => {
-		const text = generateTransactionText(result.drafts[7].txn!);
-		expect(text).toBe([
-			'2026-09-15 * "CRED Club" "UPI/CRED Club/UTIB/100000000008/payment on C"',
+	it('writes matched rows with the alias as payee and the file as link', () => {
+		expect(generateTransactionText(result.drafts[7].txn!)).toBe([
+			'2026-09-15 * "CRED Club" "UPI/CRED Club/UTIB/100000000008/payment on C" ^Kotak-Sep-2026',
 			'  import-ref: "UPI-200000000008"',
 			'  Assets:Bank:Kotak  -10994.04 INR',
 			'  Liabilities:CreditCard',
 		].join('\n'));
+		expect(result.drafts[7].match).toEqual({ posting: 1, text: 'UPI/CRED Club/UTIB/100000000008/payment on C' });
 	});
 
-	it('flags unmatched rows and sends them to the fallback account', () => {
-		const text = generateTransactionText(result.drafts[4].txn!);
-		expect(text).toBe([
-			'2026-09-05 ! "UPI/RAHUL VERMA/SBIN/100000000005/UPI"',
+	it('flags unmatched rows and sends them to the unmatched account', () => {
+		expect(generateTransactionText(result.drafts[4].txn!)).toBe([
+			'2026-09-05 ! "UPI/RAHUL VERMA/SBIN/100000000005/UPI" ^Kotak-Sep-2026',
 			'  import-ref: "UPI-200000000005"',
 			'  Assets:Bank:Kotak  100000.00 INR',
 			'  Expenses:Uncategorized',
@@ -174,24 +163,85 @@ describe('buildDrafts on the Kotak statement', () => {
 		expect(buildDrafts(data, labels, kotakMapping()).drafts[9].importRef).toBe(charge.importRef);
 		expect(charge.errors).toEqual([]);
 	});
+
+	it('uses column text that names an open account as is', () => {
+		const m = kotakMapping();
+		m.postings[1].account = '={{Dr / Cr (1)}}';
+		const [draft] = buildDrafts(data.slice(0, 1), labels, m, { accounts: ['DR'] }).drafts;
+		expect(draft.txn!.postings![1].account).toBe('DR');
+		expect(draft.txn!.flag).toBe('*');
+	});
 });
 
-describe('buildDrafts without a balance column', () => {
-	const mapping: ImportMapping = {
-		account: 'Assets:Bank', currency: 'EUR', decimalMark: ',',
-		date: { column: 0, order: 'YMD' },
-		amount: { mode: 'signed', column: 2 },
-		payee: '', narration: '{{Text}}', matchText: '{{Text}}', payeeFromAlias: true,
-		counterAccount: { mode: 'fixed', account: 'Expenses:Misc' },
-		importRef: { mode: 'generate' },
-	};
+describe('buildDrafts errors', () => {
+	const { labels, data } = loadKotak();
+
+	it('reports fields that point at the wrong kind of column', () => {
+		const m = kotakMapping();
+		m.date = '={{Description}}';
+		m.postings[0].amount = '={{Description}}';
+		const [draft] = buildDrafts(data.slice(0, 1), labels, m).drafts;
+		expect(draft.txn).toBeNull();
+		expect(draft.errors).toEqual([
+			'Date: "Description" isn\'t a Date column',
+			'Posting 1 amount: "Description" isn\'t a Number column',
+		]);
+	});
+
+	it('reports unknown columns, unsupported formulas and missing pieces', () => {
+		const m = kotakMapping();
+		m.payee = '={{Nope}}';
+		m.narration = '={{A}} {{B}}';
+		m.postings[0].account = '';
+		m.postings[0].currency = '';
+		m.postings[1].amount = '';
+		const [draft] = buildDrafts(data.slice(0, 1), labels, m).drafts;
+		expect(draft.errors).toEqual([
+			'Narration: "={{A}} {{B}}" isn\'t supported yet. Use ={{Column name}}',
+			'Payee: there\'s no column "Nope"',
+			'Posting 1 needs an account',
+			'Posting 1 needs a currency',
+		]);
+	});
+
+	it('allows only one posting without an amount', () => {
+		const m = kotakMapping();
+		m.postings[0].amount = '';
+		expect(buildDrafts(data.slice(0, 1), labels, m).drafts[0].errors).toEqual(['Only one posting can be left without an amount']);
+	});
+});
+
+describe('buildDrafts with constants and no balance column', () => {
 	const labels = ['Date', 'Text', 'Amount'];
+	const mapping: ImportMapping = {
+		version: 2,
+		decimalMark: ',',
+		columnTypes: [{ kind: 'date', order: 'YMD' }, { kind: 'text' }, { kind: 'number', sign: { mode: 'asis' } }],
+		date: '={{Date}}', flag: '*', payee: 'Canteen', narration: '={{Text}}',
+		tags: ['imported', '={{Text}}'], links: [],
+		metadata: { 'import-ref': '', source: 'bank' },
+		postings: [
+			{ account: 'Assets:Bank', amount: '={{Amount}}', currency: 'EUR' },
+			{ account: 'Expenses:Misc', amount: '', currency: '' },
+		],
+		unmatchedAccount: 'Expenses:Uncategorized', payeeFromAlias: true, balanceColumn: null,
+	};
+
+	it('uses plain text as written for every row', () => {
+		const [d] = buildDrafts([['2026-09-02', 'Lunch out', '-10,00']], labels, mapping).drafts;
+		expect(generateTransactionText(d.txn!)).toBe([
+			'2026-09-02 * "Canteen" "Lunch out" #imported #Lunch-out',
+			`  import-ref: "${d.importRef}"`,
+			'  source: "bank"',
+			'  Assets:Bank  -10.00 EUR',
+			'  Expenses:Misc',
+		].join('\n'));
+	});
 
 	it('numbers identical rows so both are kept', () => {
 		const rows = [['2026-09-02', 'Canteen', '-10,00'], ['2026-09-02', 'Canteen', '-10,00']];
 		const [a, b] = buildDrafts(rows, labels, mapping).drafts;
 		expect(b.importRef).toBe(`${a.importRef}-2`);
-		expect(a.txn!.flag).toBe('*');
 	});
 
 	it('orders a newest-first file by date', () => {
@@ -202,6 +252,6 @@ describe('buildDrafts without a balance column', () => {
 	it('keeps unreadable rows with their errors', () => {
 		const [draft] = buildDrafts([['2026-13-40', 'X', 'abc']], labels, mapping).drafts;
 		expect(draft.txn).toBeNull();
-		expect(draft.errors).toEqual(['Can\'t read date "2026-13-40"', 'Can\'t read amount "abc"']);
+		expect(draft.errors).toEqual(['Date: can\'t read "2026-13-40"', 'Posting 1 amount: can\'t read the number "abc"']);
 	});
 });

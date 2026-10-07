@@ -7,6 +7,7 @@ import { parseSnippetsFile } from './lang/beancount-snippets';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './ui/views/sidebar/sidebar-view';
 import { BeancountFileView, BEANCOUNT_FILE_VIEW_TYPE } from './ui/views/beancount-file-view';
 import { UnifiedTransactionModal } from './ui/modals/UnifiedTransactionModal';
+import { ImportModal } from './ui/modals/ImportModal';
 import { runQuery, type BQLFormat } from './utils/index';
 import { createPluginApi, type BeancountPluginApi } from './api';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
@@ -133,6 +134,11 @@ export default class BeancountPlugin extends Plugin {
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount transaction',
 			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
+		});
+		this.addCommand({
+			id: 'import-bank-statement',
+			name: 'Import bank statement',
+			callback: () => { new ImportModal(this.app, this, this.getDashboardRefreshCallback()).open(); }
 		});
 		// 'Insert BQL Query Block' command removed — use manual insertion or BQL templates instead
 		this.addCommand({

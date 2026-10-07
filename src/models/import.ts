@@ -6,6 +6,23 @@ import type { TransactionData } from '../utils/directives/types';
 /** Order of day, month and year in a date column. Separators and a trailing time are ignored. */
 export type DateOrder = 'DMY' | 'MDY' | 'YMD';
 
+/**
+ * How a number column's sign is read. Positive means money into the
+ * statement's account.
+ */
+export type NumberSign =
+	| { mode: 'asis' }
+	/** Positive means money out, e.g. credit card statements or a "Withdrawal" column. */
+	| { mode: 'negate' }
+	/** An always-positive number plus a column saying which way it went, e.g. Kotak's `DR`/`CR`. */
+	| { mode: 'indicator'; column: number; debitValue: string; creditValue: string };
+
+/** What a column holds. Date columns carry their day/month/year order; times are ignored. */
+export type ColumnType =
+	| { kind: 'date' | 'datetime'; order: DateOrder }
+	| { kind: 'number'; sign?: NumberSign }
+	| { kind: 'text' | 'ignore' };
+
 /** Where the header row is and which rows hold transactions, as indexes into the parsed CSV rows. */
 export interface TableBounds {
 	headerRow: number;
@@ -16,49 +33,50 @@ export interface TableBounds {
 }
 
 /**
- * How a signed amount is read from the CSV. Positive means money into the
- * statement's account. Columns are indexes, since headers can repeat
- * (Kotak has two "Dr / Cr" columns).
+ * A field of the transaction template. Text is used as written for every
+ * row; `={{Column}}` takes that column's value.
  */
-export type AmountSource =
-	/** One column holding a signed number. `invert` for statements where positive means money out (e.g. credit cards). */
-	| { mode: 'signed'; column: number; invert?: boolean }
-	/** An always-positive amount plus a column saying which way it went, e.g. `DR`/`CR`. */
-	| { mode: 'indicator'; column: number; indicatorColumn: number; debitValue: string; creditValue: string }
-	/** Separate "withdrawal" and "deposit" columns; one of them is empty on each row. */
-	| { mode: 'split'; debitColumn: number; creditColumn: number };
+export type FieldValue = string;
 
-/** The account on the other side of each transaction. */
-export type CounterAccountSource =
-	/** Match `aliases` on open directives; rows with no match go to `fallback` with the `!` flag. */
-	| { mode: 'aliases'; fallback: string }
-	| { mode: 'fixed'; account: string };
+export interface PostingTemplate {
+	account: FieldValue;
+	/** Empty to let beancount balance the transaction. */
+	amount: FieldValue;
+	currency: FieldValue;
+}
 
-/** Where `import-ref` comes from. A column falls back to a generated ref on rows where it's blank. */
-export type ImportRefSource = { mode: 'column'; column: number } | { mode: 'generate' };
+/** Built-in value for `={{File name}}`: the statement file's name, e.g. for links. */
+export const FILE_NAME_FIELD = 'File name';
 
 /**
- * How one bank's CSV rows become transactions. Text fields are templates
- * where `{{Column label}}` is replaced by that column's value.
+ * How one bank's CSV rows become transactions: a transaction template like
+ * the Add Transaction form, plus how its columns are read.
  */
 export interface ImportMapping {
-	/** The statement's own account, e.g. `Assets:Bank:Kotak`. */
-	account: string;
-	currency: string;
+	/** Mappings from before the transaction template have no version and aren't reused. */
+	version: 2;
 	decimalMark: '.' | ',';
-	date: { column: number; order: DateOrder };
-	amount: AmountSource;
-	/** Running balance after each row; used to check the parse and for the closing balance. */
-	balance?: AmountSource;
-	payee: string;
-	narration: string;
-	/** Text that aliases are matched against. */
-	matchText: string;
-	/** Use the matched alias as the payee instead of the payee template. */
+	/** One per column, as confirmed in the Table step. */
+	columnTypes: ColumnType[];
+	date: FieldValue;
+	flag: '*' | '!';
+	payee: FieldValue;
+	narration: FieldValue;
+	tags: FieldValue[];
+	links: FieldValue[];
+	/** Transaction metadata. Always has `import-ref`; left blank, it's generated from the row. */
+	metadata: Record<string, FieldValue>;
+	/** The first posting is the statement's own account. */
+	postings: PostingTemplate[];
+	/**
+	 * Where an account taken from a column goes when it's neither an open
+	 * account nor an alias. Those transactions get the `!` flag.
+	 */
+	unmatchedAccount: string;
+	/** Use the matched alias as the payee. */
 	payeeFromAlias: boolean;
-	counterAccount: CounterAccountSource;
-	importRef: ImportRefSource;
-	tags?: string[];
+	/** Running balance column, to check the amounts and suggest a closing balance assertion. */
+	balanceColumn: number | null;
 }
 
 /** A saved mapping, recognised again by the statement's header row. */
@@ -81,8 +99,10 @@ export interface ImportDraft {
 	/** `null` when the row couldn't be read; see `errors`. */
 	txn: TransactionData | null;
 	importRef: string;
-	/** The alias that chose the counter account, if any. */
+	/** The alias that chose an account, if any. */
 	matchedAlias?: string;
+	/** The posting whose account came from a column, and that column's text. */
+	match?: { posting: number; text: string };
 	errors: string[];
 }
 

@@ -12,6 +12,7 @@
     import BalanceCard from './cards/BalanceCard.svelte';
     import NoteCard from './cards/NoteCard.svelte';
     import { UnifiedTransactionModal } from '../../modals/UnifiedTransactionModal';
+    import { ImportModal } from '../../modals/ImportModal';
     import { ConfirmModal } from '../../modals/ConfirmModal';
     import { SnippetNameModal } from '../../modals/SnippetNameModal';
     import { Notice } from 'obsidian';
@@ -552,6 +553,7 @@
                 </div>
             </div>
             <div class="filter-actions">
+                 <button class="btn" on:click={() => plugin && new ImportModal(plugin.app, plugin, () => refresh()).open()} disabled={!plugin} title="Import a bank statement (CSV)">Import</button>
                  <button class="btn" on:click={handleClear} disabled={isLoading}>Clear</button>
                  <button class="btn btn-primary" on:click={() => refresh()} disabled={isLoading}>Refresh</button>
                  <HelpTip topic="journal" />

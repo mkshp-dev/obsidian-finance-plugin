@@ -33,6 +33,13 @@ function isHeaderRow(row: string[]): boolean {
 	return filledCount(row) >= 3 && !row.some((c) => c && (isDateLike(c) || isAmountLike(c)));
 }
 
+/** The table under a given header row: every transaction-like row up to the first one that isn't. */
+export function tableFromHeader(rows: string[][], headerRow: number): TableBounds {
+	let last = headerRow;
+	while (last + 1 < rows.length && isDataRow(rows[last + 1])) last++;
+	return { headerRow, firstRow: headerRow + 1, lastRow: Math.max(last, headerRow + 1) };
+}
+
 /**
  * Suggests where the table is: the header row followed by the longest run
  * of transaction-like rows. The run ends at the first row that isn't one
@@ -43,14 +50,16 @@ export function detectTable(rows: string[][]): TableBounds | null {
 	let best: TableBounds | null = null;
 
 	for (let h = 0; h < rows.length - 1; h++) {
-		if (!isHeaderRow(rows[h])) continue;
-		let last = h;
-		while (last + 1 < rows.length && isDataRow(rows[last + 1])) last++;
-		if (last > h && (!best || last - h > best.lastRow - best.headerRow)) {
-			best = { headerRow: h, firstRow: h + 1, lastRow: last };
-		}
+		if (!isHeaderRow(rows[h]) || !isDataRow(rows[h + 1])) continue;
+		const table = tableFromHeader(rows, h);
+		if (!best || table.lastRow - table.headerRow > best.lastRow - best.headerRow) best = table;
 	}
 	return best;
+}
+
+/** The row whose header matches `signature` (see headerSignature()), or -1. */
+export function findHeaderRow(rows: string[][], signature: string): number {
+	return rows.findIndex((row) => headerSignature(row) === signature);
 }
 
 /**
