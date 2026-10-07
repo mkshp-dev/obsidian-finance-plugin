@@ -75,8 +75,8 @@ const config: Config = {
     navbar: {
       title: 'Beancount ledger',
       logo: {
-        alt: 'Beancount ledger Logo',
-        src: 'img/logo.png',
+        alt: 'mkshp',
+        src: 'img/mkshp.png',
       },
       items: [
         {
