@@ -6,6 +6,9 @@
 [![Docs Portal](https://img.shields.io/badge/docs-docusaurus-blue.svg)](https://mkshp-dev.github.io/obsidian-finance-plugin/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-v1.7.2+-purple.svg)](https://obsidian.md)
+[![Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22beancount-finance%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)](https://obsidian.md/plugins?id=beancount-finance)
+
+[![Install in Obsidian](https://img.shields.io/badge/Install-Obsidian%20Community%20Plugins-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md/plugins?id=beancount-finance)
 
 A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that transforms your vault into a powerful plain-text accounting dashboard.
 
