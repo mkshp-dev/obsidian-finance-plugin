@@ -14,8 +14,6 @@
 	export let onList: () => void;
 
 	$: txn = row.draft.txn;
-	/** Where the row went when no alias matched. */
-	$: fallback = row.draft.match?.fallback ?? '';
 	/** The posting the Account field edits: the one categorized from a column. */
 	$: posting = categoryPosting(row);
 
@@ -29,7 +27,6 @@
 	function changeAccount(value: string) {
 		if (!txn?.postings) return;
 		txn.postings[posting] = { ...txn.postings[posting], account: value.trim() };
-		txn.flag = value.trim() && value.trim() !== fallback ? '*' : '!';
 		edited();
 	}
 </script>

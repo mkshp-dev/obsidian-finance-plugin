@@ -7,7 +7,7 @@ function draft(text: string, account = 'Expenses:Uncategorized', readable = true
 	return {
 		sourceIndex: 0, cells: [], importRef: text, errors: readable ? [] : ['bad'], match: { posting: 1, text, mode: 'contains', matched: account !== 'Expenses:Uncategorized', fallback: 'Expenses:Uncategorized' },
 		txn: readable
-			? { date: '2026-09-01', flag: account === 'Expenses:Uncategorized' ? '!' : '*', payee: '', narration: text,
+			? { date: '2026-09-01', flag: '*', payee: '', narration: text,
 				postings: [{ account: 'Assets:Bank', amount: '-1', currency: 'INR' }, { account }] }
 			: null,
 	};

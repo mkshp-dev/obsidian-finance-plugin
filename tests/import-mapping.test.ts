@@ -188,9 +188,9 @@ describe('buildDrafts on the Kotak statement', () => {
 		expect(result.drafts[7].lookups).toEqual({ Payee: true, 'Posting 2 account': true });
 	});
 
-	it('flags unmatched rows and sends them to the ELSE account', () => {
+	it('sends unmatched rows to the ELSE account, keeping the mapping\'s flag', () => {
 		expect(generateTransactionText(result.drafts[4].txn!)).toBe([
-			'2026-09-05 ! "UPI/RAHUL VERMA/SBIN/100000000005/UPI" ^Kotak-Sep-2026',
+			'2026-09-05 * "UPI/RAHUL VERMA/SBIN/100000000005/UPI" ^Kotak-Sep-2026',
 			'  import-ref: "UPI-200000000005"',
 			'  Assets:Bank:Kotak  100000.00 INR',
 			'  Expenses:Uncategorized',
@@ -386,7 +386,7 @@ describe('formulas in the template', () => {
 		expect(drafts[9].txn).toMatchObject({ flag: '*', postings: [{}, { account: 'Expenses:Bank:Fees' }] });
 		expect(byRef('UPI-200000000005')).toMatchObject({ flag: '*', payee: 'RAHUL VERMA', postings: [{}, { account: 'Income:Transfers' }] });
 		expect(byRef('UPI-200000000008')).toMatchObject({ flag: '*', payee: 'CRED Club', postings: [{}, { account: 'Liabilities:CreditCard' }] });
-		expect(byRef('UPI-200000000009')).toMatchObject({ flag: '!', payee: 'City Mall', postings: [{}, { account: 'Expenses:Uncategorized' }] });
+		expect(byRef('UPI-200000000009')).toMatchObject({ flag: '*', payee: 'City Mall', postings: [{}, { account: 'Expenses:Uncategorized' }] });
 		// Rows decided by IF before the lookup aren't offered for categorizing.
 		expect(drafts[9].match).toBeUndefined();
 		expect(byRef('UPI-200000000009').postings![1].account).toBe('Expenses:Uncategorized');

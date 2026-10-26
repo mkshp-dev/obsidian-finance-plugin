@@ -272,7 +272,6 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		const payee = text(mapping.payee, 'Payee');
 
 		let match: AccountLookupResult | undefined;
-		let unmatched = false;
 		let emptyAmounts = 0;
 		const postings: PostingData[] = mapping.postings.map((p, i) => {
 			const what = `Posting ${i + 1}`;
@@ -282,7 +281,6 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 			if (lookup && !match) {
 				match = { posting: i, text: lookup.text, mode: lookup.mode, matched: lookup.matched, fallback: lookup.matched ? '' : account };
 			}
-			if (lookup && !lookup.matched) unmatched = true;
 			if (!account) errors.push(lookup && !lookup.matched ? `${what}: no alias matched "${lookup.text}" and there's no ELSE` : `${what} needs an account`);
 			else if (!isAccountName(account)) errors.push(`${what} account: "${account}" isn't an account name`);
 
@@ -310,7 +308,7 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		const txn = date && errors.length === 0
 			? {
 				date,
-				flag: unmatched ? '!' : mapping.flag,
+				flag: mapping.flag,
 				payee,
 				narration,
 				tags,
