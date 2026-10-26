@@ -17,14 +17,6 @@ export function parseAliases(value: string): string[] {
 	return value.split('|').map((a) => a.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
 
-/** Adds `alias` to an `aliases` value unless it's already there (ignoring case and spacing). */
-export function addAlias(value: string, alias: string): string {
-	const existing = parseAliases(value);
-	const clean = parseAliases(alias.replace(/\|/g, ' '))[0];
-	if (!clean || existing.some((a) => normalize(a) === normalize(clean))) return existing.join('|');
-	return [...existing, clean].join('|');
-}
-
 function normalize(text: string): string {
 	return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }

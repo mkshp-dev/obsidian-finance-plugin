@@ -18,7 +18,7 @@ import {
 import { readNumber } from './columns';
 import { createAliasMatcher, type AccountAliases, type AliasMatchMode } from './aliases';
 import {
-	evaluate, findLookups, FormulaError, parseExpression, typeOf, valueText,
+	evaluate, FormulaError, parseExpression, typeOf, valueText,
 	type EvalContext, type Expr, type TypeEnv, type Value,
 } from './expression';
 
@@ -172,8 +172,6 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		}
 		return field;
 	};
-	const payeeField = parseField(mapping.payee);
-	const payeeIsAlias = 'expr' in payeeField && findLookups(payeeField.expr).some((l) => l.returns === 'alias');
 
 	/** A column's value for a row, read with its type; null for an empty cell. */
 	const columnValue = (cells: string[], name: string): Value | null => {
@@ -273,7 +271,6 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		const narration = text(mapping.narration, 'Narration');
 		const payee = text(mapping.payee, 'Payee');
 
-		let matchedAlias: string | undefined;
 		let match: AccountLookupResult | undefined;
 		let unmatched = false;
 		let emptyAmounts = 0;
@@ -283,8 +280,7 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 			const lookup = lookupLog.filter((l) => l.returns === 'account').pop();
 			// The first account looked up by alias is the one review lets you categorize.
 			if (lookup && !match) {
-				match = { posting: i, text: lookup.text, mode: lookup.mode, matched: lookup.matched, fallback: lookup.matched ? '' : account, payeeIsAlias };
-				matchedAlias = lookup.alias;
+				match = { posting: i, text: lookup.text, mode: lookup.mode, matched: lookup.matched, fallback: lookup.matched ? '' : account };
 			}
 			if (lookup && !lookup.matched) unmatched = true;
 			if (!account) errors.push(lookup && !lookup.matched ? `${what}: no alias matched "${lookup.text}" and there's no ELSE` : `${what} needs an account`);
@@ -324,7 +320,7 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 			}
 			: null;
 
-		return { sourceIndex, cells, txn, importRef, matchedAlias, match, lookups, filled, errors, date: date ?? '' };
+		return { sourceIndex, cells, txn, importRef, match, lookups, filled, errors, date: date ?? '' };
 	});
 
 	// Oldest first: a newest-first file is turned around, keeping same-day rows in the bank's order.

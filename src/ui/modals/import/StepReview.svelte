@@ -2,7 +2,7 @@
 	import TabBar from '../../common/TabBar.svelte';
 	import ReviewDetail from './ReviewDetail.svelte';
 	import HelpTip from '../../common/HelpTip.svelte';
-	import { counterAccount, filterRows, isUncategorized, rowsMatchingAlias, type ReviewFilter, type ReviewRow } from '../../../utils/import/review';
+	import { counterAccount, filterRows, isUncategorized, type ReviewFilter, type ReviewRow } from '../../../utils/import/review';
 	import type { OpeningBalanceCheck } from '../../../services/import.service';
 	import type { StatementAssertion } from '../../../utils/import/mapping';
 
@@ -18,7 +18,6 @@
 	export let difference: string | null = null;
 	/** True while the import is being written. */
 	export let importing = false;
-	export let onRememberAlias: (index: number, account: string, alias: string) => number;
 	export let onBack: () => void;
 	export let onSubmit: () => void;
 
@@ -62,8 +61,6 @@
 		positionLabel={position >= 0 ? `Row ${position + 1} of ${visible.length}` : ''}
 		hasPrev={position > 0}
 		hasNext={position >= 0 && position < visible.length - 1}
-		countAliasMatches={(alias) => rowsMatchingAlias(rows, alias, selected ?? -1).length}
-		onRemember={(account, alias) => { const n = onRememberAlias(selected ?? -1, account, alias); rows = rows; return n; }}
 		onPrev={() => step(-1)}
 		onNext={() => step(1)}
 		onList={() => (selected = null)}

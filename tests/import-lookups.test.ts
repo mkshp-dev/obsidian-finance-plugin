@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { addAlias, createAliasMatcher, parseAliases } from '../src/utils/import/aliases';
+import { createAliasMatcher, parseAliases } from '../src/utils/import/aliases';
 import { findDuplicates, type LedgerPosting } from '../src/utils/import/duplicates';
 import { checkOpeningBalance, loadAccountAliases, lookupDuplicates } from '../src/services/import.service';
 import type { ImportDraft } from '../src/models/import';
@@ -43,11 +43,8 @@ function posting(date: string, amount: string, importRef = ''): LedgerPosting {
 }
 
 describe('aliases', () => {
-	it('parses and extends an aliases value', () => {
+	it('parses an aliases value', () => {
 		expect(parseAliases(' CRED Club | cred ||')).toEqual(['CRED Club', 'cred']);
-		expect(addAlias('CRED Club', 'City  Mall')).toBe('CRED Club|City Mall');
-		expect(addAlias('CRED Club', 'cred club')).toBe('CRED Club');
-		expect(addAlias('', 'a|b')).toBe('a b');
 	});
 
 	const match = createAliasMatcher([

@@ -12,12 +12,11 @@ import {
 	getBalanceBeforeQuery,
 	getImportCandidatePostingsQuery,
 	getImportRefsQuery,
-	getOpenDirectiveLocationsQuery,
 } from '../queries/index';
 import { parseAliases, type AccountAliases } from '../utils/import/aliases';
 import { findDuplicates, type DuplicateStatus, type LedgerPosting } from '../utils/import/duplicates';
 import { addAmounts, addDays, amountsEqual, negateAmount } from '../utils/import/values';
-import { addAliasesToOpenDirectives, appendEntries } from '../utils/import/ledgerText';
+import { appendEntries } from '../utils/import/ledgerText';
 import { generateTransactionText } from '../utils/directives/transactionDirectives';
 import { formatBalanceHeader } from '../utils/directives/directiveText';
 import { ensureTransactionFile, getTargetFile } from '../utils/structuredLayout';
@@ -121,14 +120,11 @@ export interface ImportWrite {
 	transactions: TransactionData[];
 	/** Balance assertions on the statement's account. */
 	assertions: { date: string; account: string; amount: string; currency: string }[];
-	/** Aliases remembered in review, added to each account's open directive. */
-	aliases: { account: string; alias: string }[];
 }
 
 export interface ImportWriteResult {
 	transactions: number;
 	assertions: number;
-	aliases: number;
 	errors: string[];
 }
 
@@ -157,13 +153,12 @@ function byFile<T>(items: T[], fileOf: (item: T) => string): Map<string, T[]> {
 
 /**
  * Writes an import into the ledger: transactions into their period's
- * transactions file, balance assertions into the balances file (each file
- * backed up and written once), then the remembered aliases into the
- * accounts' open directives. A file that fails doesn't stop the others;
+ * transactions file and balance assertions into the balances file, each
+ * file backed up and written once. A file that fails doesn't stop the others;
  * the result counts what was written and lists what wasn't.
  */
 export async function writeImport(plugin: BeancountPlugin, data: ImportWrite): Promise<ImportWriteResult> {
-	const result: ImportWriteResult = { transactions: 0, assertions: 0, aliases: 0, errors: [] };
+	const result: ImportWriteResult = { transactions: 0, assertions: 0, errors: [] };
 	const folderName = plugin.settings.structuredFolderName || 'Finances';
 
 	for (const [file, txns] of byFile(data.transactions, (t) => getTargetFile(plugin, 'transaction', t.date))) {
@@ -187,52 +182,5 @@ export async function writeImport(plugin: BeancountPlugin, data: ImportWrite): P
 		}
 	}
 
-	if (data.aliases.length > 0) {
-		try {
-			const saved = await saveAliases(plugin, data.aliases);
-			result.aliases = saved.count;
-			result.errors.push(...saved.errors);
-		} catch (e) {
-			Logger.error('[Import] Failed to save aliases', e);
-			result.errors.push(`Aliases not saved: ${message(e)}`);
-		}
-	}
-
 	return result;
-}
-
-/** Adds aliases to their accounts' open directives, one write per file. */
-async function saveAliases(plugin: BeancountPlugin, aliases: { account: string; alias: string }[]): Promise<{ count: number; errors: string[] }> {
-	const locations = new Map(readRows(await runQuery(plugin, getOpenDirectiveLocationsQuery()))
-		.filter((r) => r.filename && Number(r.lineno) > 0)
-		.map((r) => [r.account, { filename: r.filename, lineno: Number(r.lineno) }]));
-
-	const errors: string[] = [];
-	const edits = new Map<string, { account: string; lineno: number; aliases: string[] }>();
-	for (const { account, alias } of aliases) {
-		const at = locations.get(account);
-		if (!at) {
-			errors.push(`Alias "${alias}" not saved: ${account} has no open directive`);
-			continue;
-		}
-		const edit = edits.get(account) ?? { account, lineno: at.lineno, aliases: [] };
-		edit.aliases.push(alias);
-		edits.set(account, edit);
-	}
-
-	let count = 0;
-	for (const [file, fileEdits] of byFile([...edits.values()], (e) => locations.get(e.account)!.filename)) {
-		const path = convertWslPathToWindows(file);
-		const content = await readFileContent(plugin, path);
-		const updated = addAliasesToOpenDirectives(content, fileEdits, getNewlineCharacter(content));
-		if (updated.content !== content) {
-			await createBackupFile(plugin, path, plugin.settings.createBackups ?? true, 'importStatement');
-			await atomicFileWrite(plugin, path, updated.content);
-		}
-		for (const e of fileEdits) {
-			if (updated.missing.includes(e.account)) errors.push(`Aliases for ${e.account} not saved: its open directive has moved since the ledger was read`);
-			else count += e.aliases.length;
-		}
-	}
-	return { count, errors };
 }

@@ -13,7 +13,7 @@
 	import { blankMapping, buildDrafts, impliedOpening, isPlainField, statementAssertions, statementDifference, type DraftResult, type StatementAssertion } from '../../utils/import/mapping';
 	import { parseAmount } from '../../utils/import/values';
 	import type { AccountAliases } from '../../utils/import/aliases';
-	import { applyAlias, createReviewRows, type ReviewRow } from '../../utils/import/review';
+	import { createReviewRows, type ReviewRow } from '../../utils/import/review';
 	import { checkOpeningBalance, loadAccountAliases, lookupDuplicates, writeImport, type OpeningBalanceCheck } from '../../services/import.service';
 	import { getOpenAccounts } from '../../utils/index';
 	import { Logger } from '../../utils/logger';
@@ -241,8 +241,6 @@
 	let assertions: StatementAssertion[] = [];
 	/** closing − opening − the rows' amounts, when both balances are given; not "0" means something's off. */
 	let difference: string | null = null;
-	/** Aliases to add to open directives on import. */
-	let pendingAliases: { account: string; alias: string }[] = [];
 	let applying = false;
 
 	async function applyMapping() {
@@ -266,7 +264,6 @@
 			opening = statement && expected !== null && firstDate
 				? await checkOpeningBalance(plugin, statement.account, statement.currency, firstDate, expected)
 				: null;
-			pendingAliases = [];
 			step = 'review';
 		} catch (e) {
 			Logger.error('[Import] Failed to prepare review', e);
@@ -274,16 +271,6 @@
 		} finally {
 			applying = false;
 		}
-	}
-
-	function rememberAlias(index: number, account: string, alias: string): number {
-		pendingAliases = [
-			...pendingAliases.filter((p) => p.alias.toLowerCase() !== alias.toLowerCase()),
-			{ account, alias },
-		];
-		const changed = applyAlias(reviewRows, account, alias, index);
-		reviewRows = reviewRows;
-		return changed.length;
 	}
 
 	let importing = false;
@@ -296,12 +283,11 @@
 			const balances = statement
 				? assertions.filter((a) => a.include).map((a) => ({ date: a.date, account: statement!.account, amount: a.amount, currency: statement!.currency }))
 				: [];
-			const written = await writeImport(plugin, { transactions, assertions: balances, aliases: pendingAliases });
+			const written = await writeImport(plugin, { transactions, assertions: balances });
 
 			const parts = [
 				written.transactions > 0 ? `${written.transactions} transaction${written.transactions === 1 ? '' : 's'}` : '',
 				written.assertions > 0 ? `${written.assertions} balance assertion${written.assertions === 1 ? '' : 's'}` : '',
-				written.aliases > 0 ? `${written.aliases} alias${written.aliases === 1 ? '' : 'es'}` : '',
 			].filter(Boolean);
 			const somethingWritten = parts.length > 0;
 			if (somethingWritten) new Notice(`Imported ${parts.join(', ')}.`);
@@ -392,7 +378,6 @@
 			bind:assertions
 			{difference}
 			{importing}
-			onRememberAlias={rememberAlias}
 			onBack={() => (step = 'mapping')}
 			onSubmit={submit}
 		/>

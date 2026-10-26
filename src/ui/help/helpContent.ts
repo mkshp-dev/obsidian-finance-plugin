@@ -204,10 +204,6 @@ export const HELP_TOPICS = {
 			'Click a row to see the original line next to its transaction and change anything.',
 		],
 	},
-	importRemember: {
-		title: 'Remembering an alias',
-		summary: 'The plugin will remember this text for the account, so it\'s recognised automatically next time. Any other rows here with the same text are updated straight away.',
-	},
 } satisfies Record<string, HelpTopic>;
 
 export type HelpTopicKey = keyof typeof HELP_TOPICS;

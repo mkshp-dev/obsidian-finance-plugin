@@ -86,8 +86,6 @@ export interface ImportDraft {
 	/** `null` when the row couldn't be read; see `errors`. */
 	txn: TransactionData | null;
 	importRef: string;
-	/** The alias that chose an account, if any. */
-	matchedAlias?: string;
 	/** The posting whose account came from an `=ACCOUNT WHERE …` lookup. */
 	match?: AccountLookupResult;
 	/** For each field holding an alias lookup (named as in error messages), whether an alias matched. */
@@ -106,8 +104,6 @@ export interface AccountLookupResult {
 	matched: boolean;
 	/** The `ELSE` value for this row: where an unmatched row's account went. */
 	fallback: string;
-	/** The payee came from an `=ALIAS WHERE …` lookup, so it should follow a newly remembered alias. */
-	payeeIsAlias: boolean;
 }
 
 /** Account suggested for a row's other posting, e.g. from aliases. */

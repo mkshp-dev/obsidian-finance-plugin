@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { aliasSuggestion, categoryPosting, type ReviewRow } from '../../../utils/import/review';
+	import { categoryPosting, type ReviewRow } from '../../../utils/import/review';
 	import { generateTransactionText } from '../../../utils/directives/transactionDirectives';
 	import { nativeDatePicker } from '../../actions/nativeDatePicker';
-	import HelpTip from '../../common/HelpTip.svelte';
 
 	export let row: ReviewRow;
 	export let labels: string[] = [];
@@ -10,10 +9,6 @@
 	export let positionLabel = '';
 	export let hasPrev = false;
 	export let hasNext = false;
-	/** How many other uncategorized rows an alias would also match. */
-	export let countAliasMatches: (alias: string) => number;
-	/** Saves an alias for `account` and applies it; returns how many other rows it changed. */
-	export let onRemember: (account: string, alias: string) => number;
 	export let onPrev: () => void;
 	export let onNext: () => void;
 	export let onList: () => void;
@@ -24,28 +19,10 @@
 	/** The posting the Account field edits: the one categorized from a column. */
 	$: posting = categoryPosting(row);
 
-	// Per-row state, reset when moving to another row.
-	let shownRow: ReviewRow | null = null;
-	let accountAtOpen = '';
-	let aliasText = '';
-	let aliasTouched = false;
-	let remembered: { account: string; alias: string; count: number } | null = null;
-	$: if (row !== shownRow) {
-		shownRow = row;
-		accountAtOpen = row.draft.txn?.postings?.[categoryPosting(row)]?.account ?? '';
-		aliasText = '';
-		aliasTouched = false;
-		remembered = null;
-	}
-
 	$: account = txn?.postings?.[posting]?.account ?? '';
-	$: canRemember = !!account && account !== fallback && account !== accountAtOpen && !remembered;
-	$: if (canRemember && !aliasTouched) aliasText = (row.draft.match?.mode === 'exact' ? '' : txn?.payee) || aliasSuggestion(row);
-	$: aliasMatches = canRemember && aliasText.trim() ? countAliasMatches(aliasText.trim()) : 0;
 	$: previewText = txn ? generateTransactionText(txn) : '';
 
 	function edited() {
-		row.edited = true;
 		row = row;
 	}
 
@@ -53,17 +30,6 @@
 		if (!txn?.postings) return;
 		txn.postings[posting] = { ...txn.postings[posting], account: value.trim() };
 		txn.flag = value.trim() && value.trim() !== fallback ? '*' : '!';
-		edited();
-	}
-
-	function remember() {
-		const alias = aliasText.trim();
-		if (!alias || !txn) return;
-		if (row.draft.match?.payeeIsAlias) txn.payee = alias;
-		if (row.draft.match) row.draft.match.matched = true;
-		row.draft.matchedAlias = alias;
-		const count = onRemember(account, alias);
-		remembered = { account, alias, count };
 		edited();
 	}
 </script>
@@ -128,24 +94,6 @@
 				</div>
 				<div class="import-hint">import-ref: <code>{row.draft.importRef}</code></div>
 
-				{#if canRemember}
-					<div class="remember">
-						<div class="import-row tight">
-							<span>Remember</span>
-							<input type="text" bind:value={aliasText} on:input={() => (aliasTouched = true)} aria-label="Alias" />
-							<span>→ {account}</span>
-							<HelpTip topic="importRemember" />
-						</div>
-						<div class="import-row tight">
-							<button type="button" disabled={!aliasText.trim()} on:click={remember}>Remember alias</button>
-							{#if aliasMatches > 0}<span class="import-hint">also fills in {aliasMatches} other row{aliasMatches === 1 ? '' : 's'}</span>{/if}
-						</div>
-					</div>
-				{:else if remembered}
-					<div class="import-banner is-success">
-						"{remembered.alias}" will be added to {remembered.account}'s aliases on import{remembered.count > 0 ? `, and ${remembered.count} other row${remembered.count === 1 ? ' was' : 's were'} filled in` : ''}.
-					</div>
-				{/if}
 			{/if}
 		</section>
 	</div>
@@ -213,15 +161,6 @@
 		padding: 2px 0;
 	}
 
-	.remember {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-4-2);
-		padding: var(--size-4-2);
-		border: 1px dashed var(--background-modifier-border);
-		border-radius: var(--radius-s);
-		font-size: var(--font-ui-small);
-	}
 
 	.preview {
 		margin: 0;

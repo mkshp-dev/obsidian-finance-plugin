@@ -183,7 +183,7 @@ describe('buildDrafts on the Kotak statement', () => {
 			'  Liabilities:CreditCard',
 		].join('\n'));
 		expect(result.drafts[7].match).toEqual({
-			posting: 1, text: 'UPI/CRED Club/UTIB/100000000008/payment on C', mode: 'contains', matched: true, fallback: '', payeeIsAlias: true,
+			posting: 1, text: 'UPI/CRED Club/UTIB/100000000008/payment on C', mode: 'contains', matched: true, fallback: '',
 		});
 		expect(result.drafts[7].lookups).toEqual({ Payee: true, 'Posting 2 account': true });
 	});
