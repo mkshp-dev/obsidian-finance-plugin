@@ -196,37 +196,55 @@ export function setOpenDirectiveMetadata(
 	return lines.join(newline);
 }
 
+/** New `aliases` for an account whose open directive is at `filename`:`lineno` (as bean-query reports it). */
+export interface AccountAliasesChange {
+	account: string;
+	filename: string;
+	lineno: number;
+	/** Empty removes the `aliases` metadata. */
+	aliases: string[];
+}
+
 /**
- * Replaces an account's `aliases` metadata (removing it when the list is
- * empty) on its open directive at `filename`:`lineno`, as reported by
- * bean-query.
+ * Writes accounts' `aliases` metadata to their open directives, one backup
+ * and write per file. Each file is edited bottom-up, so a line added for
+ * one directive doesn't move the ones above it. A directive no longer where
+ * it was reported (the file changed) is skipped and listed in `errors`.
  */
 export async function updateAccountAliases(
 	plugin: BeancountPlugin,
-	account: string,
-	filename: string,
-	lineno: number,
-	aliases: string[],
+	changes: AccountAliasesChange[],
 	createBackup = plugin.settings.createBackups ?? true
-): Promise<{ success: boolean; error?: string }> {
-	try {
-		const normalizedPath = convertWslPathToWindows(filename);
-		const content = await readFileContent(plugin, normalizedPath);
-		const value = aliases.length > 0 ? aliases.join('|') : null;
-		const updated = setOpenDirectiveMetadata(content, account, lineno, 'aliases', value, getNewlineCharacter(content));
-		if (updated === null) {
-			return { success: false, error: `Open directive for ${account} not found at ${filename}:${lineno} (file may have changed)` };
+): Promise<{ saved: number; errors: string[] }> {
+	const errors: string[] = [];
+	let saved = 0;
+	const byFile = new Map<string, AccountAliasesChange[]>();
+	for (const c of changes) byFile.set(c.filename, [...(byFile.get(c.filename) ?? []), c]);
+
+	for (const [filename, fileChanges] of byFile) {
+		try {
+			const normalizedPath = convertWslPathToWindows(filename);
+			const content = await readFileContent(plugin, normalizedPath);
+			const newline = getNewlineCharacter(content);
+			let updated = content;
+			let count = 0;
+			for (const c of [...fileChanges].sort((x, y) => y.lineno - x.lineno)) {
+				const next = setOpenDirectiveMetadata(updated, c.account, c.lineno, 'aliases', c.aliases.length > 0 ? c.aliases.join('|') : null, newline);
+				if (next === null) errors.push(`${c.account}: its open directive has moved since the ledger was read`);
+				else { updated = next; count++; }
+			}
+			if (updated !== content) {
+				await createBackupFile(plugin, normalizedPath, createBackup, 'updateAccountAliases');
+				await atomicFileWrite(plugin, normalizedPath, updated);
+			}
+			saved += count;
+		} catch (error) {
+			Logger.error('[updateAccountAliases] Error:', error);
+			errors.push(`${fileChanges.map((c) => c.account).join(', ')}: ${error instanceof Error ? error.message : String(error)}`);
 		}
-		if (updated !== content) {
-			await createBackupFile(plugin, normalizedPath, createBackup, 'updateAccountAliases');
-			await atomicFileWrite(plugin, normalizedPath, updated);
-		}
-		Logger.log(`[updateAccountAliases] Updated aliases for ${account}`);
-		return { success: true };
-	} catch (error) {
-		Logger.error('[updateAccountAliases] Error:', error);
-		return { success: false, error: error instanceof Error ? error.message : String(error) };
 	}
+	Logger.log(`[updateAccountAliases] Saved aliases for ${saved} account(s)`);
+	return { saved, errors };
 }
 
 export async function updateOperatingCurrency(

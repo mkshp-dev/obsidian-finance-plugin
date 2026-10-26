@@ -230,17 +230,32 @@ describe('updateAccountAliases', () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it('writes and clears the aliases of an open directive', async () => {
+	it('writes several accounts in one file, and clears aliases', async () => {
+		const file = path.join(tmpDir, 'accounts.beancount');
+		fs.writeFileSync(file, '2020-01-01 open Assets:Bank\n2020-01-01 open Expenses:Food\n  aliases: "Swiggy"\n2020-01-01 open Expenses:Travel\n');
+
+		// Line numbers as read before any change: adding to Assets:Bank mustn't move the others' edits.
+		expect(await updateAccountAliases(plugin, [
+			{ account: 'Assets:Bank', filename: file, lineno: 1, aliases: ['NEFT'] },
+			{ account: 'Expenses:Food', filename: file, lineno: 2, aliases: [] },
+			{ account: 'Expenses:Travel', filename: file, lineno: 4, aliases: ['Uber', 'Ola'] },
+		], false)).toEqual({ saved: 3, errors: [] });
+		expect(fs.readFileSync(file, 'utf8')).toBe([
+			'2020-01-01 open Assets:Bank',
+			'  aliases: "NEFT"',
+			'2020-01-01 open Expenses:Food',
+			'2020-01-01 open Expenses:Travel',
+			'  aliases: "Uber|Ola"',
+			'',
+		].join('\n'));
+	});
+
+	it('skips a directive that has moved', async () => {
 		const file = path.join(tmpDir, 'accounts.beancount');
 		fs.writeFileSync(file, '2020-01-01 open Expenses:Food\n');
-
-		expect(await updateAccountAliases(plugin, 'Expenses:Food', file, 1, ['Swiggy', 'Zomato'], false)).toEqual({ success: true });
-		expect(fs.readFileSync(file, 'utf8')).toBe('2020-01-01 open Expenses:Food\n  aliases: "Swiggy|Zomato"\n');
-
-		expect(await updateAccountAliases(plugin, 'Expenses:Food', file, 1, [], false)).toEqual({ success: true });
+		const result = await updateAccountAliases(plugin, [{ account: 'Expenses:Food', filename: file, lineno: 2, aliases: ['X'] }], false);
+		expect(result.saved).toBe(0);
+		expect(result.errors).toHaveLength(1);
 		expect(fs.readFileSync(file, 'utf8')).toBe('2020-01-01 open Expenses:Food\n');
-
-		const moved = await updateAccountAliases(plugin, 'Expenses:Food', file, 2, ['X'], false);
-		expect(moved.success).toBe(false);
 	});
 });

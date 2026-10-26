@@ -9,10 +9,12 @@
 
 	export let plugin: BeancountPlugin;
 
+	/** Accounts and their aliases as saved in the ledger. */
 	let entries: AccountAliasEntry[] = [];
+	/** The aliases as edited here, by account; written only on Save. */
+	let edited: Record<string, string[]> = {};
 	let loading = true;
 	let loadError = '';
-	/** True while a change is being written; other changes wait. */
 	let saving = false;
 
 	let search = '';
@@ -20,15 +22,12 @@
 	/** The alias being typed for each account, by account name. */
 	let drafts: Record<string, string> = {};
 
-	// Quick add at the top.
-	let quickAccount = '';
-	let quickAlias = '';
-
 	onMount(reload);
 
 	async function reload() {
 		try {
 			entries = await loadAccountAliasEntries(plugin);
+			edited = Object.fromEntries(entries.map((e) => [e.account, [...e.aliases]]));
 			loadError = '';
 		} catch (e) {
 			Logger.error('[Aliases] Failed to load accounts', e);
@@ -42,58 +41,56 @@
 		return text.replace(/\s+/g, ' ').trim().toLowerCase();
 	}
 
-	$: query = normalize(search);
-	$: visible = entries.filter((e) =>
-		(!onlyWithAliases || e.aliases.length > 0)
-		&& (!query || normalize(e.account).includes(query) || e.aliases.some((a) => normalize(a).includes(query))));
-	$: withAliases = entries.filter((e) => e.aliases.length > 0).length;
+	function aliasesOf(account: string): string[] {
+		return edited[account] ?? [];
+	}
 
-	/** Writes an account's new alias list, then reads the ledger again (line numbers may have moved). */
-	async function save(entry: AccountAliasEntry, aliases: string[]): Promise<boolean> {
-		if (saving) return false;
+	// Reads `edited` directly so Svelte re-runs this on every edit.
+	$: changed = entries.filter((e) => (edited[e.account] ?? []).join('|') !== e.aliases.join('|'));
+	$: query = normalize(search);
+	$: visible = entries.filter((e) => {
+		const aliases = edited[e.account] ?? [];
+		return (!onlyWithAliases || aliases.length > 0)
+			&& (!query || normalize(e.account).includes(query) || aliases.some((a) => normalize(a).includes(query)));
+	});
+	$: withAliases = entries.filter((e) => (edited[e.account] ?? []).length > 0).length;
+
+	function add(entry: AccountAliasEntry) {
+		// `|` separates aliases, so it can't be part of one.
+		const alias = parseAliases((drafts[entry.account] ?? '').replace(/\|/g, ' '))[0];
+		if (!alias) return;
+		const owner = entries.find((e) => aliasesOf(e.account).some((a) => normalize(a) === normalize(alias)));
+		if (owner) {
+			new Notice(owner === entry ? `"${alias}" is already an alias of ${owner.account}.` : `"${alias}" is already an alias of ${owner.account}. Remove it there first.`);
+			return;
+		}
+		edited[entry.account] = [...aliasesOf(entry.account), alias];
+		drafts[entry.account] = '';
+	}
+
+	function remove(entry: AccountAliasEntry, alias: string) {
+		edited[entry.account] = aliasesOf(entry.account).filter((a) => a !== alias);
+	}
+
+	/** Writes every changed account to the ledger, then reads it again. */
+	async function save() {
+		if (saving || changed.length === 0) return;
 		saving = true;
 		try {
-			const result = await updateAccountAliases(plugin, entry.account, entry.filename, entry.lineno, aliases);
-			if (!result.success) {
-				new Notice(`Couldn't update the aliases of ${entry.account}: ${result.error ?? 'unknown error'}`);
-				return false;
-			}
+			const result = await updateAccountAliases(plugin, changed.map((e) => ({
+				account: e.account, filename: e.filename, lineno: e.lineno, aliases: aliasesOf(e.account),
+			})));
+			if (result.saved > 0) new Notice(`Saved aliases for ${result.saved} account${result.saved === 1 ? '' : 's'}.`);
+			if (result.errors.length > 0) new Notice(`Some aliases weren't saved:\n${result.errors.join('\n')}`, 0);
 			await reload();
-			return true;
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function add(account: string, text: string): Promise<boolean> {
-		const entry = entries.find((e) => e.account === account.trim());
-		if (!entry) {
-			new Notice(`${account.trim() || 'That account'} isn't an open account.`);
-			return false;
-		}
-		// `|` separates aliases, so it can't be part of one.
-		const alias = parseAliases(text.replace(/\|/g, ' '))[0];
-		if (!alias) return false;
-		const owner = entries.find((e) => e.aliases.some((a) => normalize(a) === normalize(alias)));
-		if (owner) {
-			new Notice(owner === entry ? `"${alias}" is already an alias of ${owner.account}.` : `"${alias}" is already an alias of ${owner.account}. Remove it there first.`);
-			return false;
-		}
-		const saved = await save(entry, [...entry.aliases, alias]);
-		if (saved) new Notice(`Added "${alias}" to ${entry.account}.`);
-		return saved;
-	}
-
-	async function remove(entry: AccountAliasEntry, alias: string) {
-		await save(entry, entry.aliases.filter((a) => a !== alias));
-	}
-
-	async function addFromRow(entry: AccountAliasEntry) {
-		if (await add(entry.account, drafts[entry.account] ?? '')) drafts[entry.account] = '';
-	}
-
-	async function quickAdd() {
-		if (await add(quickAccount, quickAlias)) quickAlias = '';
+	/** For the modal: whether closing would lose changes. */
+	export function hasUnsavedChanges(): boolean {
+		return changed.length > 0;
 	}
 
 	function onEnter(e: KeyboardEvent, action: () => void) {
@@ -106,19 +103,10 @@
 
 <div class="aliases-modal">
 	<p class="aliases-intro">
-		Aliases are words from your bank statements that point to an account, like "Swiggy" for Expenses:Food.
+		Aliases are words from your bank statements that point to an account, like "Uber" for Expenses:Transport.
 		Importing a statement uses them in <code>ACCOUNT WHERE</code> and <code>ALIAS WHERE</code> formulas.
 		They're saved as <code>aliases</code> metadata on each account's open directive.
 	</p>
-
-	<div class="quick-add">
-		<input type="text" class="quick-account" list="aliases-accounts" placeholder="Account" bind:value={quickAccount}
-			aria-label="Account" disabled={saving} />
-		<input type="text" class="quick-alias" placeholder="Alias, e.g. Swiggy" bind:value={quickAlias}
-			aria-label="Alias" disabled={saving} on:keydown={(e) => onEnter(e, quickAdd)} />
-		<button type="button" class="mod-cta" disabled={saving || !quickAccount.trim() || !quickAlias.trim()} on:click={quickAdd}>Add alias</button>
-		<datalist id="aliases-accounts">{#each entries as e}<option value={e.account} />{/each}</datalist>
-	</div>
 
 	<div class="aliases-filter">
 		<input type="search" placeholder="Search accounts and aliases" bind:value={search} aria-label="Search" />
@@ -134,17 +122,17 @@
 	{:else}
 		<div class="aliases-list">
 			{#each visible as entry (entry.account)}
-				<div class="alias-row">
+				<div class="alias-row" class:is-changed={changed.includes(entry)}>
 					<div class="alias-account">{entry.account}</div>
 					<div class="alias-chips">
-						{#each entry.aliases as alias (alias)}
-							<span class="alias-chip">{alias}
+						{#each edited[entry.account] ?? [] as alias (alias)}
+							<span class="alias-chip" class:is-new={!entry.aliases.includes(alias)}>{alias}
 								<button type="button" aria-label="Remove {alias}" disabled={saving} on:click={() => remove(entry, alias)}>&times;</button>
 							</span>
 						{/each}
 						<input type="text" class="alias-input" placeholder="+ alias" bind:value={drafts[entry.account]}
 							aria-label="New alias for {entry.account}" disabled={saving}
-							on:keydown={(e) => onEnter(e, () => addFromRow(entry))} />
+							on:keydown={(e) => onEnter(e, () => add(entry))} />
 					</div>
 				</div>
 			{:else}
@@ -152,6 +140,13 @@
 			{/each}
 		</div>
 	{/if}
+
+	<div class="aliases-footer">
+		{#if changed.length > 0}
+			<span class="aliases-hint">Unsaved changes to {changed.length} account{changed.length === 1 ? '' : 's'}</span>
+		{/if}
+		<button type="button" class="mod-cta" disabled={saving || changed.length === 0} on:click={save}>{saving ? 'Saving…' : 'Save'}</button>
+	</div>
 </div>
 
 <style>
@@ -165,12 +160,6 @@
 		margin: 0;
 		color: var(--text-muted);
 		font-size: var(--font-ui-small);
-	}
-
-	.quick-add {
-		display: grid;
-		grid-template-columns: 2fr 1.5fr auto;
-		gap: var(--size-4-2);
 	}
 
 	.aliases-filter {
@@ -210,6 +199,21 @@
 		align-items: center;
 		padding: var(--size-4-2) var(--size-4-3);
 		border-bottom: 1px solid var(--background-modifier-border);
+	}
+
+	.alias-row.is-changed {
+		box-shadow: inset 3px 0 0 var(--interactive-accent);
+	}
+
+	.alias-chip.is-new {
+		outline: 1px dashed var(--interactive-accent);
+	}
+
+	.aliases-footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--size-4-3);
 	}
 
 	.alias-row:last-child {
@@ -259,7 +263,7 @@
 	}
 
 	@media (max-width: 600px) {
-		.quick-add, .alias-row {
+		.alias-row {
 			grid-template-columns: 1fr;
 		}
 	}
