@@ -396,6 +396,3 @@ export function blankMapping(types: ColumnType[], decimalMark: '.' | ',' = '.'):
 		],
 	};
 }
-
-/** Where rows go when no alias matches, in the ACCOUNT WHERE chip. */
-export const DEFAULT_UNMATCHED_ACCOUNT = 'Expenses:Uncategorized';

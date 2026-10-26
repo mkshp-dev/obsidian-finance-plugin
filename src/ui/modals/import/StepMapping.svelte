@@ -8,6 +8,7 @@
 	import { generateTransactionText } from '../../../utils/directives/transactionDirectives';
 	import FieldCount from './FieldCount.svelte';
 	import HelpTip from '../../common/HelpTip.svelte';
+	import TabBar from '../../common/TabBar.svelte';
 
 	export let labels: string[] = [];
 	export let dataRows: string[][] = [];
@@ -145,11 +146,28 @@
 			fn('DATE', () => `DATE({{${textColumn()}}}, "DD/MM/YYYY")`),
 		] },
 	];
-	/** The group that fits the field being edited comes first. */
-	$: groups = (() => {
-		const first = wantOf(lastFocused) === 'number' ? 'Number' : wantOf(lastFocused) === 'date' ? 'Date' : 'Logic';
-		return [...GROUPS.filter((g) => g.name === first), ...GROUPS.filter((g) => g.name !== first)];
-	})();
+	// --- Insert panel: one tab of chips at a time ---
+	type InsertTab = 'Columns' | (typeof GROUPS)[number]['name'];
+	const INSERT_TABS = [{ value: 'Columns', label: 'Columns' }, ...GROUPS.map((g) => ({ value: g.name, label: g.name }))];
+	let insertTab: InsertTab = 'Columns';
+	function selectInsertTab(tab: string) { insertTab = tab as InsertTab; }
+	$: snippets = GROUPS.find((g) => g.name === insertTab)?.snippets ?? [];
+
+	/** On a function tab, moving to a date or number field shows the functions for it. */
+	let tabFollows = lastFocused;
+	$: if (lastFocused !== tabFollows) {
+		tabFollows = lastFocused;
+		const want = wantOf(lastFocused);
+		if (insertTab !== 'Columns' && want !== 'text') insertTab = want === 'number' ? 'Number' : 'Date';
+	}
+
+	/** The field chips insert into, as shown above them. */
+	function fieldName(key: string): string {
+		const posting = /^posting-(\d+)-(account|amount|currency)$/.exec(key);
+		if (posting) return `Posting ${Number(posting[1]) + 1} ${posting[2]}`;
+		if (key.startsWith('meta-')) return metaRows[Number(key.slice(5))]?.key.trim() || 'Metadata';
+		return key.charAt(0).toUpperCase() + key.slice(1);
+	}
 
 	// --- Metadata rows, kept as a list so keys can be edited; import-ref stays first ---
 	function rowsOf(metadata: Record<string, string>) {
@@ -249,23 +267,27 @@
 </datalist>
 
 <div class="import-step">
-	<div class="column-chips">
-		<HelpTip topic="importTemplate" />
-		<span class="import-hint">Insert column:</span>
-		{#each chipLabels as label}
-			<button type="button" class="chip" class:is-builtin={label === FILE_NAME_FIELD}
-				on:mousedown|preventDefault on:click={() => insert(`{{${label}}}`)}>{label}</button>
-		{/each}
-	</div>
-	{#each groups as group (group.name)}
-		<div class="column-chips">
-			<span class="import-hint">{group.name}:</span>
-			{#each group.snippets as snippet (snippet.label)}
-				<button type="button" class="chip is-function" title={snippet.help}
-					on:mousedown|preventDefault on:click={() => insert(snippet.build())}>{snippet.label} ƒ</button>
-			{/each}
+	<div class="insert-panel">
+		<div class="insert-head">
+			<TabBar tabs={INSERT_TABS} value={insertTab} fullWidth={false} ariaLabel="Insert into the field"
+				on:change={(e) => selectInsertTab(e.detail)} />
+			<span class="import-hint insert-target">Inserts into <strong>{fieldName(lastFocused)}</strong></span>
+			<HelpTip topic="importTemplate" />
 		</div>
-	{/each}
+		<div class="insert-chips">
+			{#if insertTab === 'Columns'}
+				{#each chipLabels as label}
+					<button type="button" class="chip" class:is-builtin={label === FILE_NAME_FIELD}
+						on:mousedown|preventDefault on:click={() => insert(`{{${label}}}`)}>{label}</button>
+				{/each}
+			{:else}
+				{#each snippets as snippet (snippet.label)}
+					<button type="button" class="chip is-function" title={snippet.help}
+						on:mousedown|preventDefault on:click={() => insert(snippet.build())}>{snippet.label}</button>
+				{/each}
+			{/if}
+		</div>
+	</div>
 	<div class="txn-form">
 		<div class="transaction-header-row">
 			<div class="form-group">
@@ -412,11 +434,37 @@
 </div>
 
 <style>
-	.column-chips {
+	.insert-panel {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-2);
+		padding: var(--size-4-2);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--radius-m);
+		background: var(--background-secondary);
+	}
+
+	.insert-head {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
+		gap: var(--size-4-2);
+	}
+
+	.insert-head :global(.tab-bar-item) {
+		padding: 3px 10px;
+		font-size: var(--font-ui-smaller);
+	}
+
+	.insert-target {
+		margin-left: auto;
+	}
+
+	.insert-chips {
+		display: flex;
+		flex-wrap: wrap;
 		gap: var(--size-4-1);
+		min-height: 24px;
 	}
 
 	.chip {
