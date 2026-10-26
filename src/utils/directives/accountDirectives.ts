@@ -4,6 +4,7 @@ import type BeancountPlugin from '../../main';
 import { getTargetFile } from '../structuredLayout';
 import { atomicFileWrite, createBackupFile, convertWslPathToWindows, getNewlineCharacter, readFileContent } from '../fileEditor';
 import { Logger } from '../logger';
+import { quote } from './directiveText';
 
 export async function saveOpenDirective(
 	plugin: BeancountPlugin,
@@ -138,6 +139,92 @@ export async function updateAccountReconcileMetadata(
 		return { success: true };
 	} catch (error) {
 		Logger.error('[updateAccountReconcileMetadata] Error:', error);
+		return { success: false, error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A trailing `; comment` after a metadata value, if any. */
+function trailingComment(raw: string): string {
+	const s = raw.trim();
+	const str = /^"(?:[^"\\]|\\.)*"/.exec(s);
+	const rest = str ? s.slice(str[0].length).trim() : s.slice(Math.max(0, s.indexOf(';')));
+	return rest.startsWith(';') ? rest : '';
+}
+
+/**
+ * Sets (or with `null`, removes) one metadata key on the open directive of
+ * `account` starting on `lineno` (1-based), keeping every other line as
+ * written, and a trailing comment on the key's own line. A new key goes
+ * after the directive's metadata. Returns null when that line doesn't hold
+ * the account's open directive (the file changed since it was read).
+ */
+export function setOpenDirectiveMetadata(
+	content: string,
+	account: string,
+	lineno: number,
+	key: string,
+	value: string | null,
+	newline: string
+): string | null {
+	const lines = content.split(/\r?\n/);
+	const index = lineno - 1;
+	const open = new RegExp(`^\\d{4}-\\d{2}-\\d{2}\\s+open\\s+${escapeRegExp(account)}(\\s|;|$)`);
+	if (index < 0 || index >= lines.length || !open.test(lines[index])) return null;
+
+	let end = index + 1;
+	while (end < lines.length && /^[ \t]+\S/.test(lines[end])) end++;
+	const keyPattern = new RegExp(`^([ \\t]+)${escapeRegExp(key)}\\s*:(.*)$`);
+	const at = lines.slice(index + 1, end).findIndex((l) => keyPattern.test(l));
+
+	if (value === null) {
+		if (at >= 0) lines.splice(index + 1 + at, 1);
+	} else if (at >= 0) {
+		const [, indent, raw] = keyPattern.exec(lines[index + 1 + at])!;
+		const comment = trailingComment(raw);
+		lines[index + 1 + at] = `${indent}${key}: ${quote(value)}${comment ? ` ${comment}` : ''}`;
+	} else {
+		const indent = lines.slice(index + 1, end).find((l) => /^[ \t]+[a-z][\w-]*\s*:/.test(l))?.match(/^[ \t]+/)?.[0] ?? '  ';
+		// After the last metadata line, before indented comments trailing the directive.
+		let insertAt = end;
+		while (insertAt > index + 1 && /^[ \t]+;/.test(lines[insertAt - 1])) insertAt--;
+		lines.splice(insertAt, 0, `${indent}${key}: ${quote(value)}`);
+	}
+	return lines.join(newline);
+}
+
+/**
+ * Replaces an account's `aliases` metadata (removing it when the list is
+ * empty) on its open directive at `filename`:`lineno`, as reported by
+ * bean-query.
+ */
+export async function updateAccountAliases(
+	plugin: BeancountPlugin,
+	account: string,
+	filename: string,
+	lineno: number,
+	aliases: string[],
+	createBackup = plugin.settings.createBackups ?? true
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const normalizedPath = convertWslPathToWindows(filename);
+		const content = await readFileContent(plugin, normalizedPath);
+		const value = aliases.length > 0 ? aliases.join('|') : null;
+		const updated = setOpenDirectiveMetadata(content, account, lineno, 'aliases', value, getNewlineCharacter(content));
+		if (updated === null) {
+			return { success: false, error: `Open directive for ${account} not found at ${filename}:${lineno} (file may have changed)` };
+		}
+		if (updated !== content) {
+			await createBackupFile(plugin, normalizedPath, createBackup, 'updateAccountAliases');
+			await atomicFileWrite(plugin, normalizedPath, updated);
+		}
+		Logger.log(`[updateAccountAliases] Updated aliases for ${account}`);
+		return { success: true };
+	} catch (error) {
+		Logger.error('[updateAccountAliases] Error:', error);
 		return { success: false, error: error instanceof Error ? error.message : String(error) };
 	}
 }

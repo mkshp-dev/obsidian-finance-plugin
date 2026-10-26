@@ -433,6 +433,11 @@ export function getAliasAccountsQuery(): string {
 	return `SELECT account, open.meta['aliases'] AS aliases FROM #accounts WHERE NOT bool(close) AND open.meta['aliases'] IS NOT NULL`;
 }
 
+/** Every open account with its `aliases` (empty when none) and where its open directive is, for editing aliases. */
+export function getAccountAliasLocationsQuery(): string {
+	return `SELECT account, open.meta['aliases'] AS aliases, open.meta['filename'] AS filename, open.meta['lineno'] AS lineno FROM #accounts WHERE NOT bool(close) ORDER BY account`;
+}
+
 /** `import-ref` values already in the ledger between two dates (inclusive). */
 export function getImportRefsQuery(from: string, to: string): string {
 	return `SELECT DISTINCT entry_meta('import-ref') AS ref FROM postings WHERE date >= ${from} AND date <= ${to} AND entry_meta('import-ref') IS NOT NULL`;

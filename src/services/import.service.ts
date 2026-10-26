@@ -8,6 +8,7 @@ import type { ImportDraft } from '../models/import';
 import type { TransactionData } from '../utils/directives/types';
 import { runQuery } from '../utils/queryRunner';
 import {
+	getAccountAliasLocationsQuery,
 	getAliasAccountsQuery,
 	getBalanceBeforeQuery,
 	getImportCandidatePostingsQuery,
@@ -44,6 +45,21 @@ export async function loadAccountAliases(plugin: BeancountPlugin): Promise<Accou
 	return rows
 		.map((r) => ({ account: r.account, aliases: parseAliases(r.aliases ?? '') }))
 		.filter((e) => e.account && e.aliases.length > 0);
+}
+
+/** An open account's aliases and where its open directive is. */
+export interface AccountAliasEntry {
+	account: string;
+	aliases: string[];
+	filename: string;
+	lineno: number;
+}
+
+/** Every open account, with or without aliases, in account order. */
+export async function loadAccountAliasEntries(plugin: BeancountPlugin): Promise<AccountAliasEntry[]> {
+	return readRows(await runQuery(plugin, getAccountAliasLocationsQuery()))
+		.filter((r) => r.account)
+		.map((r) => ({ account: r.account, aliases: parseAliases(r.aliases ?? ''), filename: r.filename ?? '', lineno: Number(r.lineno) || 0 }));
 }
 
 export function parseLedgerPostings(csv: string): LedgerPosting[] {

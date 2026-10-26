@@ -8,6 +8,7 @@ import { BeancountView, BEANCOUNT_VIEW_TYPE } from './ui/views/sidebar/sidebar-v
 import { BeancountFileView, BEANCOUNT_FILE_VIEW_TYPE } from './ui/views/beancount-file-view';
 import { UnifiedTransactionModal } from './ui/modals/UnifiedTransactionModal';
 import { ImportModal } from './ui/modals/ImportModal';
+import { AccountAliasesModal } from './ui/modals/AccountAliasesModal';
 import { runQuery, type BQLFormat } from './utils/index';
 import { createPluginApi, type BeancountPluginApi } from './api';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
@@ -139,6 +140,11 @@ export default class BeancountPlugin extends Plugin {
 			id: 'import-csv-statement',
 			name: 'Import CSV statement',
 			callback: () => { new ImportModal(this.app, this, this.getDashboardRefreshCallback()).open(); }
+		});
+		this.addCommand({
+			id: 'manage-account-aliases',
+			name: 'Manage account aliases',
+			callback: () => { new AccountAliasesModal(this.app, this).open(); }
 		});
 		// 'Insert BQL Query Block' command removed — use manual insertion or BQL templates instead
 		this.addCommand({
