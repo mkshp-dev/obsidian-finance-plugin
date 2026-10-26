@@ -39,7 +39,7 @@ export interface PostingTemplate {
 }
 
 /** The format of saved mappings. Profiles saved in another format aren't reused. */
-export const MAPPING_VERSION = 5;
+export const MAPPING_VERSION = 6;
 
 /** Built-in value for `={{File name}}`: the statement file's name, e.g. for links. */
 export const FILE_NAME_FIELD = 'File name';
@@ -58,8 +58,10 @@ export interface ImportMapping {
 	flag: '*' | '!';
 	payee: FieldValue;
 	narration: FieldValue;
-	tags: FieldValue[];
-	links: FieldValue[];
+	/** Plain text lists several, separated by spaces; a formula gives one. */
+	tags: FieldValue;
+	/** Like `tags`. */
+	links: FieldValue;
 	/** Transaction metadata. Always has `import-ref`; left blank, it's generated from the row. */
 	metadata: Record<string, FieldValue>;
 	/** The first posting is the statement's own account. */

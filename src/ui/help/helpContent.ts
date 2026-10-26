@@ -185,6 +185,7 @@ export const HELP_TOPICS = {
 		paragraphs: [
 			'Formulas can do more than copy a column. Work out a sign with =IF {{Dr / Cr}} == "DR" THEN -{{Amount}} ELSE {{Amount}}, combine columns with ={{Deposit}} - {{Withdrawal}}, or pick the account from your aliases with =ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Shopping" (the ELSE is where rows go when no alias matches). The buttons above insert these for you; hover one to see what it does.',
 			`A date column comes through exactly as it's written in the file. The transaction date has to be written the Beancount way (2026-09-22), so if your file writes dates differently, use =FORMAT_DATE({{Date column}}, "YYYY-MM-DD"). The Date buttons have more, like YEAR, MONTH and ADD_DAYS.`,
+			'Tags and Links take several values separated by spaces, like imported bank. A formula gives one, so ={{File name}} links every transaction to the statement it came from.',
 			'The number next to each field, like 19/20, tells you how many rows got a value from it.',
 		],
 		tip: 'The first posting is the statement\'s own account, the one chosen on the previous page. You can leave one posting\'s amount empty and Beancount will balance it for you.',

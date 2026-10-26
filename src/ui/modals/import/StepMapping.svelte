@@ -50,8 +50,7 @@
 		const posting = /^posting-(\d+)-(account|amount|currency)$/.exec(key);
 		if (posting) mapping.postings[Number(posting[1])][posting[2] as 'account' | 'amount' | 'currency'] = value;
 		else if (key.startsWith('meta-')) metaRows[Number(key.slice(5))].value = value;
-		else if (key === 'tags' || key === 'links') mapping[key] = [...mapping[key], value];
-		else if (key === 'date' || key === 'payee' || key === 'narration') mapping[key] = value;
+		else if (key === 'date' || key === 'payee' || key === 'narration' || key === 'tags' || key === 'links') mapping[key] = value;
 		mapping = mapping;
 		metaRows = metaRows;
 	}
@@ -60,7 +59,7 @@
 		const posting = /^posting-(\d+)-(account|amount|currency)$/.exec(key);
 		if (posting) return mapping.postings[Number(posting[1])][posting[2] as 'account' | 'amount' | 'currency'];
 		if (key.startsWith('meta-')) return metaRows[Number(key.slice(5))]?.value ?? '';
-		if (key === 'date' || key === 'payee' || key === 'narration') return mapping[key];
+		if (key === 'date' || key === 'payee' || key === 'narration' || key === 'tags' || key === 'links') return mapping[key];
 		return '';
 	}
 
@@ -76,7 +75,7 @@
 	/**
 	 * Puts formula text into the field edited last: at the cursor when it
 	 * already holds a formula (like clicking a cell in Excel), otherwise as a
-	 * new formula. Tags and links get a new entry. `select`, a part of the
+	 * new formula. `select`, a part of the
 	 * snippet, is left selected to be typed over.
 	 */
 	async function insert(snippet: string, select?: string) {
@@ -84,7 +83,7 @@
 		const el = elements[key];
 		const current = getField(key);
 		let at: number;
-		if (key !== 'tags' && key !== 'links' && isFormula(current) && el) {
+		if (isFormula(current) && el) {
 			const start = el.selectionStart ?? current.length;
 			const end = el.selectionEnd ?? start;
 			setField(key, current.slice(0, start) + snippet + current.slice(end));
@@ -196,22 +195,6 @@
 		mapping.postings = mapping.postings.filter((_, i) => i !== index);
 	}
 
-	// --- Tags and links: Enter adds the typed value ---
-	let tagInput = '';
-	let linkInput = '';
-
-	function addEntry(e: KeyboardEvent, field: 'tags' | 'links') {
-		if (e.key !== 'Enter' && e.key !== ',') return;
-		e.preventDefault();
-		const value = (field === 'tags' ? tagInput : linkInput).trim().replace(/^[#^]/, '');
-		if (value && !mapping[field].includes(value)) mapping[field] = [...mapping[field], value];
-		if (field === 'tags') tagInput = ''; else linkInput = '';
-	}
-
-	function removeEntry(field: 'tags' | 'links', index: number) {
-		mapping[field] = mapping[field].filter((_, i) => i !== index);
-	}
-
 	// --- Checking fields as they're typed ---
 	/** What's wrong with a field, or '' if nothing. */
 	function problem(value: string, want: FieldWant, e: typeof env): string {
@@ -224,8 +207,8 @@
 		problem(mapping.narration, 'text', env),
 		...mapping.postings.flatMap((p) => [problem(p.account, 'text', env), problem(p.amount, 'number', env), problem(p.currency, 'text', env)]),
 		...metaRows.map((r) => problem(r.value, 'text', env)),
-		...mapping.tags.map((t) => problem(t, 'text', env)),
-		...mapping.links.map((l) => problem(l, 'text', env)),
+		problem(mapping.tags, 'text', env),
+		problem(mapping.links, 'text', env),
 	].filter(Boolean);
 
 	// --- Live preview ---
@@ -303,6 +286,7 @@
 		</div>
 	</div>
 	<div class="txn-form">
+		<h4 class="txn-form-title">Transaction</h4>
 		<div class="transaction-header-row">
 			<div class="form-group">
 				<label for="map-date">Date * <FieldCount count={countFor('date', mapping.date, result)} /></label>
@@ -386,30 +370,14 @@
 
 		<div class="tags-links-row">
 			<div class="form-group">
-				<label for="map-tags">Tags</label>
-				<input id="map-tags" type="text" placeholder="Tag + Enter" bind:value={tagInput}
-					on:keydown={(e) => addEntry(e, 'tags')} use:track={'tags'} />
-				{#if mapping.tags.length > 0}
-					<div class="entries">
-						{#each mapping.tags as tag, i}
-							<span class="entry" class:is-formula={isFormula(tag)}>{isFormula(tag) ? tag : `#${tag}`}
-								<button type="button" on:click={() => removeEntry('tags', i)} aria-label="Remove tag">&times;</button></span>
-						{/each}
-					</div>
-				{/if}
+				<label for="map-tags">Tags <FieldCount count={countFor('tags', mapping.tags, result)} /></label>
+				<input id="map-tags" type="text" class:is-formula={isFormula(mapping.tags)} class:is-invalid={problem(mapping.tags, 'text', env)}
+					placeholder="imported bank" bind:value={mapping.tags} use:track={'tags'} />
 			</div>
 			<div class="form-group">
-				<label for="map-links">Links</label>
-				<input id="map-links" type="text" placeholder="Link + Enter" bind:value={linkInput}
-					on:keydown={(e) => addEntry(e, 'links')} use:track={'links'} />
-				{#if mapping.links.length > 0}
-					<div class="entries">
-						{#each mapping.links as link, i}
-							<span class="entry" class:is-formula={isFormula(link)}>{isFormula(link) ? link : `^${link}`}
-								<button type="button" on:click={() => removeEntry('links', i)} aria-label="Remove link">&times;</button></span>
-						{/each}
-					</div>
-				{/if}
+				<label for="map-links">Links <FieldCount count={countFor('links', mapping.links, result)} /></label>
+				<input id="map-links" type="text" class:is-formula={isFormula(mapping.links)} class:is-invalid={problem(mapping.links, 'text', env)}
+					placeholder={'={{File name}}'} bind:value={mapping.links} use:track={'links'} />
 			</div>
 		</div>
 	</div>
@@ -516,6 +484,13 @@
 	.txn-form {
 		display: flex;
 		flex-direction: column;
+		margin-top: var(--size-4-1);
+		padding-top: var(--size-4-3);
+		border-top: 1px solid var(--background-modifier-border);
+	}
+
+	.txn-form-title {
+		margin: 0 0 var(--size-4-2);
 	}
 
 	.transaction-header-row {
@@ -552,7 +527,7 @@
 		border-color: var(--interactive-accent);
 	}
 
-	.txn-form input.is-formula, .entry.is-formula {
+	.txn-form input.is-formula {
 		font-family: var(--font-monospace);
 		color: var(--text-accent);
 	}
@@ -680,33 +655,8 @@
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
-	.entries {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin-top: 6px;
-	}
 
-	.entry {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		font-size: 11px;
-		padding: 2px 8px;
-		border-radius: 12px;
-		background: rgba(var(--color-accent-rgb, 0, 122, 255), 0.1);
-		color: var(--text-accent);
-	}
 
-	.entry button {
-		background: transparent !important;
-		border: none !important;
-		box-shadow: none !important;
-		padding: 0;
-		height: auto;
-		cursor: pointer;
-		color: inherit;
-	}
 
 	@media (max-width: 700px) {
 		.transaction-header-row, .posting-row, .tags-links-row {

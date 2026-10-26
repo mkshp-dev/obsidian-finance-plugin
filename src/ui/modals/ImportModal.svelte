@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { Notice, TFile } from 'obsidian';
 	import type BeancountPlugin from '../../main';
-	import { MAPPING_VERSION, type ColumnType, type ImportMapping, type ImportProfile, type TableBounds } from '../../models/import';
+	import { type ColumnType, type ImportMapping, type ImportProfile, type TableBounds } from '../../models/import';
 	import StepBar from '../common/StepBar.svelte';
 	import StepFile from './import/StepFile.svelte';
 	import StepTable from './import/StepTable.svelte';
@@ -10,7 +10,7 @@
 	import StepReview from './import/StepReview.svelte';
 	import { readCsvRows, detectTable, columnLabels, headerSignature, detectStatementBalance, findHeaderRow, tableFromHeader } from '../../utils/import/csvTable';
 	import { detectColumnTypes, detectDecimalMark } from '../../utils/import/columns';
-	import { blankMapping, buildDrafts, impliedOpening, isPlainField, statementAssertions, statementDifference, type DraftResult, type StatementAssertion } from '../../utils/import/mapping';
+	import { blankMapping, buildDrafts, upgradeMapping, impliedOpening, isPlainField, statementAssertions, statementDifference, type DraftResult, type StatementAssertion } from '../../utils/import/mapping';
 	import { parseAmount } from '../../utils/import/values';
 	import type { AccountAliases } from '../../utils/import/aliases';
 	import { applyAlias, createReviewRows, type ReviewRow } from '../../utils/import/review';
@@ -172,9 +172,10 @@
 	let mappingSource = '';
 	let profileName = '';
 
-	/** A profile saved in the current format for a file with the same number of columns. */
+	/** A profile for a file with the same number of columns, in the current format (upgraded if it was saved in an older one). */
 	function usableProfile(p: ImportProfile | null): ImportProfile | null {
-		return p && p.mapping.version === MAPPING_VERSION && p.mapping.columnTypes?.length === labels.length ? p : null;
+		const mapping = p ? upgradeMapping(p.mapping) : null;
+		return p && mapping && mapping.columnTypes?.length === labels.length ? { ...p, mapping } : null;
 	}
 
 	function prepareMapping() {
