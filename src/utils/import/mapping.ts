@@ -308,14 +308,8 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		const importRef = text(mapping.metadata[IMPORT_REF_KEY] ?? '', IMPORT_REF_KEY)
 			|| generateImportRef([date ?? '', amount ?? '', narration], seenRefs);
 
-		/** Plain text lists entries separated by spaces; a formula gives one, e.g. a file name with spaces. */
-		const entries = (value: FieldValue, what: string): string[] => {
-			const t = text(value, what);
-			const list = isPlainField(value) ? t.split(' ') : [t];
-			return [...new Set(list.map(slug).filter(Boolean))];
-		};
-		const tags = entries(mapping.tags, 'Tags');
-		const links = entries(mapping.links, 'Links');
+		const tags = mapping.tags.map((t) => slug(text(t, 'Tag'))).filter(Boolean);
+		const links = mapping.links.map((l) => slug(text(l, 'Link'))).filter(Boolean);
 
 		const txn = date && errors.length === 0
 			? {
@@ -403,27 +397,12 @@ export function blankMapping(types: ColumnType[], decimalMark: '.' | ',' = '.'):
 		flag: '*',
 		payee: '',
 		narration: '',
-		tags: '',
-		links: `={{${FILE_NAME_FIELD}}}`,
+		tags: [],
+		links: [`={{${FILE_NAME_FIELD}}}`],
 		metadata: { [IMPORT_REF_KEY]: '' },
 		postings: [
 			{ account: '', amount: '', currency: '' },
 			{ account: '', amount: '', currency: '' },
 		],
 	};
-}
-
-/**
- * A saved mapping in the current format, upgrading older formats it can,
- * or null. Version 5 kept tags and links as lists of fields: plain ones
- * are joined with spaces, and a formula among them is kept on its own.
- */
-export function upgradeMapping(saved: ImportMapping | (Omit<ImportMapping, 'version' | 'tags' | 'links'> & { version: number; tags: unknown; links: unknown })): ImportMapping | null {
-	if (saved.version === MAPPING_VERSION) return saved as ImportMapping;
-	if (saved.version !== 5) return null;
-	const join = (list: unknown): string => {
-		const values = Array.isArray(list) ? list.filter((v): v is string => typeof v === 'string') : [];
-		return values.find((v) => !isPlainField(v)) ?? values.map((v) => v.trim().replace(/^[#^]/, '')).filter(Boolean).join(' ');
-	};
-	return { ...saved, version: MAPPING_VERSION, tags: join(saved.tags), links: join(saved.links) };
 }

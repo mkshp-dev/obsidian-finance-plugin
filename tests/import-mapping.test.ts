@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { readCsvRows, detectTable, columnLabels, headerSignature, detectStatementBalance } from '../src/utils/import/csvTable';
-import { blankMapping, buildDrafts, upgradeMapping, checkField, formatLookup, impliedOpening, isAccountName, parseField, statementAssertions, statementDifference, typeEnv } from '../src/utils/import/mapping';
+import { blankMapping, buildDrafts, checkField, formatLookup, impliedOpening, isAccountName, parseField, statementAssertions, statementDifference, typeEnv } from '../src/utils/import/mapping';
 import { detectColumnTypes } from '../src/utils/import/columns';
 import { generateTransactionText } from '../src/utils/directives/transactionDirectives';
 import type { ImportMapping } from '../src/models/import';
@@ -21,15 +21,15 @@ function loadKotak(text = KOTAK) {
 function kotakMapping(): ImportMapping {
 	const { labels, data } = loadKotak();
 	return {
-		version: 6,
+		version: 5,
 		decimalMark: '.',
 		columnTypes: detectColumnTypes(data, labels.length),
 		date: '=FORMAT_DATE({{Value Date}}, "YYYY-MM-DD")',
 		flag: '*',
 		payee: '=ALIAS WHERE {{Description}} CONTAINS ALIAS',
 		narration: '={{Description}}',
-		tags: '',
-		links: '={{File name}}',
+		tags: [],
+		links: ['={{File name}}'],
 		metadata: { 'import-ref': '={{Chq /Ref No.}}' },
 		postings: [
 			{ account: 'Assets:Bank:Kotak', amount: '=IF {{Dr / Cr (1)}} == "DR" THEN -{{Amount}} ELSE {{Amount}}', currency: 'INR' },
@@ -274,7 +274,7 @@ describe('the Date field', () => {
 		const m = kotakMapping();
 		m.date = '=ADD_DAYS({{Value Date}}, 1)';
 		m.narration = '=FORMAT_DATE({{Transaction Date}}, "D MMM YYYY") + " · " + {{Value Date}}';
-		m.tags = '=FORMAT_DATE({{Value Date}}, "YYYY-MM")';
+		m.tags = ['=FORMAT_DATE({{Value Date}}, "YYYY-MM")'];
 		const [draft] = buildDrafts(data.slice(0, 1), labels, m).drafts;
 		expect(draft.txn).toMatchObject({ date: '2026-09-23', narration: '22 Sep 2026 · 22-09-2026', tags: ['2026-09'] });
 	});
@@ -329,11 +329,11 @@ describe('buildDrafts errors', () => {
 describe('buildDrafts with constants', () => {
 	const labels = ['Date', 'Text', 'Amount'];
 	const mapping: ImportMapping = {
-		version: 6,
+		version: 5,
 		decimalMark: ',',
 		columnTypes: [{ kind: 'date', order: 'YMD' }, { kind: 'text' }, { kind: 'number' }],
 		date: '={{Date}}', flag: '*', payee: 'Canteen', narration: '={{Text}}',
-		tags: 'imported #bank imported', links: '',
+		tags: ['imported', '={{Text}}'], links: [],
 		metadata: { 'import-ref': '', source: 'bank' },
 		postings: [
 			{ account: 'Assets:Bank', amount: '={{Amount}}', currency: 'EUR' },
@@ -344,17 +344,12 @@ describe('buildDrafts with constants', () => {
 	it('uses plain text as written for every row', () => {
 		const [d] = buildDrafts([['2026-09-02', 'Lunch out', '-10,00']], labels, mapping).drafts;
 		expect(generateTransactionText(d.txn!)).toBe([
-			'2026-09-02 * "Canteen" "Lunch out" #imported #bank',
+			'2026-09-02 * "Canteen" "Lunch out" #imported #Lunch-out',
 			`  import-ref: "${d.importRef}"`,
 			'  source: "bank"',
 			'  Assets:Bank  -10.00 EUR',
 			'  Expenses:Misc',
 		].join('\n'));
-	});
-
-	it('makes one tag of a formula, even with spaces in it', () => {
-		const [d] = buildDrafts([['2026-09-02', 'Lunch out', '-10,00']], labels, { ...mapping, tags: '={{Text}}' }).drafts;
-		expect(d.txn!.tags).toEqual(['Lunch-out']);
 	});
 
 	it('numbers identical rows so both are kept', () => {
@@ -420,23 +415,9 @@ describe('starting blank', () => {
 
 	it('starts like an empty Add Transaction form', () => {
 		expect(blankMapping(types)).toMatchObject({
-			date: '', payee: '', narration: '', tags: '', links: '={{File name}}',
+			date: '', payee: '', narration: '', tags: [], links: ['={{File name}}'],
 			metadata: { 'import-ref': '' },
 			postings: [{ account: '', amount: '', currency: '' }, { account: '', amount: '', currency: '' }],
 		});
-	});
-});
-
-describe('upgradeMapping', () => {
-	const v5 = { ...blankMapping([{ kind: 'text' }]), version: 5, tags: ['imported', '#bank'], links: ['={{File name}}', 'extra'] };
-
-	it('turns version 5 tag and link lists into single fields', () => {
-		expect(upgradeMapping(v5)).toMatchObject({ version: 6, tags: 'imported bank', links: '={{File name}}' });
-	});
-
-	it('keeps the current format and drops older ones', () => {
-		const current = blankMapping([{ kind: 'text' }]);
-		expect(upgradeMapping(current)).toBe(current);
-		expect(upgradeMapping({ ...v5, version: 4 })).toBeNull();
 	});
 });
