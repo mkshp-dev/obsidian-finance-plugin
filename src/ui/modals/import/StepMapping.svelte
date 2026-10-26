@@ -19,6 +19,8 @@
 	export let firstRowNumber = 1;
 	/** Aliases from open directives, for lookups. */
 	export let aliases: AccountAliases[] = [];
+	/** Opens the Account aliases window. */
+	export let onManageAliases: () => void = () => {};
 	export let mapping: ImportMapping;
 	export let profileName = '';
 	export let applying = false;
@@ -154,8 +156,12 @@
 		] },
 	];
 	// --- Insert panel: one tab of chips at a time ---
-	type InsertTab = 'Columns' | (typeof GROUPS)[number]['name'];
-	const INSERT_TABS = [{ value: 'Columns', label: 'Columns' }, ...GROUPS.map((g) => ({ value: g.name, label: g.name }))];
+	type InsertTab = 'Columns' | (typeof GROUPS)[number]['name'] | 'Aliases';
+	const INSERT_TABS = [
+		{ value: 'Columns', label: 'Columns' },
+		...GROUPS.map((g) => ({ value: g.name, label: g.name })),
+		{ value: 'Aliases', label: 'Aliases' },
+	];
 	let insertTab: InsertTab = 'Columns';
 	function selectInsertTab(tab: string) { insertTab = tab as InsertTab; }
 	$: snippets = GROUPS.find((g) => g.name === insertTab)?.snippets ?? [];
@@ -165,7 +171,7 @@
 	$: if (lastFocused !== tabFollows) {
 		tabFollows = lastFocused;
 		const want = wantOf(lastFocused);
-		if (insertTab !== 'Columns' && want !== 'text') insertTab = want === 'number' ? 'Number' : 'Date';
+		if (insertTab !== 'Columns' && insertTab !== 'Aliases' && want !== 'text') insertTab = want === 'number' ? 'Number' : 'Date';
 	}
 
 	/** The field chips insert into, as shown above them. */
@@ -288,7 +294,11 @@
 		<div class="insert-head">
 			<TabBar tabs={INSERT_TABS} value={insertTab} fullWidth={false} ariaLabel="Insert into the field"
 				on:change={(e) => selectInsertTab(e.detail)} />
-			<span class="import-hint insert-target">Inserts into <strong>{fieldName(lastFocused)}</strong></span>
+			{#if insertTab === 'Aliases'}
+				<button type="button" class="insert-target" on:click={onManageAliases}>Manage aliases</button>
+			{:else}
+				<span class="import-hint insert-target">Inserts into <strong>{fieldName(lastFocused)}</strong></span>
+			{/if}
 			<HelpTip topic="importTemplate" />
 		</div>
 		<div class="insert-chips">
@@ -297,6 +307,20 @@
 					<button type="button" class="chip" class:is-builtin={label === FILE_NAME_FIELD}
 						on:mousedown|preventDefault on:click={() => insert(`{{${label}}}`)}>{label}</button>
 				{/each}
+			{:else if insertTab === 'Aliases'}
+				{#if aliases.length === 0}
+					<span class="import-hint">No accounts have aliases yet. Add some with Manage aliases, then use them with ACCOUNT WHERE and ALIAS WHERE.</span>
+				{:else}
+					<div class="alias-list">
+						<span class="import-hint">What <code>ACCOUNT WHERE</code> and <code>ALIAS WHERE</code> look for in the statement:</span>
+						{#each aliases as entry (entry.account)}
+							<div class="alias-line">
+								<span class="alias-account">{entry.account}</span>
+								{#each entry.aliases as alias}<span class="alias-chip">{alias}</span>{/each}
+							</div>
+						{/each}
+					</div>
+				{/if}
 			{:else}
 				{#each snippets as snippet (snippet.label)}
 					<button type="button" class="chip is-function" title={snippet.help}
@@ -500,6 +524,35 @@
 		flex-wrap: wrap;
 		gap: var(--size-4-1);
 		min-height: 24px;
+	}
+
+	.alias-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-1);
+		width: 100%;
+		max-height: 160px;
+		overflow-y: auto;
+	}
+
+	.alias-line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--size-4-1);
+		font-size: var(--font-ui-smaller);
+	}
+
+	.alias-account {
+		min-width: 180px;
+		color: var(--text-normal);
+	}
+
+	.alias-chip {
+		padding: 1px 8px;
+		border-radius: var(--radius-l);
+		background: rgba(var(--color-accent-rgb, 0, 122, 255), 0.1);
+		color: var(--text-accent);
 	}
 
 	.chip {

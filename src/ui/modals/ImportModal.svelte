@@ -16,6 +16,7 @@
 	import { createReviewRows, isResolved, type ReviewRow } from '../../utils/import/review';
 	import { checkOpeningBalance, loadAccountAliases, lookupDuplicates, writeImport, type OpeningBalanceCheck } from '../../services/import.service';
 	import { getCommodities, getOpenAccounts, getPayees, getTags } from '../../utils/index';
+	import { AccountAliasesModal } from './AccountAliasesModal';
 	import { Logger } from '../../utils/logger';
 
 	export let plugin: BeancountPlugin;
@@ -57,6 +58,15 @@
 			ledgerError = `Couldn't read accounts from the ledger: ${e instanceof Error ? e.message : String(e)}`;
 		}
 	});
+
+	/** Opens the Account aliases window; saved aliases apply to this import straight away. */
+	function manageAliases() {
+		new AccountAliasesModal(plugin.app, plugin, () => {
+			loadAccountAliases(plugin)
+				.then((entries) => { aliasEntries = entries; })
+				.catch((e) => Logger.error('[Import] Failed to reload aliases', e));
+		}).open();
+	}
 
 	// Step 1: file and profile
 	const files: string[] = plugin.app.vault.getFiles()
@@ -370,6 +380,7 @@
 			fileName={filePath}
 			firstRowNumber={bounds.firstRow + 1}
 			aliases={aliasEntries}
+			onManageAliases={manageAliases}
 			bind:mapping
 			bind:profileName
 			{applying}

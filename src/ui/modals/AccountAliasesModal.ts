@@ -10,10 +10,13 @@ import { ConfirmModal } from './ConfirmModal';
 export class AccountAliasesModal extends Modal {
 	plugin: BeancountPlugin;
 	private component: SvelteComponent | null = null;
+	/** Called once the window has closed, e.g. so an open import picks up saved aliases. */
+	private onDone?: () => void;
 
-	constructor(app: App, plugin: BeancountPlugin) {
+	constructor(app: App, plugin: BeancountPlugin, onDone?: () => void) {
 		super(app);
 		this.plugin = plugin;
+		this.onDone = onDone;
 	}
 
 	onOpen() {
@@ -42,5 +45,6 @@ export class AccountAliasesModal extends Modal {
 		this.component?.$destroy();
 		this.component = null;
 		this.contentEl.empty();
+		this.onDone?.();
 	}
 }
