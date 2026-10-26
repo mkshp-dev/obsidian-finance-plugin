@@ -29,7 +29,7 @@
 		{ value: 'table', label: 'Identify content', title: 'Identify the content',
 			description: 'Show where the transactions are in the file and what each column holds.' },
 		{ value: 'mapping', label: 'Define mapping', title: 'Define the mapping',
-			description: 'Describe how each row becomes a transaction in your ledger.' },
+			description: "Describe how each row becomes a transaction in your ledger. It doesn't have to be perfect: set up the pattern most rows follow, and fix individual rows on the next page." },
 		{ value: 'review', label: 'Review', title: 'Review',
 			description: 'Check what will be added to your ledger before importing.' },
 	];

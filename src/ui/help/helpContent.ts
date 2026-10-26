@@ -183,7 +183,7 @@ export const HELP_TOPICS = {
 		title: 'How each row becomes a transaction',
 		summary: 'Fill this in like the Add Transaction form. Anything you type is used for every row. To take a value from the file instead, start the field with = and click a column above, for example ={{Description}}.',
 		paragraphs: [
-			'Formulas can do more than copy a column. Work out a sign with =IF {{Dr / Cr}} == "DR" THEN -{{Amount}} ELSE {{Amount}}, combine columns with ={{Deposit}} - {{Withdrawal}}, or pick the account from your aliases with =ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Uncategorized". The buttons above insert these for you; hover one to see what it does.',
+			'Formulas can do more than copy a column. Work out a sign with =IF {{Dr / Cr}} == "DR" THEN -{{Amount}} ELSE {{Amount}}, combine columns with ={{Deposit}} - {{Withdrawal}}, or pick the account from your aliases with =ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Shopping" (the ELSE is where rows go when no alias matches). The buttons above insert these for you; hover one to see what it does.',
 			`A date column comes through exactly as it's written in the file. The transaction date has to be written the Beancount way (2026-09-22), so if your file writes dates differently, use =FORMAT_DATE({{Date column}}, "YYYY-MM-DD"). The Date buttons have more, like YEAR, MONTH and ADD_DAYS.`,
 			'The number next to each field, like 19/20, tells you how many rows got a value from it.',
 		],

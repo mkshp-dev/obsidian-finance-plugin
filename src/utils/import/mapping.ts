@@ -134,6 +134,15 @@ export interface DraftContext {
 	fileName?: string;
 }
 
+/**
+ * Beancount's account syntax: colon-separated parts, each starting with a
+ * capital letter or digit (the first with a capital) and holding letters,
+ * digits and dashes, e.g. `Expenses:Food-2026`.
+ */
+export function isAccountName(text: string): boolean {
+	return /^\p{Lu}[\p{L}\p{N}-]*(:[\p{Lu}\p{N}][\p{L}\p{N}-]*)+$/u.test(text);
+}
+
 /** Tags and links can only hold letters, digits and `-_/.`. */
 function slug(text: string): string {
 	return text.replace(/^[#^]/, '').replace(/[^A-Za-z0-9\-_/.]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
@@ -279,6 +288,7 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 			}
 			if (lookup && !lookup.matched) unmatched = true;
 			if (!account) errors.push(lookup && !lookup.matched ? `${what}: no alias matched "${lookup.text}" and there's no ELSE` : `${what} needs an account`);
+			else if (!isAccountName(account)) errors.push(`${what} account: "${account}" isn't an account name`);
 
 			const amount = number(p.amount, `${what} amount`);
 			const currency = text(p.currency, `${what} currency`);

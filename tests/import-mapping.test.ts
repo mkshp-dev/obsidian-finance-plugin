@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { readCsvRows, detectTable, columnLabels, headerSignature, detectStatementBalance } from '../src/utils/import/csvTable';
-import { blankMapping, buildDrafts, checkField, formatLookup, impliedOpening, parseField, statementAssertions, statementDifference, typeEnv } from '../src/utils/import/mapping';
+import { blankMapping, buildDrafts, checkField, formatLookup, impliedOpening, isAccountName, parseField, statementAssertions, statementDifference, typeEnv } from '../src/utils/import/mapping';
 import { detectColumnTypes } from '../src/utils/import/columns';
 import { generateTransactionText } from '../src/utils/directives/transactionDirectives';
 import type { ImportMapping } from '../src/models/import';
@@ -132,6 +132,13 @@ describe('checkField', () => {
 	});
 });
 
+describe('isAccountName', () => {
+	it('follows beancount account syntax', () => {
+		for (const a of ['Assets:Bank', 'Expenses:Food-2026:Café', 'Liabilities:CC:2026']) expect(isAccountName(a)).toBe(true);
+		for (const a of ['Assets', 'assets:bank', 'Assets:bank', 'Assets:Bank ', 'Expenses:…', 'Assets::Bank', 'Assets:Bank:']) expect(isAccountName(a)).toBe(false);
+	});
+});
+
 describe('buildDrafts on the Kotak statement', () => {
 	const { labels, data } = loadKotak();
 	const aliases: AccountAliases[] = [
@@ -210,9 +217,19 @@ describe('buildDrafts on the Kotak statement', () => {
 		const m = kotakMapping();
 		m.postings[1].account = '={{Dr / Cr (1)}}';
 		const [draft] = buildDrafts(data.slice(0, 1), labels, m, { aliases }).drafts;
-		expect(draft.txn!.postings![1].account).toBe('DR');
-		expect(draft.txn!.flag).toBe('*');
 		expect(draft.match).toBeUndefined();
+		// "DR" is used as written, so it isn't an account.
+		expect(draft.txn).toBeNull();
+		expect(draft.errors).toEqual(['Posting 2 account: "DR" isn\'t an account name']);
+	});
+
+	it("rejects an ELSE that isn't an account yet, like the ACCOUNT WHERE button's placeholder", () => {
+		const m = kotakMapping();
+		m.postings[1].account = '=ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:…"';
+		const drafts = buildDrafts(data, labels, m, { aliases }).drafts;
+		expect(drafts.some((d) => d.txn?.postings![1].account === 'Expenses:Food:EatingOut')).toBe(true);
+		expect(drafts.filter((d) => !d.txn).every((d) => d.errors[0] === 'Posting 2 account: "Expenses:…" isn\'t an account name')).toBe(true);
+		expect(drafts.some((d) => !d.txn)).toBe(true);
 	});
 
 	it('matches the whole text with EQUALS', () => {

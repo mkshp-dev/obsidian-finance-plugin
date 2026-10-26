@@ -26,8 +26,6 @@
 	export let onBack: () => void;
 	export let onApply: () => void;
 
-	const PREVIEW_COUNT = 3;
-
 	$: types = mapping.columnTypes;
 	$: onStatementAccount(isFormula(mapping.postings[0]?.account ?? '') ? '' : (mapping.postings[0]?.account ?? '').trim());
 	$: env = typeEnv(labels, types);
@@ -78,24 +76,29 @@
 	/**
 	 * Puts formula text into the field edited last: at the cursor when it
 	 * already holds a formula (like clicking a cell in Excel), otherwise as a
-	 * new formula. Tags and links get a new entry.
+	 * new formula. Tags and links get a new entry. `select`, a part of the
+	 * snippet, is left selected to be typed over.
 	 */
-	async function insert(snippet: string) {
+	async function insert(snippet: string, select?: string) {
 		const key = lastFocused;
 		const el = elements[key];
 		const current = getField(key);
+		let at: number;
 		if (key !== 'tags' && key !== 'links' && isFormula(current) && el) {
 			const start = el.selectionStart ?? current.length;
 			const end = el.selectionEnd ?? start;
 			setField(key, current.slice(0, start) + snippet + current.slice(end));
-			await tick();
-			el.focus();
-			el.setSelectionRange(start + snippet.length, start + snippet.length);
-			return;
+			at = start;
+		} else {
+			setField(key, `=${snippet}`);
+			at = 1;
 		}
-		setField(key, `=${snippet}`);
 		await tick();
-		el?.focus();
+		if (!el) return;
+		el.focus();
+		const part = select ? snippet.indexOf(select) : -1;
+		if (part >= 0) el.setSelectionRange(at + part, at + part + select!.length);
+		else el.setSelectionRange(at + snippet.length, at + snippet.length);
 	}
 
 	// --- Function chips, grouped by what they work on ---
@@ -117,12 +120,15 @@
 		return labels[numberColumns[0]] ?? '';
 	}
 
-	type Snippet = { label: string; help: string; build: () => string };
+	/** `select`: a placeholder in the built text, selected after inserting so it's typed over. */
+	type Snippet = { label: string; help: string; build: () => string; select?: string };
+	/** Where unmatched rows go: left for the user to choose, and not an account until they do. */
+	const ELSE_PLACEHOLDER = 'Expenses:…';
 	const fn = (name: FunctionName, build: () => string): Snippet => ({ label: name, help: functionHelp(name), build });
 	const GROUPS: { name: 'Logic' | 'Text' | 'Number' | 'Date'; snippets: Snippet[] }[] = [
 		{ name: 'Logic', snippets: [
 			{ label: 'IF', help: 'IF condition THEN value ELSE value', build: () => `IF {{${textColumn()}}} CONTAINS "text" THEN "value" ELSE "value"` },
-			{ label: 'ACCOUNT WHERE', help: 'The account whose alias matches the text', build: () => `ACCOUNT WHERE {{${textColumn()}}} CONTAINS ALIAS ELSE "Expenses:Uncategorized"` },
+			{ label: 'ACCOUNT WHERE', help: 'The account whose alias matches the text', build: () => `ACCOUNT WHERE {{${textColumn()}}} CONTAINS ALIAS ELSE "${ELSE_PLACEHOLDER}"`, select: ELSE_PLACEHOLDER },
 			{ label: 'ALIAS WHERE', help: 'The alias that matched, e.g. as a tidy payee', build: () => `ALIAS WHERE {{${textColumn()}}} CONTAINS ALIAS` },
 		] },
 		{ name: 'Text', snippets: [
@@ -224,9 +230,17 @@
 
 	// --- Live preview ---
 	$: result = buildDrafts(dataRows, labels, mapping, { aliases, fileName });
-	$: preview = result.drafts.filter((d) => d.txn).slice(0, PREVIEW_COUNT).map((d) => generateTransactionText(d.txn!));
 	$: failed = result.drafts.filter((d) => d.errors.length > 0);
 	$: readable = result.drafts.length - failed.length;
+
+	/** The draft shown in the preview, stepped through with the arrows. Kept in range as the mapping changes. */
+	let previewIndex = 0;
+	$: if (previewIndex > result.drafts.length - 1) previewIndex = Math.max(0, result.drafts.length - 1);
+	$: shown = result.drafts[previewIndex] ?? null;
+
+	function showDraft(draft: (typeof result.drafts)[number]) {
+		previewIndex = Math.max(0, result.drafts.indexOf(draft));
+	}
 
 	// --- How many rows each field gave a value for, shown next to its label ---
 	/** A field's name in error messages and in the drafts' per-field results. */
@@ -283,7 +297,7 @@
 			{:else}
 				{#each snippets as snippet (snippet.label)}
 					<button type="button" class="chip is-function" title={snippet.help}
-						on:mousedown|preventDefault on:click={() => insert(snippet.build())}>{snippet.label}</button>
+						on:mousedown|preventDefault on:click={() => insert(snippet.build(), snippet.select)}>{snippet.label}</button>
 				{/each}
 			{/if}
 		</div>
@@ -405,17 +419,32 @@
 	{/if}
 
 	<section class="import-section">
-		<h4>Preview</h4>
+		<div class="preview-head">
+			<h4>Preview</h4>
+			{#if shown}
+				<span class="import-hint">Transaction {previewIndex + 1} of {result.drafts.length} · row {firstRowNumber + shown.sourceIndex} of the file</span>
+				<div class="nav-arrows">
+					<button type="button" on:click={() => previewIndex--} disabled={previewIndex === 0} aria-label="Previous transaction">‹</button>
+					<button type="button" on:click={() => previewIndex++} disabled={previewIndex >= result.drafts.length - 1} aria-label="Next transaction">›</button>
+				</div>
+			{/if}
+		</div>
 		{#if failed.length > 0}
 			<div class="import-banner is-warning">
 				{failed.length} row{failed.length === 1 ? '' : 's'} can't be read:
-				{#each failed.slice(0, 3) as d}<div>Row {firstRowNumber + d.sourceIndex}: {d.errors.join('; ')}</div>{/each}
+				{#each failed.slice(0, 3) as d}
+					<div><button type="button" class="link-button" on:click={() => showDraft(d)}>Row {firstRowNumber + d.sourceIndex}</button>: {d.errors.join('; ')}</div>
+				{/each}
 			</div>
 		{/if}
-		{#each preview as text}
-			<pre class="preview">{text}</pre>
-		{/each}
-		{#if readable > PREVIEW_COUNT}<span class="import-hint">…and {readable - PREVIEW_COUNT} more</span>{/if}
+		{#if shown?.txn}
+			<pre class="preview">{generateTransactionText(shown.txn)}</pre>
+		{:else if shown}
+			<div class="preview is-unreadable">
+				<div>This row can't be read: {shown.errors.join('; ')}</div>
+				<code>{shown.cells.join(' | ')}</code>
+			</div>
+		{/if}
 		{#if missingAccounts.length > 0}
 			<div class="import-banner is-warning">Not an open account yet: {missingAccounts.join(', ')}</div>
 		{/if}
@@ -683,6 +712,41 @@
 		.transaction-header-row, .posting-row, .tags-links-row {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.preview-head {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+	}
+
+	.preview-head h4 {
+		margin: 0;
+		margin-right: auto;
+	}
+
+	.nav-arrows {
+		display: flex;
+		gap: var(--size-4-1);
+	}
+
+	.link-button {
+		all: unset;
+		cursor: pointer;
+		color: var(--text-accent);
+		text-decoration: underline;
+	}
+
+	.preview.is-unreadable {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-1);
+		color: var(--text-error);
+	}
+
+	.preview.is-unreadable code {
+		color: var(--text-muted);
+		white-space: pre-wrap;
 	}
 
 	.preview {
