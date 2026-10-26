@@ -16,6 +16,8 @@
 	export let assertions: StatementAssertion[] = [];
 	/** closing − opening − the rows' amounts, when both balances were given. */
 	export let difference: string | null = null;
+	/** True while the import is being written. */
+	export let importing = false;
 	export let onRememberAlias: (index: number, account: string, alias: string) => number;
 	export let onBack: () => void;
 	export let onSubmit: () => void;
@@ -141,8 +143,8 @@
 
 		<div class="import-footer">
 			<button type="button" on:click={onBack}>Back</button>
-			<button type="button" class="mod-cta" disabled={includedCount === 0 && assertionCount === 0} on:click={onSubmit}>
-				Import {importLabel}
+			<button type="button" class="mod-cta" disabled={importing || (includedCount === 0 && assertionCount === 0)} on:click={onSubmit}>
+				{importing ? 'Importing…' : `Import ${importLabel}`}
 			</button>
 		</div>
 	</div>

@@ -14,7 +14,7 @@
 	import { parseAmount } from '../../utils/import/values';
 	import type { AccountAliases } from '../../utils/import/aliases';
 	import { applyAlias, createReviewRows, type ReviewRow } from '../../utils/import/review';
-	import { checkOpeningBalance, loadAccountAliases, lookupDuplicates, type OpeningBalanceCheck } from '../../services/import.service';
+	import { checkOpeningBalance, loadAccountAliases, lookupDuplicates, writeImport, type OpeningBalanceCheck } from '../../services/import.service';
 	import { getOpenAccounts } from '../../utils/index';
 	import { Logger } from '../../utils/logger';
 
@@ -286,10 +286,38 @@
 		return changed.length;
 	}
 
-	function submit() {
-		// Writing to the ledger comes in the next stage.
-		new Notice(`Ready to import ${reviewRows.filter((r) => r.include).length} transactions and ${assertions.filter((a) => a.include).length} balance assertions (writing isn't built yet).`);
-		void onComplete?.();
+	let importing = false;
+
+	async function submit() {
+		if (importing) return;
+		importing = true;
+		try {
+			const transactions = reviewRows.filter((r) => r.include && r.draft.txn).map((r) => r.draft.txn!);
+			const balances = statement
+				? assertions.filter((a) => a.include).map((a) => ({ date: a.date, account: statement!.account, amount: a.amount, currency: statement!.currency }))
+				: [];
+			const written = await writeImport(plugin, { transactions, assertions: balances, aliases: pendingAliases });
+
+			const parts = [
+				written.transactions > 0 ? `${written.transactions} transaction${written.transactions === 1 ? '' : 's'}` : '',
+				written.assertions > 0 ? `${written.assertions} balance assertion${written.assertions === 1 ? '' : 's'}` : '',
+				written.aliases > 0 ? `${written.aliases} alias${written.aliases === 1 ? '' : 'es'}` : '',
+			].filter(Boolean);
+			const somethingWritten = parts.length > 0;
+			if (somethingWritten) new Notice(`Imported ${parts.join(', ')}.`);
+			if (written.errors.length > 0) {
+				new Notice(`Some of the import wasn't written:\n${written.errors.join('\n')}`, 0);
+			}
+			if (somethingWritten) {
+				await onComplete?.();
+				close();
+			}
+		} catch (e) {
+			Logger.error('[Import] Failed to write import', e);
+			new Notice(`Couldn't write the import: ${e instanceof Error ? e.message : String(e)}`);
+		} finally {
+			importing = false;
+		}
 	}
 </script>
 
@@ -363,6 +391,7 @@
 			{statement}
 			bind:assertions
 			{difference}
+			{importing}
 			onRememberAlias={rememberAlias}
 			onBack={() => (step = 'mapping')}
 			onSubmit={submit}
