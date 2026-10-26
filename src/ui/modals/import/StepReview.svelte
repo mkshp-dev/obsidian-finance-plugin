@@ -103,7 +103,7 @@
 		<div class="import-table-wrap">
 			<table class="review-table">
 				<thead>
-					<tr><th>Add</th><th>Date</th><th>Description</th><th class="amount">Amount</th><th>Account</th><th></th></tr>
+					<tr><th>Add</th><th>Date</th><th>Description</th><th class="amount">Amount</th><th>Account</th><th>Status</th></tr>
 				</thead>
 				<tbody>
 					{#each visible as i (i)}
@@ -123,7 +123,7 @@
 								{txn.postings?.[0]?.amount ?? ''}
 							</td>
 							<td class="account" title={counterAccount(row)}>{counterAccount(row)}</td>
-							<td>{#if status}<span class="badge tone-{status.tone}">{status.label}</span>{/if}</td>
+							<td>{#if status}<span class="import-badge tone-{status.tone}">{status.label}</span>{/if}</td>
 						</tr>
 					{:else}
 						<tr><td colspan="6" class="import-hint">Nothing here.</td></tr>
@@ -137,7 +137,7 @@
 				<h4>Balance assertions</h4>
 				<table class="review-table">
 					<thead>
-						<tr><th>Add</th><th>Date</th><th>Balance</th><th></th></tr>
+						<tr><th>Add</th><th>Date</th><th>Balance</th><th>When</th></tr>
 					</thead>
 					<tbody>
 						{#each assertions as assertion, i (assertion.kind)}
@@ -222,27 +222,9 @@
 		color: var(--text-error);
 	}
 
-	.badge {
-		font-size: var(--font-ui-smaller);
-		padding: 1px 6px;
-		border-radius: var(--radius-s);
-		white-space: nowrap;
-	}
 
-	.tone-warn {
-		background: rgba(var(--color-orange-rgb), 0.15);
-		color: var(--color-orange);
-	}
 
-	.tone-bad {
-		background: rgba(var(--color-red-rgb), 0.15);
-		color: var(--text-error);
-	}
 
-	.tone-muted {
-		background: var(--background-modifier-hover);
-		color: var(--text-muted);
-	}
 
 	.assertion-row {
 		cursor: default;

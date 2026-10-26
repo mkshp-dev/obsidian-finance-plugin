@@ -142,6 +142,23 @@
 		</div>
 	</div>
 
+	<div class="detail-status" class:is-unresolved={!resolved}>
+		<span class="import-badge tone-{resolved ? 'good' : 'bad'}">{resolved ? 'Resolved' : 'Unresolved'}</span>
+		{#if row.status.kind === 'possible'}
+			<span class="import-badge tone-warn">possible duplicate</span>
+		{:else if row.status.kind === 'imported'}
+			<span class="import-badge tone-muted">imported</span>
+		{/if}
+		<span class="import-hint">
+			{resolved
+				? 'Ready to add to the ledger.'
+				: `${problems.unresolved.length} thing${problems.unresolved.length === 1 ? '' : 's'} to fill in before it can be added.`}
+		</span>
+		<label class="toggle-include" title={resolved ? '' : 'Resolve this transaction before adding it'}>
+			<input type="checkbox" bind:checked={row.include} disabled={!resolved} on:change={() => onChange()} /> Add to ledger
+		</label>
+	</div>
+
 	<div class="detail-grid">
 		<section class="import-section">
 			<h4>Statement row</h4>
@@ -159,7 +176,7 @@
 			<pre class="preview">{ledgerText}</pre>
 			{#if !resolved}
 				<div class="import-banner is-error">
-					<strong>Unresolved.</strong> Fill in the following before this can be added:
+					Fill in the following before this can be added:
 					<ul>{#each problems.unresolved as p}<li>{p}</li>{/each}</ul>
 				</div>
 			{/if}
@@ -261,12 +278,6 @@
 		<TagLinkInput bind:selectedTags bind:selectedLinks {tags} />
 	</div>
 
-	<div class="import-footer">
-		<label class="toggle-include" title={resolved ? '' : 'Resolve this transaction before adding it'}>
-			<input type="checkbox" bind:checked={row.include} disabled={!resolved} on:change={() => onChange()} /> Add to ledger
-		</label>
-		{#if !resolved}<span class="import-hint">Resolve this transaction to add it.</span>{/if}
-	</div>
 </div>
 
 <style>
@@ -444,13 +455,27 @@
 		font-weight: 500;
 	}
 
+	.detail-status {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--size-4-2);
+		padding: var(--size-4-2) var(--size-4-3);
+		border: 1px solid var(--background-modifier-border);
+		border-left: 3px solid var(--color-green);
+		border-radius: var(--radius-s);
+		background: var(--background-secondary);
+	}
+
+	.detail-status.is-unresolved {
+		border-left-color: var(--text-error);
+	}
+
 	.toggle-include {
 		display: flex;
 		align-items: center;
 		gap: var(--size-4-2);
-	}
-
-	.import-footer .import-hint {
-		margin-right: auto;
+		margin-left: auto;
+		font-weight: 500;
 	}
 </style>

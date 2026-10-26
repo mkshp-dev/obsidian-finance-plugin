@@ -925,6 +925,40 @@
 	border-collapse: collapse;
 }
 
+.import-modal input[type="checkbox"]:disabled {
+	opacity: 0.35;
+	filter: grayscale(1);
+	cursor: not-allowed;
+}
+
+/* Status labels in the import review */
+.import-badge {
+	font-size: var(--font-ui-smaller);
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	white-space: nowrap;
+}
+
+.import-badge.tone-good {
+	background: rgba(var(--color-green-rgb), 0.15);
+	color: var(--color-green);
+}
+
+.import-badge.tone-warn {
+	background: rgba(var(--color-orange-rgb), 0.15);
+	color: var(--color-orange);
+}
+
+.import-badge.tone-bad {
+	background: rgba(var(--color-red-rgb), 0.15);
+	color: var(--text-error);
+}
+
+.import-badge.tone-muted {
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+}
+
 .import-banner {
 	padding: var(--size-4-2) var(--size-4-3);
 	border-radius: var(--radius-s);
