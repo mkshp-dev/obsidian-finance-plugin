@@ -6,6 +6,7 @@
 	import { columnFits } from '../../../utils/import/columns';
 	import { functionHelp, resultTexts, type FunctionName } from '../../../utils/import/expression';
 	import { generateTransactionText } from '../../../utils/directives/transactionDirectives';
+	import { draftProblems } from '../../../utils/import/review';
 	import FieldCount from './FieldCount.svelte';
 	import HelpTip from '../../common/HelpTip.svelte';
 	import TabBar from '../../common/TabBar.svelte';
@@ -230,8 +231,9 @@
 
 	// --- Live preview ---
 	$: result = buildDrafts(dataRows, labels, mapping, { aliases, fileName });
-	$: failed = result.drafts.filter((d) => d.errors.length > 0);
-	$: readable = result.drafts.length - failed.length;
+	/** What each row still needs (or couldn't read), as review will show it. */
+	$: problemsByDraft = new Map(result.drafts.map((d) => [d, draftProblems(d)]));
+	$: unresolved = result.drafts.filter((d) => problemsByDraft.get(d)!.unresolved.length > 0);
 
 	/** The draft shown in the preview, stepped through with the arrows. Kept in range as the mapping changes. */
 	let previewIndex = 0;
@@ -273,7 +275,8 @@
 		return 'expr' in f ? resultTexts(f.expr) : [];
 	});
 	$: missingAccounts = constantAccounts.filter((a) => a && accounts.length > 0 && !accounts.includes(a.trim()));
-	$: canApply = !!mapping.postings[0]?.account.trim() && readable > 0 && problems.length === 0;
+	// Rows that aren't resolved can still go on to review, to be finished there.
+	$: canApply = !!mapping.postings[0]?.account.trim() && result.drafts.length > 0 && problems.length === 0;
 </script>
 
 <datalist id="import-accounts">
@@ -430,21 +433,23 @@
 				</div>
 			{/if}
 		</div>
-		{#if failed.length > 0}
+		{#if unresolved.length > 0}
 			<div class="import-banner is-warning">
-				{failed.length} row{failed.length === 1 ? '' : 's'} can't be read:
-				{#each failed.slice(0, 3) as d}
-					<div><button type="button" class="link-button" on:click={() => showDraft(d)}>Row {firstRowNumber + d.sourceIndex}</button>: {d.errors.join('; ')}</div>
+				{unresolved.length} of {result.drafts.length} row{result.drafts.length === 1 ? '' : 's'} {unresolved.length === 1 ? 'is' : 'are'} unresolved. You can finish them on the next page, or adjust the mapping:
+				{#each unresolved.slice(0, 3) as d}
+					<div><button type="button" class="link-button" on:click={() => showDraft(d)}>Row {firstRowNumber + d.sourceIndex}</button>: {problemsByDraft.get(d)?.unresolved.join('; ')}</div>
 				{/each}
 			</div>
 		{/if}
-		{#if shown?.txn}
+		{#if shown}
+			{@const shownProblems = problemsByDraft.get(shown)}
 			<pre class="preview">{generateTransactionText(shown.txn)}</pre>
-		{:else if shown}
-			<div class="preview is-unreadable">
-				<div>This row can't be read: {shown.errors.join('; ')}</div>
-				<code>{shown.cells.join(' | ')}</code>
-			</div>
+			{#if shownProblems && shownProblems.unresolved.length > 0}
+				<div class="preview-problems">Unresolved: {shownProblems.unresolved.join('; ')}</div>
+			{/if}
+			{#if shownProblems && shownProblems.notes.length > 0}
+				<div class="import-hint">Couldn't read from the file: {shownProblems.notes.join('; ')}</div>
+			{/if}
 		{/if}
 		{#if missingAccounts.length > 0}
 			<div class="import-banner is-warning">Not an open account yet: {missingAccounts.join(', ')}</div>
@@ -745,16 +750,10 @@
 		text-decoration: underline;
 	}
 
-	.preview.is-unreadable {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-4-1);
-		color: var(--text-error);
-	}
 
-	.preview.is-unreadable code {
-		color: var(--text-muted);
-		white-space: pre-wrap;
+	.preview-problems {
+		color: var(--text-error);
+		font-size: var(--font-ui-small);
 	}
 
 	.preview {

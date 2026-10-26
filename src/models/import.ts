@@ -83,8 +83,8 @@ export interface ImportDraft {
 	/** Index of the row within the table rows, in file order. */
 	sourceIndex: number;
 	cells: string[];
-	/** `null` when the row couldn't be read; see `errors`. */
-	txn: TransactionData | null;
+	/** The transaction as far as the mapping could fill it in; see unresolvedReasons() for what's missing. */
+	txn: TransactionData;
 	importRef: string;
 	/** The posting whose account came from an `=ACCOUNT WHERE …` lookup. */
 	match?: AccountLookupResult;
@@ -92,6 +92,7 @@ export interface ImportDraft {
 	lookups?: Record<string, boolean>;
 	/** For each field (named as in error messages), whether it gave a value for this row. */
 	filled?: Record<string, boolean>;
+	/** Values the mapping couldn't read from this row, each starting with its field's name, e.g. "Posting 1 amount: …". */
 	errors: string[];
 }
 
@@ -100,10 +101,8 @@ export interface AccountLookupResult {
 	/** The column text the alias was looked for in. */
 	text: string;
 	mode: 'contains' | 'exact';
-	/** False when no alias matched and the `ELSE` value was used. */
+	/** False when no alias matched and the `ELSE` value (if any) was used. */
 	matched: boolean;
-	/** The `ELSE` value for this row: where an unmatched row's account went. */
-	fallback: string;
 }
 
 /** Account suggested for a row's other posting, e.g. from aliases. */

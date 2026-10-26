@@ -6,6 +6,7 @@ import { blankMapping, buildDrafts, checkField, formatLookup, impliedOpening, is
 import { detectColumnTypes } from '../src/utils/import/columns';
 import { generateTransactionText } from '../src/utils/directives/transactionDirectives';
 import type { ImportMapping } from '../src/models/import';
+import { draftProblems } from '../src/utils/import/review';
 import type { AccountAliases } from '../src/utils/import/aliases';
 
 const KOTAK = readFileSync(path.join(__dirname, 'fixtures/kotak-statement.csv'), 'utf8');
@@ -148,13 +149,13 @@ describe('buildDrafts on the Kotak statement', () => {
 	const result = buildDrafts(data, labels, kotakMapping(), { aliases, fileName: 'Docs/Kotak Sep 2026.csv' });
 
 	it('orders drafts oldest first', () => {
-		expect(result.drafts.map((d) => d.txn!.date)).toEqual([
+		expect(result.drafts.map((d) => d.txn.date)).toEqual([
 			'2026-08-29', '2026-09-01', '2026-09-02', '2026-09-02', '2026-09-05',
 			'2026-09-13', '2026-09-15', '2026-09-15', '2026-09-20', '2026-09-22',
 		]);
 		// Same-day rows keep the bank's order: the 14,000 credit landed before the 10,994.04 payment.
-		expect(result.drafts[6].txn!.postings![0].amount).toBe('14000.00');
-		expect(result.drafts[7].txn!.postings![0].amount).toBe('-10994.04');
+		expect(result.drafts[6].txn.postings![0].amount).toBe('14000.00');
+		expect(result.drafts[7].txn.postings![0].amount).toBe('-10994.04');
 	});
 
 	it('dates balance assertions around the transactions', () => {
@@ -171,25 +172,25 @@ describe('buildDrafts on the Kotak statement', () => {
 		expect(statementDifference(result.drafts, '1500.00', '49448.24')).toBe('0.00');
 		expect(statementDifference(result.drafts, '1600.00', '49448.24')).toBe('-100.00');
 		const m = kotakMapping();
-		m.date = '={{Description}}';
+		m.postings[0].amount = '';
 		expect(impliedOpening(buildDrafts(data, labels, m).drafts, '49448.24')).toBeNull();
 	});
 
 	it('writes matched rows with the alias as payee and the file as link', () => {
-		expect(generateTransactionText(result.drafts[7].txn!)).toBe([
+		expect(generateTransactionText(result.drafts[7].txn)).toBe([
 			'2026-09-15 * "CRED Club" "UPI/CRED Club/UTIB/100000000008/payment on C" ^Kotak-Sep-2026',
 			'  import-ref: "UPI-200000000008"',
 			'  Assets:Bank:Kotak  -10994.04 INR',
 			'  Liabilities:CreditCard',
 		].join('\n'));
 		expect(result.drafts[7].match).toEqual({
-			posting: 1, text: 'UPI/CRED Club/UTIB/100000000008/payment on C', mode: 'contains', matched: true, fallback: '',
+			posting: 1, text: 'UPI/CRED Club/UTIB/100000000008/payment on C', mode: 'contains', matched: true,
 		});
 		expect(result.drafts[7].lookups).toEqual({ Payee: true, 'Posting 2 account': true });
 	});
 
 	it('sends unmatched rows to the ELSE account, keeping the mapping\'s flag', () => {
-		expect(generateTransactionText(result.drafts[4].txn!)).toBe([
+		expect(generateTransactionText(result.drafts[4].txn)).toBe([
 			'2026-09-05 * "UPI/RAHUL VERMA/SBIN/100000000005/UPI" ^Kotak-Sep-2026',
 			'  import-ref: "UPI-200000000005"',
 			'  Assets:Bank:Kotak  100000.00 INR',
@@ -218,18 +219,19 @@ describe('buildDrafts on the Kotak statement', () => {
 		m.postings[1].account = '={{Dr / Cr (1)}}';
 		const [draft] = buildDrafts(data.slice(0, 1), labels, m, { aliases }).drafts;
 		expect(draft.match).toBeUndefined();
-		// "DR" is used as written, so it isn't an account.
-		expect(draft.txn).toBeNull();
-		expect(draft.errors).toEqual(['Posting 2 account: "DR" isn\'t an account name']);
+		// "DR" is used as written, so it isn't an account and the row is unresolved.
+		expect(draft.txn.postings![1].account).toBe('DR');
+		expect(draftProblems(draft).unresolved).toEqual(['Posting 2 account: "DR" isn\'t an account name']);
 	});
 
 	it("rejects an ELSE that isn't an account yet, like the ACCOUNT WHERE button's placeholder", () => {
 		const m = kotakMapping();
 		m.postings[1].account = '=ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:…"';
 		const drafts = buildDrafts(data, labels, m, { aliases }).drafts;
-		expect(drafts.some((d) => d.txn?.postings![1].account === 'Expenses:Food:EatingOut')).toBe(true);
-		expect(drafts.filter((d) => !d.txn).every((d) => d.errors[0] === 'Posting 2 account: "Expenses:…" isn\'t an account name')).toBe(true);
-		expect(drafts.some((d) => !d.txn)).toBe(true);
+		expect(drafts.some((d) => d.txn.postings![1].account === 'Expenses:Food:EatingOut')).toBe(true);
+		const unmatched = drafts.filter((d) => d.txn.postings![1].account === 'Expenses:…');
+		expect(unmatched.length).toBeGreaterThan(0);
+		expect(unmatched.every((d) => draftProblems(d).unresolved.join() === 'Posting 2 account: "Expenses:…" isn\'t an account name')).toBe(true);
 	});
 
 	it('matches the whole text with EQUALS', () => {
@@ -237,9 +239,9 @@ describe('buildDrafts on the Kotak statement', () => {
 		m.postings[1].account = '=ACCOUNT WHERE {{Description}} EQUALS ALIAS ELSE "Expenses:Uncategorized"';
 		const exact: AccountAliases[] = [{ account: 'Expenses:Bank:Fees', aliases: ['chrg:sms  alert fee for the month of aug26'] }, ...aliases];
 		const drafts = buildDrafts(data, labels, m, { aliases: exact }).drafts;
-		expect(drafts[9].txn!.postings![1].account).toBe('Expenses:Bank:Fees');
+		expect(drafts[9].txn.postings![1].account).toBe('Expenses:Bank:Fees');
 		// "CRED Club" is only part of the text, so EQUALS doesn't match it.
-		expect(drafts[7].txn!.postings![1].account).toBe('Expenses:Uncategorized');
+		expect(drafts[7].txn.postings![1].account).toBe('Expenses:Uncategorized');
 	});
 
 	it('falls back to another column, or reports a lookup with nowhere to go', () => {
@@ -247,8 +249,10 @@ describe('buildDrafts on the Kotak statement', () => {
 		m.payee = '=ALIAS WHERE {{Description}} CONTAINS ALIAS ELSE {{Chq /Ref No.}}';
 		m.postings[1].account = '=ACCOUNT WHERE {{Description}} CONTAINS ALIAS';
 		const [draft] = buildDrafts(data.slice(1, 2), labels, m, { aliases }).drafts;
-		expect(draft.errors).toEqual(['Posting 2: no alias matched "UPI/City Mall/ICIC/100000000009/UPI" and there\'s no ELSE']);
-		expect(buildDrafts(data.slice(2, 3), labels, m, { aliases }).drafts[0].txn!.payee).toBe('CRED Club');
+		expect(draft.errors).toEqual(['Posting 2 account: no alias matched "UPI/City Mall/ICIC/100000000009/UPI" and there\'s no ELSE']);
+		// The lookup's own message explains why the account is missing.
+		expect(draftProblems(draft).unresolved).toEqual(draft.errors);
+		expect(buildDrafts(data.slice(2, 3), labels, m, { aliases }).drafts[0].txn.payee).toBe('CRED Club');
 	});
 
 	it('refuses lookups in dates and amounts', () => {
@@ -265,7 +269,7 @@ describe('the Date field', () => {
 		const m = kotakMapping();
 		m.date = '={{Value Date}}';
 		const [draft] = buildDrafts(data.slice(0, 1), labels, m).drafts;
-		expect(draft.txn).toBeNull();
+		expect(draft.txn.date).toBe('');
 		expect(draft.errors).toEqual([`Date: "22-09-2026" isn't a Beancount date (YYYY-MM-DD). Try =FORMAT_DATE({{Value Date}}, "YYYY-MM-DD")`]);
 		expect(draft.filled?.Date).toBe(false);
 	});
@@ -296,14 +300,14 @@ describe('buildDrafts errors', () => {
 		m.date = '={{Description}}';
 		m.postings[0].amount = '={{Description}}';
 		const [draft] = buildDrafts(data.slice(0, 1), labels, m).drafts;
-		expect(draft.txn).toBeNull();
+		expect(draft.txn).toMatchObject({ date: '', postings: [{ account: 'Assets:Bank:Kotak' }, { account: 'Expenses:Uncategorized' }] });
 		expect(draft.errors).toEqual([
 			'Date: "Description" isn\'t a Date column',
 			'Posting 1 amount: "Description" isn\'t a Number column',
 		]);
 	});
 
-	it('reports unknown columns, unreadable formulas and missing pieces', () => {
+	it('reports unknown columns and unreadable formulas; missing pieces leave the row unresolved', () => {
 		const m = kotakMapping();
 		m.payee = '={{Nope}}';
 		m.narration = '={{A}} {{B}}';
@@ -314,15 +318,17 @@ describe('buildDrafts errors', () => {
 		expect(draft.errors).toEqual([
 			'Narration: Unexpected {{B}}',
 			'Payee: There\'s no column "Nope"',
-			'Posting 1 needs an account',
-			'Posting 1 needs a currency',
 		]);
+		expect(draftProblems(draft)).toEqual({
+			unresolved: ['Posting 1 account: needs an account', 'Posting 1 currency: needs a currency'],
+			notes: draft.errors,
+		});
 	});
 
 	it('allows only one posting without an amount', () => {
 		const m = kotakMapping();
-		m.postings[0].amount = '';
-		expect(buildDrafts(data.slice(0, 1), labels, m).drafts[0].errors).toEqual(['Only one posting can be left without an amount']);
+		m.postings.push({ account: 'Expenses:Misc', amount: '', currency: '' });
+		expect(draftProblems(buildDrafts(data.slice(0, 1), labels, m).drafts[0]).unresolved).toEqual(['Only one posting can be left without an amount']);
 	});
 });
 
@@ -343,7 +349,7 @@ describe('buildDrafts with constants', () => {
 
 	it('uses plain text as written for every row', () => {
 		const [d] = buildDrafts([['2026-09-02', 'Lunch out', '-10,00']], labels, mapping).drafts;
-		expect(generateTransactionText(d.txn!)).toBe([
+		expect(generateTransactionText(d.txn)).toBe([
 			'2026-09-02 * "Canteen" "Lunch out" #imported #Lunch-out',
 			`  import-ref: "${d.importRef}"`,
 			'  source: "bank"',
@@ -360,13 +366,14 @@ describe('buildDrafts with constants', () => {
 
 	it('orders a newest-first file by date', () => {
 		const rows = [['2026-09-03', 'B', '-1,00'], ['2026-09-01', 'A', '-2,00']];
-		expect(buildDrafts(rows, labels, mapping).drafts.map((d) => d.txn!.narration)).toEqual(['A', 'B']);
+		expect(buildDrafts(rows, labels, mapping).drafts.map((d) => d.txn.narration)).toEqual(['A', 'B']);
 	});
 
-	it('keeps unreadable rows with their errors', () => {
+	it('keeps unreadable rows, with their errors, as unresolved transactions', () => {
 		const [draft] = buildDrafts([['2026-13-40', 'X', 'abc']], labels, mapping).drafts;
-		expect(draft.txn).toBeNull();
+		expect(draft.txn).toMatchObject({ date: '', narration: 'X', postings: [{ account: 'Assets:Bank' }, { account: 'Expenses:Misc' }] });
 		expect(draft.errors).toEqual(['Date: can\'t read the date "2026-13-40"', 'Posting 1 amount: can\'t read the number "abc"']);
+		expect(draftProblems(draft).unresolved).toEqual(['Date: can\'t read the date "2026-13-40"', 'Needs at least one amount']);
 	});
 });
 
@@ -381,7 +388,7 @@ describe('formulas in the template', () => {
 			+ 'ELSE ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Uncategorized"';
 		m.payee = '=ALIAS WHERE {{Description}} CONTAINS ALIAS ELSE SPLIT({{Description}}, "/", 2)';
 		const drafts = buildDrafts(data, labels, m, { aliases }).drafts;
-		const byRef = (ref: string) => drafts.find((d) => d.importRef === ref)!.txn!;
+		const byRef = (ref: string) => drafts.find((d) => d.importRef === ref)!.txn;
 
 		expect(drafts[9].txn).toMatchObject({ flag: '*', postings: [{}, { account: 'Expenses:Bank:Fees' }] });
 		expect(byRef('UPI-200000000005')).toMatchObject({ flag: '*', payee: 'RAHUL VERMA', postings: [{}, { account: 'Income:Transfers' }] });
@@ -400,13 +407,13 @@ describe('formulas in the template', () => {
 		m.postings[0] = { account: 'Assets:Bank:HDFC', amount: '={{Deposit Amt.}} - {{Withdrawal Amt.}}', currency: 'INR' };
 		m.postings[1].account = 'Expenses:Misc';
 		const drafts = buildDrafts(rows, splitLabels, m).drafts;
-		expect(drafts.map((d) => d.txn!.postings![0].amount)).toEqual(['-120.00', '5000.00']);
+		expect(drafts.map((d) => d.txn.postings![0].amount)).toEqual(['-120.00', '5000.00']);
 	});
 
 	it('joins text with + in the narration', () => {
 		const m = kotakMapping();
 		m.narration = '=SPLIT({{Description}}, "/", 2) + " (" + {{Chq /Ref No.}} + ")"';
-		expect(buildDrafts(data.slice(1, 2), labels, m).drafts[0].txn!.narration).toBe('City Mall (UPI-200000000009)');
+		expect(buildDrafts(data.slice(1, 2), labels, m).drafts[0].txn.narration).toBe('City Mall (UPI-200000000009)');
 	});
 });
 

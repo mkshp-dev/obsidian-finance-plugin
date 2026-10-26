@@ -11,7 +11,7 @@ import {
 	type ImportDraft,
 	type ImportMapping,
 } from '../../models/import';
-import type { PostingData } from '../directives/types';
+import type { PostingData, TransactionData } from '../directives/types';
 import {
 	addAmounts, addDays, compareAmounts, divideAmounts, isIsoDate, multiplyAmounts, negateAmount, parseAmount, parseDate, roundAmount,
 } from './values';
@@ -272,25 +272,19 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		const payee = text(mapping.payee, 'Payee');
 
 		let match: AccountLookupResult | undefined;
-		let emptyAmounts = 0;
 		const postings: PostingData[] = mapping.postings.map((p, i) => {
 			const what = `Posting ${i + 1}`;
 			const account = text(p.account, `${what} account`);
 			const lookup = lookupLog.filter((l) => l.returns === 'account').pop();
-			// The first account looked up by alias is the one review lets you categorize.
-			if (lookup && !match) {
-				match = { posting: i, text: lookup.text, mode: lookup.mode, matched: lookup.matched, fallback: lookup.matched ? '' : account };
-			}
-			if (!account) errors.push(lookup && !lookup.matched ? `${what}: no alias matched "${lookup.text}" and there's no ELSE` : `${what} needs an account`);
-			else if (!isAccountName(account)) errors.push(`${what} account: "${account}" isn't an account name`);
+			// The first account looked up by alias is the one the review list shows.
+			if (lookup && !match) match = { posting: i, text: lookup.text, mode: lookup.mode, matched: lookup.matched };
+			if (!account && lookup && !lookup.matched) errors.push(`${what} account: no alias matched "${lookup.text}" and there's no ELSE`);
 
 			const amount = number(p.amount, `${what} amount`);
 			const currency = text(p.currency, `${what} currency`);
-			if (amount === null) emptyAmounts++;
-			else if (amount !== undefined && !currency) errors.push(`${what} needs a currency`);
-			return amount == null ? { account } : { account, amount, currency };
+			// The currency is kept without an amount, so filling in the amount in review is enough.
+			return amount == null ? { account, ...(currency ? { currency } : {}) } : { account, amount, currency };
 		});
-		if (emptyAmounts > 1) errors.push('Only one posting can be left without an amount');
 
 		const own = postings[0]?.amount;
 		const amount = own === undefined ? null : String(own);
@@ -299,24 +293,24 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		for (const [key, value] of Object.entries(mapping.metadata)) {
 			if (key !== IMPORT_REF_KEY && key.trim()) metadata[key.trim()] = text(value, `Metadata "${key}"`);
 		}
+		// Made up from the row when the mapping leaves it blank or gives nothing for this row.
 		const importRef = text(mapping.metadata[IMPORT_REF_KEY] ?? '', IMPORT_REF_KEY)
 			|| generateImportRef([date ?? '', amount ?? '', narration], seenRefs);
 
 		const tags = mapping.tags.map((t) => slug(text(t, 'Tag'))).filter(Boolean);
 		const links = mapping.links.map((l) => slug(text(l, 'Link'))).filter(Boolean);
 
-		const txn = date && errors.length === 0
-			? {
-				date,
-				flag: mapping.flag,
-				payee,
-				narration,
-				tags,
-				links,
-				metadata: { [IMPORT_REF_KEY]: importRef, ...metadata },
-				postings,
-			}
-			: null;
+		// Kept even when parts are missing: review shows what's unresolved for the user to fill in.
+		const txn: TransactionData = {
+			date: date ?? '',
+			flag: mapping.flag,
+			payee,
+			narration,
+			tags,
+			links,
+			metadata: { [IMPORT_REF_KEY]: importRef, ...metadata },
+			postings,
+		};
 
 		return { sourceIndex, cells, txn, importRef, match, lookups, filled, errors, date: date ?? '' };
 	});

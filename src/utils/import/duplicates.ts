@@ -47,7 +47,7 @@ export function findDuplicates(
 		let bestIndex = -1;
 		let bestDistance = Infinity;
 		available.forEach((p, i) => {
-			const distance = Math.abs(daysBetween(draft.txn!.date, p.date));
+			const distance = Math.abs(daysBetween(draft.txn.date, p.date));
 			if (distance <= windowDays && distance < bestDistance && p.currency === own.currency && amountsEqual(p.amount, String(own.amount))) {
 				bestIndex = i;
 				bestDistance = distance;

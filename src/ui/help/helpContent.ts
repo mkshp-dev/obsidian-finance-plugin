@@ -200,8 +200,9 @@ export const HELP_TOPICS = {
 		title: 'Before you import',
 		summary: 'This is everything that will be added to your ledger: the transactions, and a balance assertion for each statement balance you gave.',
 		paragraphs: [
-			'Untick anything you don\'t want added. Rows that are already in your ledger start unticked. "Needs attention" collects rows that couldn\'t be read, look like duplicates, or still need an account.',
-			'Click a row to see the original line next to its transaction and change anything.',
+			'A transaction is unresolved until it has a date, at least two postings with valid accounts, at least one amount with its currency, and an import-ref. Unresolved rows can\'t be ticked: click one to fill in what\'s missing, then tick it.',
+			'Untick anything you don\'t want added. Rows that are already in your ledger start unticked. "Needs attention" collects unresolved rows and possible duplicates.',
+			'Click a row to see the original line next to its transaction and edit it like in Add Transaction.',
 		],
 	},
 } satisfies Record<string, HelpTopic>;

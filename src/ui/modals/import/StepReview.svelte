@@ -2,13 +2,16 @@
 	import TabBar from '../../common/TabBar.svelte';
 	import ReviewDetail from './ReviewDetail.svelte';
 	import HelpTip from '../../common/HelpTip.svelte';
-	import { counterAccount, filterRows, isUncategorized, type ReviewFilter, type ReviewRow } from '../../../utils/import/review';
+	import { counterAccount, filterRows, isResolved, untickUnresolved, type ReviewFilter, type ReviewRow } from '../../../utils/import/review';
 	import type { OpeningBalanceCheck } from '../../../services/import.service';
 	import type { StatementAssertion } from '../../../utils/import/mapping';
 
 	export let rows: ReviewRow[] = [];
 	export let labels: string[] = [];
 	export let accounts: string[] = [];
+	export let payees: string[] = [];
+	export let tags: string[] = [];
+	export let currencies: string[] = [];
 	export let opening: OpeningBalanceCheck | null = null;
 	/** Posting 1's account and currency, when they're the same for every row. */
 	export let statement: { account: string; currency: string } | null = null;
@@ -31,7 +34,15 @@
 		{ value: 'attention', label: 'Needs attention', count: filterRows(rows, 'attention').length, tone: 'warning' as const },
 		{ value: 'duplicates', label: 'Duplicates', count: filterRows(rows, 'duplicates').length },
 	];
-	$: includedCount = rows.filter((r) => r.include && r.draft.txn).length;
+	/** Which rows can be ticked. */
+	$: resolved = rows.map(isResolved);
+
+	/** After an edit in the detail view: a row that's become unresolved can't stay ticked. */
+	function changed() {
+		untickUnresolved(rows);
+		rows = rows;
+	}
+	$: includedCount = rows.filter((r, i) => r.include && resolved[i]).length;
 	$: assertionCount = assertions.filter((a) => a.include).length;
 	$: importLabel = [
 		includedCount > 0 || assertionCount === 0 ? `${includedCount} transaction${includedCount === 1 ? '' : 's'}` : '',
@@ -40,10 +51,9 @@
 	$: position = selected === null ? -1 : visible.indexOf(selected);
 
 	function statusOf(row: ReviewRow): { label: string; tone: string } | null {
-		if (!row.draft.txn) return { label: 'error', tone: 'bad' };
+		if (!isResolved(row)) return { label: 'unresolved', tone: 'bad' };
 		if (row.status.kind === 'imported') return { label: 'imported', tone: 'muted' };
 		if (row.status.kind === 'possible') return { label: 'possible duplicate', tone: 'warn' };
-		if (isUncategorized(row)) return { label: 'uncategorized', tone: 'warn' };
 		return null;
 	}
 
@@ -55,9 +65,13 @@
 
 {#if selected !== null && rows[selected]}
 	<ReviewDetail
-		bind:row={rows[selected]}
+		row={rows[selected]}
 		{labels}
 		{accounts}
+		{payees}
+		{tags}
+		{currencies}
+		onChange={changed}
 		positionLabel={position >= 0 ? `Row ${position + 1} of ${visible.length}` : ''}
 		hasPrev={position > 0}
 		hasNext={position >= 0 && position < visible.length - 1}
@@ -98,14 +112,15 @@
 						{@const status = statusOf(row)}
 						<tr on:click={() => (selected = i)}>
 							<td on:click|stopPropagation>
-								<input type="checkbox" bind:checked={rows[i].include} disabled={!txn} aria-label="Add to ledger" />
+								<input type="checkbox" bind:checked={rows[i].include} disabled={!resolved[i]}
+									aria-label="Add to ledger" title={resolved[i] ? '' : 'Resolve this transaction before adding it'} />
 							</td>
-							<td class="nowrap">{txn?.date ?? ''}</td>
-							<td class="description" title={txn?.narration ?? row.draft.cells.join(' | ')}>
-								{txn ? (txn.payee || txn.narration) : row.draft.errors.join('; ')}
+							<td class="nowrap">{txn.date}</td>
+							<td class="description" title={txn.narration || row.draft.cells.join(' | ')}>
+								{txn.payee || txn.narration || row.draft.cells.filter(Boolean).join(' | ')}
 							</td>
-							<td class="amount" class:is-negative={String(txn?.postings?.[0]?.amount ?? '').startsWith('-')}>
-								{txn?.postings?.[0]?.amount ?? ''}
+							<td class="amount" class:is-negative={String(txn.postings?.[0]?.amount ?? '').startsWith('-')}>
+								{txn.postings?.[0]?.amount ?? ''}
 							</td>
 							<td class="account" title={counterAccount(row)}>{counterAccount(row)}</td>
 							<td>{#if status}<span class="badge tone-{status.tone}">{status.label}</span>{/if}</td>

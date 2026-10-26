@@ -11,11 +11,11 @@
 	import { readCsvRows, detectTable, columnLabels, headerSignature, detectStatementBalance, findHeaderRow, tableFromHeader } from '../../utils/import/csvTable';
 	import { detectColumnTypes, detectDecimalMark } from '../../utils/import/columns';
 	import { blankMapping, buildDrafts, impliedOpening, isPlainField, statementAssertions, statementDifference, type DraftResult, type StatementAssertion } from '../../utils/import/mapping';
-	import { parseAmount } from '../../utils/import/values';
+	import { isIsoDate, parseAmount } from '../../utils/import/values';
 	import type { AccountAliases } from '../../utils/import/aliases';
-	import { createReviewRows, type ReviewRow } from '../../utils/import/review';
+	import { createReviewRows, isResolved, type ReviewRow } from '../../utils/import/review';
 	import { checkOpeningBalance, loadAccountAliases, lookupDuplicates, writeImport, type OpeningBalanceCheck } from '../../services/import.service';
-	import { getOpenAccounts } from '../../utils/index';
+	import { getCommodities, getOpenAccounts, getPayees, getTags } from '../../utils/index';
 	import { Logger } from '../../utils/logger';
 
 	export let plugin: BeancountPlugin;
@@ -36,12 +36,20 @@
 	let step: Step = 'file';
 	$: page = STEPS.find((s) => s.value === step)!;
 
-	// Ledger data for account pickers and alias matching.
+	// Ledger data for account pickers, alias matching and the review form's suggestions.
 	let accounts: string[] = [];
 	let aliasEntries: AccountAliases[] = [];
+	let payees: string[] = [];
+	let tags: string[] = [];
+	let currencies: string[] = [];
 	let ledgerError = '';
 
 	onMount(async () => {
+		void Promise.all([getPayees(plugin), getTags(plugin), getCommodities(plugin)]).then(([p, t, c]) => {
+			payees = p;
+			tags = t;
+			currencies = c.map((x) => x.name);
+		});
 		try {
 			[accounts, aliasEntries] = await Promise.all([getOpenAccounts(plugin), loadAccountAliases(plugin)]);
 		} catch (e) {
@@ -256,7 +264,7 @@
 			// Statement balances only apply to a single statement account.
 			const before = statementAccount ? amountOf(openingBalance) : null;
 			const after = statementAccount ? amountOf(closingBalance) : null;
-			const firstDate = result.drafts.find((d) => d.txn)?.txn!.date;
+			const firstDate = result.drafts.map((d) => d.txn.date).filter(isIsoDate).sort()[0];
 			assertions = statement ? statementAssertions(result.drafts, before, after) : [];
 			difference = before !== null && after !== null ? statementDifference(result.drafts, before, after) : null;
 			// The ledger should hold the balance before the statement: given, or implied by the one after.
@@ -279,7 +287,7 @@
 		if (importing) return;
 		importing = true;
 		try {
-			const transactions = reviewRows.filter((r) => r.include && r.draft.txn).map((r) => r.draft.txn!);
+			const transactions = reviewRows.filter((r) => r.include && isResolved(r)).map((r) => r.draft.txn);
 			const balances = statement
 				? assertions.filter((a) => a.include).map((a) => ({ date: a.date, account: statement!.account, amount: a.amount, currency: statement!.currency }))
 				: [];
@@ -373,6 +381,9 @@
 			bind:rows={reviewRows}
 			{labels}
 			{accounts}
+			{payees}
+			{tags}
+			{currencies}
 			{opening}
 			{statement}
 			bind:assertions
