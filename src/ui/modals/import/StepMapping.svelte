@@ -303,6 +303,7 @@
 		</div>
 	</div>
 	<div class="txn-form">
+		<h4 class="txn-form-title">Transaction</h4>
 		<div class="transaction-header-row">
 			<div class="form-group">
 				<label for="map-date">Date * <FieldCount count={countFor('date', mapping.date, result)} /></label>
@@ -516,6 +517,13 @@
 	.txn-form {
 		display: flex;
 		flex-direction: column;
+		margin-top: var(--size-4-1);
+		padding-top: var(--size-4-3);
+		border-top: 1px solid var(--background-modifier-border);
+	}
+
+	.txn-form-title {
+		margin: 0 0 var(--size-4-2);
 	}
 
 	.transaction-header-row {
