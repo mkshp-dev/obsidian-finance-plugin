@@ -7,21 +7,12 @@ import type { TransactionData } from '../utils/directives/types';
 export type DateOrder = 'DMY' | 'MDY' | 'YMD';
 
 /**
- * How a number column's sign is read. Positive means money into the
- * statement's account.
+ * What a column holds. Date columns carry their day/month/year order; times
+ * are ignored. Numbers are read as written; signs are decided in formulas.
  */
-export type NumberSign =
-	| { mode: 'asis' }
-	/** Positive means money out, e.g. credit card statements or a "Withdrawal" column. */
-	| { mode: 'negate' }
-	/** An always-positive number plus a column saying which way it went, e.g. Kotak's `DR`/`CR`. */
-	| { mode: 'indicator'; column: number; debitValue: string; creditValue: string };
-
-/** What a column holds. Date columns carry their day/month/year order; times are ignored. */
 export type ColumnType =
 	| { kind: 'date' | 'datetime'; order: DateOrder }
-	| { kind: 'number'; sign?: NumberSign }
-	| { kind: 'text' | 'ignore' };
+	| { kind: 'number' | 'text' | 'ignore' };
 
 /** Where the header row is and which rows hold transactions, as indexes into the parsed CSV rows. */
 export interface TableBounds {
@@ -34,7 +25,9 @@ export interface TableBounds {
 
 /**
  * A field of the transaction template. Text is used as written for every
- * row; `={{Column}}` takes that column's value.
+ * row; `={{Column}}` takes that column's value; and an alias lookup like
+ * `=ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Uncategorized"`
+ * finds the account (or the alias) matching that column.
  */
 export type FieldValue = string;
 
@@ -45,6 +38,9 @@ export interface PostingTemplate {
 	currency: FieldValue;
 }
 
+/** The format of saved mappings. Profiles saved in another format aren't reused. */
+export const MAPPING_VERSION = 5;
+
 /** Built-in value for `={{File name}}`: the statement file's name, e.g. for links. */
 export const FILE_NAME_FIELD = 'File name';
 
@@ -53,8 +49,8 @@ export const FILE_NAME_FIELD = 'File name';
  * the Add Transaction form, plus how its columns are read.
  */
 export interface ImportMapping {
-	/** Mappings from before the transaction template have no version and aren't reused. */
-	version: 2;
+	/** See MAPPING_VERSION. */
+	version: typeof MAPPING_VERSION;
 	decimalMark: '.' | ',';
 	/** One per column, as confirmed in the Table step. */
 	columnTypes: ColumnType[];
@@ -68,15 +64,6 @@ export interface ImportMapping {
 	metadata: Record<string, FieldValue>;
 	/** The first posting is the statement's own account. */
 	postings: PostingTemplate[];
-	/**
-	 * Where an account taken from a column goes when it's neither an open
-	 * account nor an alias. Those transactions get the `!` flag.
-	 */
-	unmatchedAccount: string;
-	/** Use the matched alias as the payee. */
-	payeeFromAlias: boolean;
-	/** Running balance column, to check the amounts and suggest a closing balance assertion. */
-	balanceColumn: number | null;
 }
 
 /** A saved mapping, recognised again by the statement's header row. */
@@ -101,21 +88,26 @@ export interface ImportDraft {
 	importRef: string;
 	/** The alias that chose an account, if any. */
 	matchedAlias?: string;
-	/** The posting whose account came from a column, and that column's text. */
-	match?: { posting: number; text: string };
+	/** The posting whose account came from an `=ACCOUNT WHERE …` lookup. */
+	match?: AccountLookupResult;
+	/** For each field holding an alias lookup (named as in error messages), whether an alias matched. */
+	lookups?: Record<string, boolean>;
+	/** For each field (named as in error messages), whether it gave a value for this row. */
+	filled?: Record<string, boolean>;
 	errors: string[];
 }
 
-export interface BalanceCheck {
-	ok: boolean;
-	/** Whether the file lists rows oldest first or newest first. */
-	order: 'asc' | 'desc';
-	/** When not ok: index (file order) of the first row whose balance doesn't follow. */
-	breakAt?: number;
-	/** Balance before the earliest row. */
-	opening?: string;
-	/** Balance after the latest row. */
-	closing?: string;
+export interface AccountLookupResult {
+	posting: number;
+	/** The column text the alias was looked for in. */
+	text: string;
+	mode: 'contains' | 'exact';
+	/** False when no alias matched and the `ELSE` value was used. */
+	matched: boolean;
+	/** The `ELSE` value for this row: where an unmatched row's account went. */
+	fallback: string;
+	/** The payee came from an `=ALIAS WHERE …` lookup, so it should follow a newly remembered alias. */
+	payeeIsAlias: boolean;
 }
 
 /** Account suggested for a row's other posting, e.g. from aliases. */

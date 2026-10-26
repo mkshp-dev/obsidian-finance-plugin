@@ -5,7 +5,7 @@ import type BeancountPlugin from '../../main';
 import ImportModalComponent from './ImportModal.svelte';
 import { SvelteComponent } from 'svelte';
 
-/** Imports a bank statement (CSV from the vault) into the ledger. */
+/** Imports a CSV statement from the vault into the ledger. */
 export class ImportModal extends Modal {
 	plugin: BeancountPlugin;
 	private component: SvelteComponent | null = null;
@@ -21,7 +21,7 @@ export class ImportModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.setCssStyles({ maxWidth: '960px', width: '92vw' });
-		this.setTitle('Import bank statement');
+		this.setTitle('Import CSV statement');
 
 		this.component = new ImportModalComponent({
 			target: contentEl,

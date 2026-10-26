@@ -2,7 +2,7 @@
 // State for the import modal's review step: which rows get added, which
 // need a look, and applying a newly remembered alias to the other rows.
 
-import type { ImportDraft, ImportMapping } from '../../models/import';
+import type { ImportDraft } from '../../models/import';
 import { createAliasMatcher } from './aliases';
 import type { DuplicateStatus } from './duplicates';
 
@@ -30,7 +30,7 @@ export function createReviewRows(drafts: ImportDraft[], statuses: DuplicateStatu
 	}));
 }
 
-/** The posting being categorized: the one whose account came from a column, else the second. */
+/** The posting being categorized: the one whose account came from an alias lookup, else the second. */
 export function categoryPosting(row: ReviewRow): number {
 	return row.draft.match?.posting ?? 1;
 }
@@ -39,29 +39,31 @@ export function counterAccount(row: ReviewRow): string {
 	return row.draft.txn?.postings?.[categoryPosting(row)]?.account ?? '';
 }
 
-/** Still on the unmatched account, waiting for a category. */
-export function isUncategorized(row: ReviewRow, mapping: ImportMapping): boolean {
-	return !!row.draft.match && counterAccount(row) === mapping.unmatchedAccount;
+/** No alias matched and the row is still on its lookup's ELSE account, waiting for a category. */
+export function isUncategorized(row: ReviewRow): boolean {
+	const match = row.draft.match;
+	return !!match && !match.matched && counterAccount(row) === match.fallback;
 }
 
-export function needsAttention(row: ReviewRow, mapping: ImportMapping): boolean {
-	return row.draft.txn === null || row.status.kind === 'possible' || (row.include && isUncategorized(row, mapping));
+export function needsAttention(row: ReviewRow): boolean {
+	return row.draft.txn === null || row.status.kind === 'possible' || (row.include && isUncategorized(row));
 }
 
 export function isDuplicate(row: ReviewRow): boolean {
 	return row.status.kind !== 'new';
 }
 
-export function filterRows(rows: ReviewRow[], filter: ReviewFilter, mapping: ImportMapping): number[] {
+export function filterRows(rows: ReviewRow[], filter: ReviewFilter): number[] {
 	return rows.flatMap((row, i) =>
-		filter === 'all' || (filter === 'attention' ? needsAttention(row, mapping) : isDuplicate(row)) ? [i] : []);
+		filter === 'all' || (filter === 'attention' ? needsAttention(row) : isDuplicate(row)) ? [i] : []);
 }
 
-/** Uncategorized rows, other than `except`, that `alias` would match. */
-export function rowsMatchingAlias(rows: ReviewRow[], alias: string, mapping: ImportMapping, except = -1): number[] {
-	const match = createAliasMatcher([{ account: '_', aliases: [alias] }]);
+/** Uncategorized rows, other than `except`, that `alias` would match, each in its own lookup's mode. */
+export function rowsMatchingAlias(rows: ReviewRow[], alias: string, except = -1): number[] {
+	const entries = [{ account: '_', aliases: [alias] }];
+	const matchers = { contains: createAliasMatcher(entries, 'contains'), exact: createAliasMatcher(entries, 'exact') };
 	return rows.flatMap((row, i) =>
-		i !== except && row.draft.txn && !row.edited && isUncategorized(row, mapping) && match(row.matchText) ? [i] : []);
+		i !== except && row.draft.txn && !row.edited && isUncategorized(row) && matchers[row.draft.match!.mode](row.matchText) ? [i] : []);
 }
 
 /**
@@ -69,14 +71,16 @@ export function rowsMatchingAlias(rows: ReviewRow[], alias: string, mapping: Imp
  * `account`, as if the alias had been there from the start. Returns the
  * indexes of the rows it changed.
  */
-export function applyAlias(rows: ReviewRow[], account: string, alias: string, mapping: ImportMapping, except = -1): number[] {
-	const changed = rowsMatchingAlias(rows, alias, mapping, except);
+export function applyAlias(rows: ReviewRow[], account: string, alias: string, except = -1): number[] {
+	const changed = rowsMatchingAlias(rows, alias, except);
 	for (const i of changed) {
 		const txn = rows[i].draft.txn!;
 		const p = categoryPosting(rows[i]);
 		txn.postings![p] = { ...txn.postings![p], account };
 		txn.flag = '*';
-		if (mapping.payeeFromAlias) txn.payee = alias;
+		const match = rows[i].draft.match!;
+		if (match.payeeIsAlias) txn.payee = alias;
+		match.matched = true;
 		rows[i].draft.matchedAlias = alias;
 	}
 	return changed;
@@ -84,7 +88,16 @@ export function applyAlias(rows: ReviewRow[], account: string, alias: string, ma
 
 /**
  * A starting point for a new alias from the statement text: the name in
- * payment strings like `UPI/City Mall/ICIC/…` or `NEFT-ACME LTD-…`.
+ * payment strings like `UPI/City Mall/ICIC/…` or `NEFT-ACME LTD-…`. An exact
+ * lookup needs the whole text, so it gets that instead.
+ */
+export function aliasSuggestion(row: ReviewRow): string {
+	return row.draft.match?.mode === 'exact' ? row.matchText : suggestAliasText(row.matchText);
+}
+
+/**
+ * The name inside payment strings like `UPI/City Mall/ICIC/…` or
+ * `NEFT-ACME LTD-…`, or '' if the text isn't one.
  */
 export function suggestAliasText(matchText: string): string {
 	const parts = matchText.split(/[/-]/).map((p) => p.replace(/\s+/g, ' ').trim());

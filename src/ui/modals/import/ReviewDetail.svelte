@@ -1,12 +1,11 @@
 <script lang="ts">
-	import type { ImportMapping } from '../../../models/import';
-	import { categoryPosting, suggestAliasText, type ReviewRow } from '../../../utils/import/review';
+	import { aliasSuggestion, categoryPosting, type ReviewRow } from '../../../utils/import/review';
 	import { generateTransactionText } from '../../../utils/directives/transactionDirectives';
 	import { nativeDatePicker } from '../../actions/nativeDatePicker';
+	import HelpTip from '../../common/HelpTip.svelte';
 
 	export let row: ReviewRow;
 	export let labels: string[] = [];
-	export let mapping: ImportMapping;
 	export let accounts: string[] = [];
 	export let positionLabel = '';
 	export let hasPrev = false;
@@ -20,7 +19,8 @@
 	export let onList: () => void;
 
 	$: txn = row.draft.txn;
-	$: fallback = mapping.unmatchedAccount;
+	/** Where the row went when no alias matched. */
+	$: fallback = row.draft.match?.fallback ?? '';
 	/** The posting the Account field edits: the one categorized from a column. */
 	$: posting = categoryPosting(row);
 
@@ -40,7 +40,7 @@
 
 	$: account = txn?.postings?.[posting]?.account ?? '';
 	$: canRemember = !!account && account !== fallback && account !== accountAtOpen && !remembered;
-	$: if (canRemember && !aliasTouched) aliasText = txn?.payee || suggestAliasText(row.matchText);
+	$: if (canRemember && !aliasTouched) aliasText = (row.draft.match?.mode === 'exact' ? '' : txn?.payee) || aliasSuggestion(row);
 	$: aliasMatches = canRemember && aliasText.trim() ? countAliasMatches(aliasText.trim()) : 0;
 	$: previewText = txn ? generateTransactionText(txn) : '';
 
@@ -59,7 +59,8 @@
 	function remember() {
 		const alias = aliasText.trim();
 		if (!alias || !txn) return;
-		if (mapping.payeeFromAlias && !txn.payee) txn.payee = alias;
+		if (row.draft.match?.payeeIsAlias) txn.payee = alias;
+		if (row.draft.match) row.draft.match.matched = true;
 		row.draft.matchedAlias = alias;
 		const count = onRemember(account, alias);
 		remembered = { account, alias, count };
@@ -133,13 +134,11 @@
 							<span>Remember</span>
 							<input type="text" bind:value={aliasText} on:input={() => (aliasTouched = true)} aria-label="Alias" />
 							<span>→ {account}</span>
+							<HelpTip topic="importRemember" />
 						</div>
 						<div class="import-row tight">
-							<span class="import-hint">
-								Adds this alias to the account, so future statements match it.
-								{#if aliasMatches > 0}Also fills in {aliasMatches} other uncategorized row{aliasMatches === 1 ? '' : 's'} now.{/if}
-							</span>
 							<button type="button" disabled={!aliasText.trim()} on:click={remember}>Remember alias</button>
+							{#if aliasMatches > 0}<span class="import-hint">also fills in {aliasMatches} other row{aliasMatches === 1 ? '' : 's'}</span>{/if}
 						</div>
 					</div>
 				{:else if remembered}

@@ -4,7 +4,7 @@
 
 import { parse as parseCsv } from 'csv-parse/sync';
 import type { TableBounds } from '../../models/import';
-import { isAmountLike, isDateLike } from './values';
+import { isAmountLike, isDateLike, parseAmount } from './values';
 
 /** Parses CSV text into trimmed rows, dropping blank lines. Rows may differ in length. */
 export function readCsvRows(text: string): string[][] {
@@ -86,15 +86,38 @@ export function headerSignature(header: string[]): string {
 	return header.map((h) => h.replace(/\s+/g, ' ').trim().toLowerCase()).join('|');
 }
 
+const BALANCE_LABELS = {
+	opening: /opening\s*bal|balance\s*b\/?f\b|brought\s*forward|previous\s*bal|beginning\s*bal|starting\s*bal|balance\s+before/i,
+	closing: /closing\s*bal|ending\s*bal|balance\s+as\s+(on|of)|available\s*bal|ledger\s*bal|balance\s*c\/?f\b|carried\s*forward/i,
+};
+const DATE_IN_TEXT = /\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}/g;
+const NUMBER_IN_TEXT = /\(?-?\d[\d,.']*\d\)?-?|\d/g;
+
 /**
- * Looks above the table for the statement's currency, e.g. Kotak's
- * `"Currency","INR"` line.
+ * Looks outside the transaction table for the balance before or after the
+ * statement, e.g. Kotak's `"Closing Balance","as on 28/09/2026 INR 9,656.51"`:
+ * a row labelled like one, taking its last number that isn't part of a date.
+ * The opening balance is looked for above the table first, the closing one
+ * below it first. Returns the amount and the row it was found on, or null.
  */
-export function detectCurrency(rows: string[][], headerRow: number): string | null {
-	for (const row of rows.slice(0, headerRow)) {
-		const i = row.findIndex((c) => /^currency$/i.test(c));
-		const code = i >= 0 ? row.slice(i + 1).find(Boolean) : undefined;
-		if (code && /^[A-Z]{3}$/.test(code)) return code;
+export function detectStatementBalance(
+	rows: string[][],
+	bounds: TableBounds,
+	decimalMark: '.' | ',',
+	which: 'opening' | 'closing',
+): { amount: string; row: number } | null {
+	const above = rows.map((_, i) => i).filter((i) => i < bounds.headerRow).reverse();
+	const below = rows.map((_, i) => i).filter((i) => i > bounds.lastRow);
+	// "Opening balance as on …" also reads like a closing label, so the closing balance skips opening labels.
+	const label = BALANCE_LABELS[which];
+	const fits = (c: string) => label.test(c) && (which === 'opening' || !BALANCE_LABELS.opening.test(c));
+	for (const i of which === 'opening' ? [...above, ...below] : [...below, ...above]) {
+		if (!rows[i].some(fits)) continue;
+		const numbers = rows[i].flatMap((c) => c.replace(DATE_IN_TEXT, ' ').match(NUMBER_IN_TEXT) ?? []);
+		for (const n of numbers.reverse()) {
+			const amount = parseAmount(n, decimalMark);
+			if (amount !== null) return { amount, row: i };
+		}
 	}
 	return null;
 }

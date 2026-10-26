@@ -1,19 +1,21 @@
 <script lang="ts">
-	import type { ImportMapping } from '../../../models/import';
 	import TabBar from '../../common/TabBar.svelte';
 	import ReviewDetail from './ReviewDetail.svelte';
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { counterAccount, filterRows, isUncategorized, rowsMatchingAlias, type ReviewFilter, type ReviewRow } from '../../../utils/import/review';
 	import type { OpeningBalanceCheck } from '../../../services/import.service';
+	import type { StatementAssertion } from '../../../utils/import/mapping';
 
 	export let rows: ReviewRow[] = [];
 	export let labels: string[] = [];
-	export let mapping: ImportMapping;
 	export let accounts: string[] = [];
 	export let opening: OpeningBalanceCheck | null = null;
 	/** Posting 1's account and currency, when they're the same for every row. */
 	export let statement: { account: string; currency: string } | null = null;
-	export let closingBalance: { date: string; amount: string } | null = null;
-	export let addAssertion = true;
+	/** Balance assertions for the balances before and after the statement, each with its own toggle. */
+	export let assertions: StatementAssertion[] = [];
+	/** closing − opening − the rows' amounts, when both balances were given. */
+	export let difference: string | null = null;
 	export let onRememberAlias: (index: number, account: string, alias: string) => number;
 	export let onBack: () => void;
 	export let onSubmit: () => void;
@@ -22,20 +24,25 @@
 	/** Index into `rows` of the row open in detail, or null for the list. */
 	let selected: number | null = null;
 
-	$: visible = filterRows(rows, filter, mapping);
+	$: visible = filterRows(rows, filter);
 	$: tabs = [
 		{ value: 'all', label: 'All', count: rows.length },
-		{ value: 'attention', label: 'Needs attention', count: filterRows(rows, 'attention', mapping).length, tone: 'warning' as const },
-		{ value: 'duplicates', label: 'Duplicates', count: filterRows(rows, 'duplicates', mapping).length },
+		{ value: 'attention', label: 'Needs attention', count: filterRows(rows, 'attention').length, tone: 'warning' as const },
+		{ value: 'duplicates', label: 'Duplicates', count: filterRows(rows, 'duplicates').length },
 	];
 	$: includedCount = rows.filter((r) => r.include && r.draft.txn).length;
+	$: assertionCount = assertions.filter((a) => a.include).length;
+	$: importLabel = [
+		includedCount > 0 || assertionCount === 0 ? `${includedCount} transaction${includedCount === 1 ? '' : 's'}` : '',
+		assertionCount > 0 ? `${assertionCount} balance assertion${assertionCount === 1 ? '' : 's'}` : '',
+	].filter(Boolean).join(' and ');
 	$: position = selected === null ? -1 : visible.indexOf(selected);
 
-	function statusOf(row: ReviewRow, m: ImportMapping): { label: string; tone: string } | null {
+	function statusOf(row: ReviewRow): { label: string; tone: string } | null {
 		if (!row.draft.txn) return { label: 'error', tone: 'bad' };
 		if (row.status.kind === 'imported') return { label: 'imported', tone: 'muted' };
 		if (row.status.kind === 'possible') return { label: 'possible duplicate', tone: 'warn' };
-		if (isUncategorized(row, m)) return { label: 'uncategorized', tone: 'warn' };
+		if (isUncategorized(row)) return { label: 'uncategorized', tone: 'warn' };
 		return null;
 	}
 
@@ -49,12 +56,11 @@
 	<ReviewDetail
 		bind:row={rows[selected]}
 		{labels}
-		{mapping}
 		{accounts}
 		positionLabel={position >= 0 ? `Row ${position + 1} of ${visible.length}` : ''}
 		hasPrev={position > 0}
 		hasNext={position >= 0 && position < visible.length - 1}
-		countAliasMatches={(alias) => rowsMatchingAlias(rows, alias, mapping, selected ?? -1).length}
+		countAliasMatches={(alias) => rowsMatchingAlias(rows, alias, selected ?? -1).length}
 		onRemember={(account, alias) => { const n = onRememberAlias(selected ?? -1, account, alias); rows = rows; return n; }}
 		onPrev={() => step(-1)}
 		onNext={() => step(1)}
@@ -62,6 +68,13 @@
 	/>
 {:else}
 	<div class="import-step">
+		{#if difference !== null && difference !== '0' && !/^-?0(\.0+)?$/.test(difference)}
+			<div class="import-banner is-warning">
+				The balances before and after the statement don't match its transactions: they're {difference} {statement?.currency ?? ''} apart.
+				A row may be missing, or an amount's sign is wrong.
+			</div>
+		{/if}
+
 		{#if opening && !opening.ok}
 			<div class="import-banner is-warning">
 				Before this statement, the ledger shows {opening.ledger} {statement?.currency ?? ''} but the bank shows {opening.statement} {statement?.currency ?? ''}
@@ -69,7 +82,10 @@
 			</div>
 		{/if}
 
-		<TabBar {tabs} value={filter} ariaLabel="Filter rows" on:change={(e) => (filter = e.detail)} />
+		<div class="review-tabs">
+			<TabBar {tabs} value={filter} ariaLabel="Filter rows" on:change={(e) => (filter = e.detail)} />
+			<HelpTip topic="importReview" />
+		</div>
 
 		<div class="import-table-wrap">
 			<table class="review-table">
@@ -80,7 +96,7 @@
 					{#each visible as i (i)}
 						{@const row = rows[i]}
 						{@const txn = row.draft.txn}
-						{@const status = statusOf(row, mapping)}
+						{@const status = statusOf(row)}
 						<tr on:click={() => (selected = i)}>
 							<td on:click|stopPropagation>
 								<input type="checkbox" bind:checked={rows[i].include} disabled={!txn} aria-label="Add to ledger" />
@@ -102,23 +118,47 @@
 			</table>
 		</div>
 
-		{#if closingBalance}
-			<label class="assertion">
-				<input type="checkbox" bind:checked={addAssertion} />
-				Add balance assertion: <code>{closingBalance.date} balance {statement?.account} {closingBalance.amount} {statement?.currency}</code>
-			</label>
+		{#if assertions.length > 0}
+			<section class="import-section">
+				<h4>Balance assertions</h4>
+				<table class="review-table">
+					<thead>
+						<tr><th>Add</th><th>Date</th><th>Balance</th><th></th></tr>
+					</thead>
+					<tbody>
+						{#each assertions as assertion, i (assertion.kind)}
+							<tr class="assertion-row">
+								<td><input type="checkbox" bind:checked={assertions[i].include} aria-label="Add balance assertion to ledger" /></td>
+								<td class="nowrap">{assertion.date}</td>
+								<td><code>{assertion.date} balance {statement?.account} {assertion.amount} {statement?.currency}</code></td>
+								<td class="import-hint">{assertion.kind === 'opening' ? 'before the statement' : 'after the statement'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
 		{/if}
 
 		<div class="import-footer">
 			<button type="button" on:click={onBack}>Back</button>
-			<button type="button" class="mod-cta" disabled={includedCount === 0} on:click={onSubmit}>
-				Import {includedCount} transaction{includedCount === 1 ? '' : 's'}
+			<button type="button" class="mod-cta" disabled={includedCount === 0 && assertionCount === 0} on:click={onSubmit}>
+				Import {importLabel}
 			</button>
 		</div>
 	</div>
 {/if}
 
 <style>
+	.review-tabs {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+	}
+
+	.review-tabs > :global(:first-child) {
+		flex: 1;
+	}
+
 	.review-table {
 		width: 100%;
 		border-collapse: collapse;
@@ -190,10 +230,7 @@
 		color: var(--text-muted);
 	}
 
-	.assertion {
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-2);
-		font-size: var(--font-ui-small);
+	.assertion-row {
+		cursor: default;
 	}
 </style>

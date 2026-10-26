@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { FILE_NAME_FIELD, IMPORT_REF_KEY, type AccountMatcher, type ColumnType, type ImportMapping } from '../../../models/import';
-	import { buildDrafts, parseField } from '../../../utils/import/mapping';
+	import { FILE_NAME_FIELD, IMPORT_REF_KEY, type ImportMapping } from '../../../models/import';
+	import { buildDrafts, checkField, parseField, typeEnv, type DraftResult, type FieldWant } from '../../../utils/import/mapping';
+	import type { AccountAliases } from '../../../utils/import/aliases';
 	import { columnFits } from '../../../utils/import/columns';
+	import { functionHelp, resultTexts, type FunctionName } from '../../../utils/import/expression';
 	import { generateTransactionText } from '../../../utils/directives/transactionDirectives';
+	import FieldCount from './FieldCount.svelte';
+	import HelpTip from '../../common/HelpTip.svelte';
 
 	export let labels: string[] = [];
 	export let dataRows: string[][] = [];
@@ -11,20 +15,25 @@
 	export let fileName = '';
 	/** Row number of the first transaction, for pointing at rows in messages. */
 	export let firstRowNumber = 1;
-	export let matcher: AccountMatcher;
+	/** Aliases from open directives, for lookups. */
+	export let aliases: AccountAliases[] = [];
 	export let mapping: ImportMapping;
 	export let profileName = '';
 	export let applying = false;
+	/** Told the account posting 1 now has when it's plain text, or '' for a formula: page 2 shows the same value. */
+	export let onStatementAccount: (account: string) => void = () => {};
 	export let onBack: () => void;
 	export let onApply: () => void;
 
 	const PREVIEW_COUNT = 3;
 
 	$: types = mapping.columnTypes;
+	$: onStatementAccount(isFormula(mapping.postings[0]?.account ?? '') ? '' : (mapping.postings[0]?.account ?? '').trim());
+	$: env = typeEnv(labels, types);
 	$: chipLabels = [...labels.filter((_, i) => columnFits(types[i], 'any')), FILE_NAME_FIELD];
 	$: numberColumns = labels.map((_, i) => i).filter((i) => types[i]?.kind === 'number');
 
-	// --- Column chips insert `={{Column}}` into the field edited last ---
+	// --- Fields, by key: 'date', 'payee', 'narration', 'posting-0-amount', 'meta-1', 'tags'… ---
 	let lastFocused = 'narration';
 	const elements: Record<string, HTMLInputElement> = {};
 
@@ -48,18 +57,109 @@
 		metaRows = metaRows;
 	}
 
-	async function insertColumn(label: string) {
-		const key = lastFocused;
-		setField(key, `={{${label}}}`);
-		await tick();
-		elements[key]?.focus();
+	function getField(key: string): string {
+		const posting = /^posting-(\d+)-(account|amount|currency)$/.exec(key);
+		if (posting) return mapping.postings[Number(posting[1])][posting[2] as 'account' | 'amount' | 'currency'];
+		if (key.startsWith('meta-')) return metaRows[Number(key.slice(5))]?.value ?? '';
+		if (key === 'date' || key === 'payee' || key === 'narration') return mapping[key];
+		return '';
 	}
 
+	/** What a field has to produce. */
+	function wantOf(key: string): FieldWant {
+		return key === 'date' ? 'date' : /^posting-\d+-amount$/.test(key) ? 'number' : 'text';
+	}
+
+	function isFormula(value: string): boolean {
+		return value.trim().startsWith('=');
+	}
+
+	/**
+	 * Puts formula text into the field edited last: at the cursor when it
+	 * already holds a formula (like clicking a cell in Excel), otherwise as a
+	 * new formula. Tags and links get a new entry.
+	 */
+	async function insert(snippet: string) {
+		const key = lastFocused;
+		const el = elements[key];
+		const current = getField(key);
+		if (key !== 'tags' && key !== 'links' && isFormula(current) && el) {
+			const start = el.selectionStart ?? current.length;
+			const end = el.selectionEnd ?? start;
+			setField(key, current.slice(0, start) + snippet + current.slice(end));
+			await tick();
+			el.focus();
+			el.setSelectionRange(start + snippet.length, start + snippet.length);
+			return;
+		}
+		setField(key, `=${snippet}`);
+		await tick();
+		el?.focus();
+	}
+
+	// --- Function chips, grouped by what they work on ---
+	/** The column formulas usually start from: the narration's column, else the first text column. */
+	function textColumn(): string {
+		const f = parseField(mapping.narration);
+		if ('expr' in f && f.expr.type === 'column' && labels.includes(f.expr.name)) return f.expr.name;
+		return labels.find((_, i) => types[i]?.kind === 'text') ?? labels[0] ?? '';
+	}
+
+	/** The first Date or Date & time column. */
+	function dateColumn(): string {
+		return labels.find((_, i) => types[i]?.kind === 'date' || types[i]?.kind === 'datetime') ?? labels[0] ?? '';
+	}
+
+	function numberColumn(): string {
+		const f = parseField(mapping.postings[0]?.amount ?? '');
+		if ('expr' in f && f.expr.type === 'column') return f.expr.name;
+		return labels[numberColumns[0]] ?? '';
+	}
+
+	type Snippet = { label: string; help: string; build: () => string };
+	const fn = (name: FunctionName, build: () => string): Snippet => ({ label: name, help: functionHelp(name), build });
+	const GROUPS: { name: 'Logic' | 'Text' | 'Number' | 'Date'; snippets: Snippet[] }[] = [
+		{ name: 'Logic', snippets: [
+			{ label: 'IF', help: 'IF condition THEN value ELSE value', build: () => `IF {{${textColumn()}}} CONTAINS "text" THEN "value" ELSE "value"` },
+			{ label: 'ACCOUNT WHERE', help: 'The account whose alias matches the text', build: () => `ACCOUNT WHERE {{${textColumn()}}} CONTAINS ALIAS ELSE "Expenses:Uncategorized"` },
+			{ label: 'ALIAS WHERE', help: 'The alias that matched, e.g. as a tidy payee', build: () => `ALIAS WHERE {{${textColumn()}}} CONTAINS ALIAS` },
+		] },
+		{ name: 'Text', snippets: [
+			fn('SPLIT', () => `SPLIT({{${textColumn()}}}, "/", 2)`),
+			fn('TRIM', () => `TRIM({{${textColumn()}}})`),
+			fn('UPPER', () => `UPPER({{${textColumn()}}})`),
+			fn('LOWER', () => `LOWER({{${textColumn()}}})`),
+			fn('REPLACE', () => `REPLACE({{${textColumn()}}}, "find", "with")`),
+			fn('FIRST', () => `FIRST({{${textColumn()}}}, "")`),
+		] },
+		{ name: 'Number', snippets: [
+			fn('ABS', () => `ABS({{${numberColumn()}}})`),
+			fn('ROUND', () => `ROUND({{${numberColumn()}}}, 2)`),
+		] },
+		{ name: 'Date', snippets: [
+			fn('FORMAT_DATE', () => `FORMAT_DATE({{${dateColumn()}}}, "YYYY-MM-DD")`),
+			fn('YEAR', () => `YEAR({{${dateColumn()}}})`),
+			fn('MONTH', () => `MONTH({{${dateColumn()}}})`),
+			fn('DAY', () => `DAY({{${dateColumn()}}})`),
+			fn('ADD_DAYS', () => `ADD_DAYS({{${dateColumn()}}}, 1)`),
+			fn('DATE', () => `DATE({{${textColumn()}}}, "DD/MM/YYYY")`),
+		] },
+	];
+	/** The group that fits the field being edited comes first. */
+	$: groups = (() => {
+		const first = wantOf(lastFocused) === 'number' ? 'Number' : wantOf(lastFocused) === 'date' ? 'Date' : 'Logic';
+		return [...GROUPS.filter((g) => g.name === first), ...GROUPS.filter((g) => g.name !== first)];
+	})();
+
 	// --- Metadata rows, kept as a list so keys can be edited; import-ref stays first ---
-	let metaRows = Object.entries(mapping.metadata)
-		.sort(([a], [b]) => (a === IMPORT_REF_KEY ? -1 : b === IMPORT_REF_KEY ? 1 : 0))
-		.map(([key, value]) => ({ key, value }));
-	if (!metaRows.some((r) => r.key === IMPORT_REF_KEY)) metaRows.unshift({ key: IMPORT_REF_KEY, value: '' });
+	function rowsOf(metadata: Record<string, string>) {
+		const rows = Object.entries(metadata)
+			.sort(([a], [b]) => (a === IMPORT_REF_KEY ? -1 : b === IMPORT_REF_KEY ? 1 : 0))
+			.map(([key, value]) => ({ key, value }));
+		if (!rows.some((r) => r.key === IMPORT_REF_KEY)) rows.unshift({ key: IMPORT_REF_KEY, value: '' });
+		return rows;
+	}
+	let metaRows = rowsOf(mapping.metadata);
 	$: mapping.metadata = Object.fromEntries(metaRows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value]));
 	let showMetadata = true;
 
@@ -89,46 +189,59 @@
 	}
 
 	// --- Checking fields as they're typed ---
-	type Want = 'date' | 'number' | 'any';
-
 	/** What's wrong with a field, or '' if nothing. */
-	function problem(value: string, want: Want, cols: string[], columnTypes: ColumnType[]): string {
-		const f = parseField(value);
-		if ('error' in f) return f.error;
-		if ('text' in f) return '';
-		if (f.column === FILE_NAME_FIELD) return want === 'any' ? '' : `${FILE_NAME_FIELD} can't be used here`;
-		const i = cols.indexOf(f.column);
-		if (i < 0) return `There's no column "${f.column}"`;
-		if (want === 'date' && !columnFits(columnTypes[i], 'date')) return `"${f.column}" isn't a Date column`;
-		if (want === 'number' && !columnFits(columnTypes[i], 'number')) return `"${f.column}" isn't a Number column`;
-		return '';
-	}
-
-	function isFormula(value: string): boolean {
-		return value.trim().startsWith('=');
+	function problem(value: string, want: FieldWant, e: typeof env): string {
+		return checkField(value, want, e);
 	}
 
 	$: problems = [
-		problem(mapping.date, 'date', labels, types),
-		problem(mapping.payee, 'any', labels, types),
-		problem(mapping.narration, 'any', labels, types),
-		...mapping.postings.flatMap((p) => [problem(p.account, 'any', labels, types), problem(p.amount, 'number', labels, types), problem(p.currency, 'any', labels, types)]),
-		...metaRows.map((r) => problem(r.value, 'any', labels, types)),
-		...mapping.tags.map((t) => problem(t, 'any', labels, types)),
-		...mapping.links.map((l) => problem(l, 'any', labels, types)),
+		problem(mapping.date, 'date', env),
+		problem(mapping.payee, 'text', env),
+		problem(mapping.narration, 'text', env),
+		...mapping.postings.flatMap((p) => [problem(p.account, 'text', env), problem(p.amount, 'number', env), problem(p.currency, 'text', env)]),
+		...metaRows.map((r) => problem(r.value, 'text', env)),
+		...mapping.tags.map((t) => problem(t, 'text', env)),
+		...mapping.links.map((l) => problem(l, 'text', env)),
 	].filter(Boolean);
 
 	// --- Live preview ---
-	$: result = buildDrafts(dataRows, labels, mapping, { matchAccount: matcher, accounts, fileName });
+	$: result = buildDrafts(dataRows, labels, mapping, { aliases, fileName });
 	$: preview = result.drafts.filter((d) => d.txn).slice(0, PREVIEW_COUNT).map((d) => generateTransactionText(d.txn!));
 	$: failed = result.drafts.filter((d) => d.errors.length > 0);
 	$: readable = result.drafts.length - failed.length;
-	$: constantAccounts = [
-		...mapping.postings.map((p) => p.account).filter((a) => a.trim() && !isFormula(a)),
-		mapping.unmatchedAccount,
-	];
+
+	// --- How many rows each field gave a value for, shown next to its label ---
+	/** A field's name in error messages and in the drafts' per-field results. */
+	function whatOf(key: string): string {
+		const posting = /^posting-(\d+)-(account|amount|currency)$/.exec(key);
+		if (posting) return `Posting ${Number(posting[1]) + 1} ${posting[2]}`;
+		if (key.startsWith('meta-')) {
+			const k = metaRows[Number(key.slice(5))]?.key.trim() ?? '';
+			return k === IMPORT_REF_KEY ? IMPORT_REF_KEY : `Metadata "${k}"`;
+		}
+		return key[0].toUpperCase() + key.slice(1);
+	}
+
+	/** Nothing for an empty or broken field; otherwise rows that got a value, and how alias lookups went. */
+	function countFor(key: string, value: string, r: DraftResult) {
+		if (!value.trim() || problem(value, wantOf(key), env)) return null;
+		const what = whatOf(key);
+		const looked = r.drafts.filter((d) => d.lookups?.[what] !== undefined);
+		return {
+			filled: r.drafts.filter((d) => d.filled?.[what]).length,
+			total: r.drafts.length,
+			looked: looked.length,
+			matched: looked.filter((d) => d.lookups![what]).length,
+		};
+	}
+
+	$: constantAccounts = mapping.postings.flatMap((p) => {
+		const f = parseField(p.account);
+		if ('text' in f) return f.text ? [f.text] : [];
+		return 'expr' in f ? resultTexts(f.expr) : [];
+	});
 	$: missingAccounts = constantAccounts.filter((a) => a && accounts.length > 0 && !accounts.includes(a.trim()));
-	$: canApply = !!mapping.postings[0]?.account.trim() && readable > 0 && problems.length === 0 && !!mapping.unmatchedAccount.trim();
+	$: canApply = !!mapping.postings[0]?.account.trim() && readable > 0 && problems.length === 0;
 </script>
 
 <datalist id="import-accounts">
@@ -137,22 +250,27 @@
 
 <div class="import-step">
 	<div class="column-chips">
+		<HelpTip topic="importTemplate" />
 		<span class="import-hint">Insert column:</span>
 		{#each chipLabels as label}
 			<button type="button" class="chip" class:is-builtin={label === FILE_NAME_FIELD}
-				on:mousedown|preventDefault on:click={() => insertColumn(label)}>{label}</button>
+				on:mousedown|preventDefault on:click={() => insert(`{{${label}}}`)}>{label}</button>
 		{/each}
 	</div>
-	<p class="import-hint">
-		Fill in the transaction as you would in Add Transaction. Text you type is used for every row;
-		<code>={'{{Column}}'}</code> takes the value from that column. Click a column above to put it in the field you're editing.
-	</p>
-
+	{#each groups as group (group.name)}
+		<div class="column-chips">
+			<span class="import-hint">{group.name}:</span>
+			{#each group.snippets as snippet (snippet.label)}
+				<button type="button" class="chip is-function" title={snippet.help}
+					on:mousedown|preventDefault on:click={() => insert(snippet.build())}>{snippet.label} ƒ</button>
+			{/each}
+		</div>
+	{/each}
 	<div class="txn-form">
 		<div class="transaction-header-row">
 			<div class="form-group">
-				<label for="map-date">Date *</label>
-				<input id="map-date" type="text" class:is-formula={isFormula(mapping.date)} class:is-invalid={problem(mapping.date, 'date', labels, types)}
+				<label for="map-date">Date * <FieldCount count={countFor('date', mapping.date, result)} /></label>
+				<input id="map-date" type="text" class:is-formula={isFormula(mapping.date)} class:is-invalid={problem(mapping.date, 'date', env)}
 					placeholder={'={{Date column}}'} bind:value={mapping.date} use:track={'date'} />
 			</div>
 			<div class="form-group">
@@ -163,13 +281,13 @@
 				</select>
 			</div>
 			<div class="form-group">
-				<label for="map-payee">Payee</label>
-				<input id="map-payee" type="text" class:is-formula={isFormula(mapping.payee)} class:is-invalid={problem(mapping.payee, 'any', labels, types)}
+				<label for="map-payee">Payee <FieldCount count={countFor('payee', mapping.payee, result)} /></label>
+				<input id="map-payee" type="text" class:is-formula={isFormula(mapping.payee)} class:is-invalid={problem(mapping.payee, 'text', env)}
 					placeholder="Store name" bind:value={mapping.payee} use:track={'payee'} />
 			</div>
 			<div class="form-group">
-				<label for="map-narration">Narration</label>
-				<input id="map-narration" type="text" class:is-formula={isFormula(mapping.narration)} class:is-invalid={problem(mapping.narration, 'any', labels, types)}
+				<label for="map-narration">Narration <FieldCount count={countFor('narration', mapping.narration, result)} /></label>
+				<input id="map-narration" type="text" class:is-formula={isFormula(mapping.narration)} class:is-invalid={problem(mapping.narration, 'text', env)}
 					placeholder="Description" bind:value={mapping.narration} use:track={'narration'} />
 			</div>
 			<button type="button" class="metadata-toggle-btn" class:active={showMetadata}
@@ -178,16 +296,19 @@
 
 		{#if showMetadata}
 			<div class="transaction-metadata-section">
-				<h5>Transaction metadata</h5>
+				<h5>Transaction metadata <HelpTip topic="importMetadata" /></h5>
 				{#each metaRows as row, i}
 					<div class="metadata-item">
 						<input type="text" class="metadata-key" placeholder="key" bind:value={row.key}
 							readonly={row.key === IMPORT_REF_KEY && i === 0} aria-label="Metadata key" />
-						<input type="text" class="metadata-value" class:is-formula={isFormula(row.value)} class:is-invalid={problem(row.value, 'any', labels, types)}
-							placeholder={row.key === IMPORT_REF_KEY ? 'Blank: generated from the row' : 'value'}
-							bind:value={row.value} use:track={`meta-${i}`} aria-label="Metadata value" />
+						<div class="metadata-value-wrap">
+							<FieldCount count={countFor(`meta-${i}`, row.value, result)} />
+							<input type="text" class="metadata-value" class:is-formula={isFormula(row.value)} class:is-invalid={problem(row.value, 'text', env)}
+								placeholder="value"
+								bind:value={row.value} use:track={`meta-${i}`} aria-label="Metadata value" />
+						</div>
 						{#if row.key === IMPORT_REF_KEY && i === 0}
-							<span class="import-hint required-note" title="Used to recognise rows that were already imported">required</span>
+							<span class="import-hint required-note">required</span>
 						{:else}
 							<button type="button" class="remove-metadata" on:click={() => (metaRows = metaRows.filter((_, j) => j !== i))}>&times;</button>
 						{/if}
@@ -201,25 +322,25 @@
 			<div class="posting-container">
 				<div class="posting-row">
 					<div class="posting-field">
-						<label for="map-account-{i}">Account *{i === 0 ? ' (this statement\'s account)' : ''}</label>
+						<label for="map-account-{i}">Account *{i === 0 ? ' (this statement\'s account)' : ''} <FieldCount count={countFor(`posting-${i}-account`, posting.account, result)} /></label>
 						<input id="map-account-{i}" type="text" list="import-accounts"
-							class:is-formula={isFormula(posting.account)} class:is-invalid={problem(posting.account, 'any', labels, types)}
-							placeholder={i === 0 ? 'Assets:Bank:Checking' : 'Account name, or ={{Column}} to match aliases'}
+							class:is-formula={isFormula(posting.account)} class:is-invalid={problem(posting.account, 'text', env)}
+							placeholder="Account name"
 							bind:value={posting.account} use:track={`posting-${i}-account`} />
 					</div>
 					<div class="posting-field">
-						<label for="map-amount-{i}">Amount</label>
+						<label for="map-amount-{i}">Amount <FieldCount count={countFor(`posting-${i}-amount`, posting.amount, result)} /></label>
 						<input id="map-amount-{i}" type="text"
-							class:is-formula={isFormula(posting.amount)} class:is-invalid={problem(posting.amount, 'number', labels, types)}
-							placeholder="Optional amount" bind:value={posting.amount} use:track={`posting-${i}-amount`} />
+							class:is-formula={isFormula(posting.amount)} class:is-invalid={problem(posting.amount, 'number', env)}
+							bind:value={posting.amount} use:track={`posting-${i}-amount`} />
 					</div>
 					<div class="posting-field">
-						<label for="map-currency-{i}">Currency</label>
+						<label for="map-currency-{i}">Currency <FieldCount count={countFor(`posting-${i}-currency`, posting.currency, result)} /></label>
 						<input id="map-currency-{i}" type="text"
-							class:is-formula={isFormula(posting.currency)} class:is-invalid={problem(posting.currency, 'any', labels, types)}
+							class:is-formula={isFormula(posting.currency)} class:is-invalid={problem(posting.currency, 'text', env)}
 							bind:value={posting.currency} use:track={`posting-${i}-currency`} />
 					</div>
-					{#if mapping.postings.length > 2}
+					{#if mapping.postings.length > 2 && i > 0}
 						<button type="button" class="remove-posting" on:click={() => removePosting(i)} title="Remove posting">&times;</button>
 					{/if}
 				</div>
@@ -261,37 +382,8 @@
 		<div class="import-banner is-error">{problems[0]}{problems.length > 1 ? ` (and ${problems.length - 1} more)` : ''}</div>
 	{/if}
 
-	<details class="import-collapsible">
-		<summary><span class="summary-title">Options</span>
-			<span class="import-hint">unmatched accounts, running balance</span></summary>
-		<div class="options">
-			<div class="import-field">
-				<label for="map-unmatched">Unmatched accounts go to</label>
-				<input id="map-unmatched" type="text" list="import-accounts" bind:value={mapping.unmatchedAccount} />
-				<span class="import-hint">For an account taken from a column that isn't an open account or one of your aliases. These transactions get the ! flag.</span>
-			</div>
-			<label class="inline-check">
-				<input type="checkbox" bind:checked={mapping.payeeFromAlias} /> Use the matched alias as payee
-			</label>
-			<div class="import-field">
-				<label for="map-balance">Running balance column</label>
-				<select id="map-balance" class="dropdown" value={mapping.balanceColumn ?? -1}
-					on:change={(e) => (mapping.balanceColumn = Number(e.currentTarget.value) < 0 ? null : Number(e.currentTarget.value))}>
-					<option value={-1}>None</option>
-					{#each numberColumns as i}<option value={i}>{labels[i]}</option>{/each}
-				</select>
-				<span class="import-hint">Checks posting 1's amounts add up row by row, and offers a closing balance assertion.</span>
-			</div>
-		</div>
-	</details>
-
 	<section class="import-section">
 		<h4>Preview</h4>
-		{#if result.balance?.ok}
-			<div class="status is-ok">✓ All {result.drafts.length} rows add up to the running balance · closing balance {result.balance.closing}</div>
-		{:else if result.balance && result.balance.breakAt !== undefined}
-			<div class="status is-bad">✗ Row {firstRowNumber + result.balance.breakAt} doesn't add up to the running balance. Check the amount column's sign in the Table step.</div>
-		{/if}
 		{#if failed.length > 0}
 			<div class="import-banner is-warning">
 				{failed.length} row{failed.length === 1 ? '' : 's'} can't be read:
@@ -336,6 +428,11 @@
 
 	.chip.is-builtin {
 		font-style: italic;
+	}
+
+	.chip.is-function {
+		font-family: var(--font-monospace);
+		color: var(--text-accent);
 	}
 
 	/* Mirrors the Add Transaction form */
@@ -426,6 +523,21 @@
 		grid-template-columns: 1fr 2fr 4.5em;
 		gap: 0.5rem;
 		align-items: center;
+	}
+
+	.metadata-value-wrap {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+
+	.metadata-value-wrap input {
+		width: 100%;
+	}
+
+	.metadata-item {
+		align-items: end;
 	}
 
 	.required-note {
@@ -523,50 +635,6 @@
 		.transaction-header-row, .posting-row, .tags-links-row {
 			grid-template-columns: 1fr;
 		}
-	}
-
-	.import-collapsible {
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--radius-m);
-		padding: var(--size-4-2) var(--size-4-3);
-	}
-
-	.import-collapsible > summary {
-		display: flex;
-		align-items: baseline;
-		gap: var(--size-4-3);
-		cursor: pointer;
-	}
-
-	.summary-title {
-		font-weight: 600;
-	}
-
-	.options {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-4-3);
-		padding-top: var(--size-4-2);
-	}
-
-	.inline-check {
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-2);
-		font-size: var(--font-ui-small);
-	}
-
-	.status {
-		font-size: var(--font-ui-small);
-		margin-bottom: var(--size-4-2);
-	}
-
-	.status.is-ok {
-		color: var(--text-success);
-	}
-
-	.status.is-bad {
-		color: var(--text-error);
 	}
 
 	.preview {

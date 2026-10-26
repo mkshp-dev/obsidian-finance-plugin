@@ -136,8 +136,8 @@ export default class BeancountPlugin extends Plugin {
 			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
 		});
 		this.addCommand({
-			id: 'import-bank-statement',
-			name: 'Import bank statement',
+			id: 'import-csv-statement',
+			name: 'Import CSV statement',
 			callback: () => { new ImportModal(this.app, this, this.getDashboardRefreshCallback()).open(); }
 		});
 		// 'Insert BQL Query Block' command removed — use manual insertion or BQL templates instead

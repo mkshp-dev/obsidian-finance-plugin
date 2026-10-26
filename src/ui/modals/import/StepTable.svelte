@@ -1,14 +1,30 @@
 <script lang="ts">
-	import type { ColumnType, DateOrder, NumberSign, TableBounds } from '../../../models/import';
-	import { indicatorValues, readNumber, unreadableValues } from '../../../utils/import/columns';
-	import { detectDateOrder } from '../../../utils/import/values';
+	import type { ColumnType, DateOrder, TableBounds } from '../../../models/import';
+	import { columnCheck } from '../../../utils/import/columns';
+	import { detectDateOrder, parseAmount } from '../../../utils/import/values';
+	import BalanceField from './BalanceField.svelte';
+	import HelpTip from '../../common/HelpTip.svelte';
 
 	export let rows: string[][] = [];
+	/** False when the table wasn't found and its rows have to be marked by hand. */
+	export let tableFound = true;
 	export let bounds: TableBounds;
 	export let labels: string[] = [];
 	export let dataRows: string[][] = [];
 	export let columnTypes: ColumnType[] = [];
 	export let decimalMark: '.' | ',' = '.';
+	/** Open accounts, offered for the statement account. */
+	export let accounts: string[] = [];
+	/** The account this statement belongs to; '' when the file has several. */
+	export let statementAccount = '';
+	/** The balances before and after the statement, optional. */
+	export let openingBalance = '';
+	export let closingBalance = '';
+	/** The rows they were found on in the file, or null if typed in or not found. */
+	export let openingRow: number | null = null;
+	export let closingRow: number | null = null;
+	export let onEditOpening: () => void = () => {};
+	export let onEditClosing: () => void = () => {};
 	export let onBack: () => void;
 	export let onNext: () => void;
 
@@ -21,12 +37,6 @@
 	};
 	const ORDER_LABELS: Record<DateOrder, string> = { DMY: 'Day-Month-Year', MDY: 'Month-Day-Year', YMD: 'Year-Month-Day' };
 	const SAMPLE_COUNT = 2;
-	const SIGN_LABELS: Record<NumberSign['mode'], string> = {
-		asis: 'Sign as written',
-		negate: 'Flip sign (+ is money out)',
-		indicator: 'Sign from column',
-	};
-
 	let selected: number | null = null;
 
 	$: width = Math.max(1, ...rows.map((r) => r.length));
@@ -55,42 +65,8 @@
 		const current = columnTypes[column];
 		columnTypes[column] = kind === 'date' || kind === 'datetime'
 			? { kind, order: current && 'order' in current ? current.order : detectDateOrder(columnValues(column)).order ?? 'DMY' }
-			: kind === 'number' ? { kind, sign: { mode: 'asis' } }
 			: { kind };
 		columnTypes = columnTypes;
-	}
-
-	function signOf(type: ColumnType | undefined): NumberSign {
-		return type?.kind === 'number' && type.sign ? type.sign : { mode: 'asis' };
-	}
-
-	function setSign(column: number, sign: NumberSign) {
-		columnTypes[column] = { kind: 'number', sign };
-		columnTypes = columnTypes;
-	}
-
-	function setSignMode(column: number, mode: NumberSign['mode']) {
-		if (mode !== 'indicator') return setSign(column, { mode });
-		// Default to the nearest column that looks like a debit/credit marker.
-		const marker = labels.map((_, i) => i).filter((i) => i !== column)
-			.sort((a, b) => Math.abs(a - column) - Math.abs(b - column))
-			.find((i) => indicatorValues(dataRows, i)) ?? Math.min(column + 1, labels.length - 1);
-		setSign(column, { mode, column: marker, ...(indicatorValues(dataRows, marker) ?? { debitValue: 'DR', creditValue: 'CR' }) });
-	}
-
-	function updateSign(column: number, change: Partial<{ column: number; debitValue: string; creditValue: string }>) {
-		const sign = signOf(columnTypes[column]);
-		if (sign.mode === 'indicator') setSign(column, { ...sign, ...change });
-	}
-
-	/** The first value read with the column's sign, to show the rule works. */
-	function signedExample(column: number, type: ColumnType | undefined, mark: '.' | ',', data: string[][]): string {
-		for (const row of data) {
-			if (!(row[column] ?? '').trim()) continue;
-			const n = readNumber(row, column, type, mark);
-			return 'amount' in n ? n.amount : '';
-		}
-		return '';
 	}
 
 	function setOrder(column: number, order: DateOrder) {
@@ -99,14 +75,32 @@
 		columnTypes = columnTypes;
 	}
 
-	function problemsOf(column: number, type: ColumnType | undefined, mark: '.' | ',', data: string[][]): string[] {
-		return type ? unreadableValues(data, column, type, mark) : [];
+	const TYPE_WORDS: Record<ColumnType['kind'], string> = { date: 'a date', datetime: 'a date', number: 'a number', text: 'text', ignore: '' };
+
+	/** How the column's cells read as its type, for the count; nothing for ignored columns. */
+	function checkOf(column: number, type: ColumnType | undefined, mark: '.' | ',', data: string[][]) {
+		if (!type || type.kind === 'ignore') return null;
+		const check = columnCheck(data, column, type, mark);
+		const notes = [
+			`${check.readable} of ${data.length} rows read as ${TYPE_WORDS[type.kind]}`,
+			check.unreadable.length > 0 ? `${check.unreadable.length} don't, e.g. "${check.unreadable[0]}"` : '',
+			check.empty > 0 ? `${check.empty} empty` : '',
+		].filter(Boolean);
+		return { ...check, total: data.length, title: notes.join('; ') };
 	}
 
 	function otherOrders(column: number, type: ColumnType | undefined, data: string[][]): DateOrder[] {
 		if (!type || !('order' in type)) return [];
 		return detectDateOrder(columnValues(column, data)).candidates.filter((o) => o !== type.order);
 	}
+
+	function unreadable(text: string, mark: '.' | ','): boolean {
+		return !!text.trim() && parseAmount(text, mark) === null && parseAmount(text, '.') === null;
+	}
+	// Balances belong to one account, so they only count when one is chosen.
+	$: openingUnreadable = !!statementAccount.trim() && unreadable(openingBalance, decimalMark);
+	$: closingUnreadable = !!statementAccount.trim() && unreadable(closingBalance, decimalMark);
+	$: accountMissing = !!statementAccount.trim() && accounts.length > 0 && !accounts.includes(statementAccount.trim());
 
 	$: hasDate = columnTypes.some((t) => t.kind === 'date' || t.kind === 'datetime');
 	$: hasNumber = columnTypes.some((t) => t.kind === 'number');
@@ -115,15 +109,14 @@
 <div class="import-step">
 	<details class="import-collapsible" open>
 		<summary>
-			<span class="summary-title">Table rows</span>
+			<span class="summary-title">Table rows <span class="help-in-summary" on:click|preventDefault role="presentation"><HelpTip topic="importTable" /></span></span>
 			<span class="import-hint">
 				Header row {bounds.headerRow + 1} · last row {bounds.lastRow + 1} · {count} transaction{count === 1 ? '' : 's'}
 			</span>
 		</summary>
-		<p class="import-hint">
-			Rows outside the table, like account details or the closing balance line, are greyed out.
-			Click a row to change the header or last row.
-		</p>
+		{#if !tableFound}
+			<div class="import-banner is-warning">Couldn't find the transactions in this file. Click the header row and the last transaction row to mark them.</div>
+		{/if}
 		<div class="import-table-wrap">
 			<table class="import-raw-table">
 				<tbody>
@@ -150,12 +143,9 @@
 
 	<details class="import-collapsible" open>
 		<summary>
-			<span class="summary-title">Column types</span>
+			<span class="summary-title">Column types <span class="help-in-summary" on:click|preventDefault role="presentation"><HelpTip topic="importColumns" /></span></span>
 			<span class="import-hint">{labels.length} columns · numbers like {decimalMark === '.' ? '1,234.56' : '1.234,56'}</span>
 		</summary>
-		<p class="import-hint">
-			What each column holds. These are best guesses; change any that are wrong. Ignored columns aren't offered in the mapping.
-		</p>
 
 		<div class="import-row tight">
 			<span class="import-field-label">Numbers are written like</span>
@@ -166,12 +156,12 @@
 		<div class="import-table-wrap">
 			<table class="types-table">
 				<thead>
-					<tr><th>Column</th><th>Example</th><th>Type</th><th></th></tr>
+					<tr><th>Column</th><th>Example</th><th>Type</th><th>Fits</th></tr>
 				</thead>
 				<tbody>
 					{#each labels as label, c}
 						{@const type = columnTypes[c]}
-						{@const problems = problemsOf(c, type, decimalMark, dataRows)}
+						{@const check = checkOf(c, type, decimalMark, dataRows)}
 						{@const others = otherOrders(c, type, dataRows)}
 						{@const values = columnValues(c, dataRows)}
 						<tr class:is-ignored={type?.kind === 'ignore'}>
@@ -190,36 +180,15 @@
 											on:change={(e) => setOrder(c, e.currentTarget.value)}>
 											{#each Object.entries(ORDER_LABELS) as [order, text]}<option value={order}>{text}</option>{/each}
 										</select>
-									{:else if type?.kind === 'number'}
-										{@const sign = signOf(type)}
-										<select class="dropdown" value={sign.mode} aria-label="Sign of {label}"
-											on:change={(e) => setSignMode(c, e.currentTarget.value)}>
-											{#each Object.entries(SIGN_LABELS) as [mode, text]}<option value={mode}>{text}</option>{/each}
-										</select>
-										{#if sign.mode === 'indicator'}
-											<select class="dropdown" value={sign.column} aria-label="Sign column of {label}"
-												on:change={(e) => updateSign(c, { column: Number(e.currentTarget.value) })}>
-												{#each labels as other, i}{#if i !== c && columnTypes[i]?.kind !== 'ignore'}<option value={i}>{other}</option>{/if}{/each}
-											</select>
-											<span class="import-hint">−</span>
-											<input type="text" class="marker-input" value={sign.debitValue} aria-label="Money out marker for {label}"
-												on:input={(e) => updateSign(c, { debitValue: e.currentTarget.value })} />
-											<span class="import-hint">+</span>
-											<input type="text" class="marker-input" value={sign.creditValue} aria-label="Money in marker for {label}"
-												on:input={(e) => updateSign(c, { creditValue: e.currentTarget.value })} />
-										{/if}
 									{/if}
 								</div>
 							</td>
 							<td class="check">
-								{#if problems.length > 0}
-									<span class="is-bad" title={problems.slice(0, 5).join('\n')}>✗ {problems.length} can't be read, e.g. "{problems[0]}"</span>
-								{:else if others.length > 0}
+								{#if check}
+									<span class="type-count" class:is-full={check.readable === check.total} title={check.title}>{check.readable}/{check.total}</span>
+								{/if}
+								{#if others.length > 0}
 									<span class="is-warn">Also reads as {others.map((o) => ORDER_LABELS[o]).join(', ')}: check the format</span>
-								{:else if type?.kind === 'number'}
-									<span class="is-ok">✓ e.g. {signedExample(c, type, decimalMark, dataRows)}</span>
-								{:else if type && type.kind !== 'text' && type.kind !== 'ignore'}
-									<span class="is-ok">✓</span>
 								{/if}
 							</td>
 						</tr>
@@ -229,13 +198,31 @@
 		</div>
 	</details>
 
+	<h4 class="balances-title">This statement <HelpTip topic="importStatement" /></h4>
+	<div class="import-row statement-balances">
+		<div class="import-field statement-account">
+			<label for="import-account">Statement account <span class="import-hint">(optional)</span></label>
+			<input id="import-account" type="text" list="import-table-accounts" placeholder="Assets:Bank:Checking" bind:value={statementAccount} />
+			<datalist id="import-table-accounts">
+				{#each accounts as a}<option value={a} />{/each}
+			</datalist>
+			{#if accountMissing}<span class="import-hint is-warn">Not an open account yet.</span>{/if}
+		</div>
+		{#if statementAccount.trim()}
+		<BalanceField id="import-opening" label="Balance before statement" bind:value={openingBalance} bind:foundRow={openingRow}
+			unreadable={openingUnreadable} onEdit={onEditOpening} />
+		<BalanceField id="import-closing" label="Balance after statement" bind:value={closingBalance} bind:foundRow={closingRow}
+			unreadable={closingUnreadable} onEdit={onEditClosing} />
+		{/if}
+	</div>
+
 	{#if !hasDate || !hasNumber}
 		<div class="import-banner is-warning">Mark at least one date column and one number column to continue.</div>
 	{/if}
 
 	<div class="import-footer">
 		<button type="button" on:click={onBack}>Back</button>
-		<button type="button" class="mod-cta" disabled={count < 1 || !hasDate || !hasNumber} on:click={onNext}>Next</button>
+		<button type="button" class="mod-cta" disabled={count < 1 || !hasDate || !hasNumber || openingUnreadable || closingUnreadable} on:click={onNext}>Next</button>
 	</div>
 </div>
 
@@ -328,6 +315,21 @@
 		margin-right: var(--size-4-2);
 	}
 
+	.balances-title {
+		margin: 0;
+		font-size: var(--font-ui-small);
+		color: var(--text-muted);
+	}
+
+	.statement-account {
+		flex: 1;
+		min-width: 220px;
+	}
+
+	.statement-balances {
+		gap: var(--size-4-4);
+	}
+
 	.import-field-label {
 		font-size: var(--font-ui-small);
 		color: var(--text-muted);
@@ -379,23 +381,26 @@
 		text-decoration: line-through;
 	}
 
-	.marker-input {
-		width: 3.5em;
-	}
-
 	.check {
 		font-size: var(--font-ui-smaller);
 	}
 
-	.is-ok {
-		color: var(--text-success);
+	.type-count {
+		padding: 0 6px;
+		margin-right: var(--size-4-1);
+		border-radius: var(--radius-s);
+		font-variant-numeric: tabular-nums;
+		background: rgba(var(--color-yellow-rgb), 0.15);
+		color: var(--color-yellow);
+	}
+
+	.type-count.is-full {
+		background: rgba(var(--color-green-rgb), 0.15);
+		color: var(--color-green);
 	}
 
 	.is-warn {
 		color: var(--color-orange);
 	}
 
-	.is-bad {
-		color: var(--text-error);
-	}
 </style>

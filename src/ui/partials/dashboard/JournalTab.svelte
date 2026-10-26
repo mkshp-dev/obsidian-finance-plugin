@@ -553,7 +553,7 @@
                 </div>
             </div>
             <div class="filter-actions">
-                 <button class="btn" on:click={() => plugin && new ImportModal(plugin.app, plugin, () => refresh()).open()} disabled={!plugin} title="Import a bank statement (CSV)">Import</button>
+                 <button class="btn" on:click={() => plugin && new ImportModal(plugin.app, plugin, () => refresh()).open()} disabled={!plugin} title="Import a CSV statement">Import</button>
                  <button class="btn" on:click={handleClear} disabled={isLoading}>Clear</button>
                  <button class="btn btn-primary" on:click={() => refresh()} disabled={isLoading}>Refresh</button>
                  <HelpTip topic="journal" />

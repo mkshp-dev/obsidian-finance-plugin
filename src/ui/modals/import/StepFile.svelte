@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	export let files: string[] = [];
 	export let filePath = '';
 	export let fileError = '';
@@ -7,7 +8,6 @@
 	export let profileId = '';
 	/** The chosen profile's header isn't in this file. */
 	export let profileMismatch = false;
-	export let transactionCount = 0;
 	/** A table was found, or can be marked by hand in the next step. */
 	export let canContinue = false;
 	export let onSelectFile: (path: string) => void;
@@ -26,14 +26,13 @@
 		</div>
 	{:else}
 		<div class="import-field">
-			<label for="import-file">Statement file</label>
+			<label for="import-file">Statement file <HelpTip topic="importFile" /></label>
 			<select id="import-file" class="dropdown" value={filePath} on:change={(e) => onSelectFile(e.currentTarget.value)}>
 				<option value="" disabled>Choose a CSV file…</option>
 				{#each files as path}
 					<option value={path}>{path}</option>
 				{/each}
 			</select>
-			<span class="import-hint">CSV files in your vault, most recently changed first.</span>
 		</div>
 
 		<div class="import-field">
@@ -44,19 +43,10 @@
 					<option value={p.id}>{p.name}</option>
 				{/each}
 			</select>
-			<span class="import-hint">
-				{#if profiles.length === 0}
-					A profile saves how a bank's columns map to transactions. One is saved when you apply a mapping.
-				{:else}
-					Reuse a mapping saved from an earlier import of the same bank.
-				{/if}
-			</span>
 		</div>
 
 		{#if fileError}
 			<div class="import-banner is-warning">{fileError}</div>
-		{:else if filePath && transactionCount > 0}
-			<div class="import-banner is-success">Found {transactionCount} transaction{transactionCount === 1 ? '' : 's'}.</div>
 		{/if}
 
 		{#if chosen && profileMismatch && filePath}

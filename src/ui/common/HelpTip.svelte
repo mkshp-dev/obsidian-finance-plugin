@@ -161,7 +161,6 @@
 	type="button"
 	class="bc-help-tip"
 	class:is-open={open}
-	aria-label="Help: {help.title}"
 	aria-expanded={open}
 	aria-controls={open ? popoverId : undefined}
 	on:click={handleClick}
@@ -175,6 +174,8 @@
 		<line x1="12" y1="16" x2="12" y2="11"/>
 		<line x1="12" y1="7.5" x2="12.01" y2="7.5"/>
 	</svg>
+	<!-- The accessible name is hidden text, not aria-label: Obsidian shows aria-labels as its own tooltip, which would cover the popover. -->
+	<span class="bc-help-name">Help: {help.title}</span>
 </button>
 
 {#if open}
@@ -185,13 +186,16 @@
 		class="bc-help-popover"
 		class:is-pinned={pinned}
 		role="dialog"
-		aria-label={help.title}
+		aria-labelledby="{popoverId}-title"
 		style="top: {top}px; left: {left}px;"
 		on:mouseenter={scheduleShow}
 		on:mouseleave={scheduleHide}
 	>
-		<div class="bc-help-title">{help.title}</div>
+		<div class="bc-help-title" id="{popoverId}-title">{help.title}</div>
 		<p class="bc-help-summary">{help.summary}</p>
+		{#each help.paragraphs ?? [] as paragraph}
+			<p class="bc-help-summary">{paragraph}</p>
+		{/each}
 
 		{#if help.steps?.length}
 			<div class="bc-help-heading">How to use it</div>
@@ -253,9 +257,19 @@
 		display: none;
 	}
 
+	.bc-help-name {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
 	.bc-help-popover {
 		position: fixed;
-		z-index: var(--layer-popover, 30);
+		/* Above modals (the import modal has help icons), not just the workspace. */
+		z-index: var(--layer-tooltip, 70);
 		width: max-content;
 		max-width: min(340px, calc(100vw - 16px));
 		max-height: min(70vh, 520px);

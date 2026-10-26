@@ -46,12 +46,16 @@ function containsAlias(text: string, alias: string): boolean {
 	return false;
 }
 
+/** How an alias has to appear in the text: anywhere as whole words, or as the whole text. */
+export type AliasMatchMode = 'contains' | 'exact';
+
 /**
- * Builds a matcher that returns the account whose alias appears in the text,
- * ignoring case and extra spaces. When several match, the longest alias
- * wins, as the most specific; ties go to the account listed first.
+ * Builds a matcher that returns the account whose alias matches the text,
+ * ignoring case and extra spaces. With `contains`, several aliases can
+ * match and the longest wins, as the most specific; ties go to the account
+ * listed first.
  */
-export function createAliasMatcher(entries: AccountAliases[]): AccountMatcher {
+export function createAliasMatcher(entries: AccountAliases[], mode: AliasMatchMode = 'contains'): AccountMatcher {
 	const candidates = entries
 		.flatMap((e) => e.aliases.map((alias) => ({ account: e.account, alias, key: normalize(alias) })))
 		.filter((c) => c.key);
@@ -60,7 +64,8 @@ export function createAliasMatcher(entries: AccountAliases[]): AccountMatcher {
 		const haystack = normalize(text);
 		let best: (typeof candidates)[number] | null = null;
 		for (const c of candidates) {
-			if ((!best || c.key.length > best.key.length) && containsAlias(haystack, c.key)) best = c;
+			const matches = mode === 'exact' ? haystack === c.key : containsAlias(haystack, c.key);
+			if (matches && (!best || c.key.length > best.key.length)) best = c;
 		}
 		return best ? { account: best.account, alias: best.alias } : null;
 	};

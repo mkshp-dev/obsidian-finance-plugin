@@ -12,6 +12,8 @@ export interface HelpTopic {
 	title: string;
 	/** One or two sentences: what this section is for. */
 	summary: string;
+	/** More explanation in plain prose, shown under the summary without a heading. */
+	paragraphs?: string[];
 	/** Typical workflow, in order. */
 	steps?: string[];
 	/** What each button / control does. */
@@ -142,6 +144,69 @@ export const HELP_TOPICS = {
 			{ label: '+ Add Commodity', text: 'Declares a new commodity.' },
 			{ label: 'Commodity card', text: 'Click to see and edit its metadata and price history.' },
 		],
+	},
+
+	// --- CSV statement import ---
+	importFile: {
+		title: 'Choosing a file',
+		summary: 'Pick the statement you downloaded from your bank or card provider. It needs to be a CSV file saved somewhere in this vault; the newest ones are at the top.',
+		paragraphs: [
+			'If you\'ve imported from the same place before, choose its mapping profile too. It brings back everything you set up last time, so you don\'t have to do it again. For a new source, leave it on None and a profile is saved for you at the end.',
+		],
+	},
+	importTable: {
+		title: 'Where are the transactions?',
+		summary: 'Statements often have account details above the transactions and notes or totals below them. The header row is shaded, the transactions are highlighted, and everything else is greyed out.',
+		paragraphs: [
+			'If that doesn\'t look right, click a row and mark it as the header or as the last transaction.',
+		],
+	},
+	importColumns: {
+		title: 'What\'s in each column?',
+		summary: 'Tell the plugin what kind of value each column holds, so it reads them correctly: dates, numbers, text, or something to ignore. Nothing is changed here; you decide what to do with the values on the next page.',
+		paragraphs: [
+			'For dates, pick the order of day, month and year. If you see a warning, the dates could be read more than one way, so double-check it.',
+			'Also tell it how numbers are written: 1,234.56 or 1.234,56.',
+		],
+		tip: 'A ✓ means every value in the column could be read. A ✗ shows how many couldn\'t, with an example.',
+	},
+	importStatement: {
+		title: 'This statement',
+		summary: 'Which account in your ledger this statement is for, like your savings account or credit card. It fills in the first posting on the next page, and you can change it in either place.',
+		paragraphs: [
+			'Some files cover several accounts, like exports from budgeting apps. Leave the account empty for those, and pick each row\'s account with a formula on the next page instead.',
+			'Once an account is set, you can add your balance before and after the statement. They\'re filled in when the file has them; otherwise type them in, or leave them empty. Each becomes a balance assertion, so Beancount can tell you if your books and your bank ever disagree.',
+		],
+		tip: 'With both balances filled in, you\'ll be warned on the last page if the transactions don\'t add up from one to the other. That usually means a missing row or a wrong sign.',
+	},
+	importTemplate: {
+		title: 'How each row becomes a transaction',
+		summary: 'Fill this in like the Add Transaction form. Anything you type is used for every row. To take a value from the file instead, start the field with = and click a column above, for example ={{Description}}.',
+		paragraphs: [
+			'Formulas can do more than copy a column. Work out a sign with =IF {{Dr / Cr}} == "DR" THEN -{{Amount}} ELSE {{Amount}}, combine columns with ={{Deposit}} - {{Withdrawal}}, or pick the account from your aliases with =ACCOUNT WHERE {{Description}} CONTAINS ALIAS ELSE "Expenses:Uncategorized". The buttons above insert these for you; hover one to see what it does.',
+			`A date column comes through exactly as it's written in the file. The transaction date has to be written the Beancount way (2026-09-22), so if your file writes dates differently, use =FORMAT_DATE({{Date column}}, "YYYY-MM-DD"). The Date buttons have more, like YEAR, MONTH and ADD_DAYS.`,
+			'The number next to each field, like 19/20, tells you how many rows got a value from it.',
+		],
+		tip: 'The first posting is the statement\'s own account, the one chosen on the previous page. You can leave one posting\'s amount empty and Beancount will balance it for you.',
+	},
+	importMetadata: {
+		title: 'Transaction metadata',
+		summary: 'Extra details saved with every imported transaction.',
+		paragraphs: [
+			'import-ref is always there: it\'s how the plugin spots rows you\'ve already imported, so nothing gets added twice. Point it at your bank\'s reference column if there is one. Leave it empty and one is made up from the row.',
+		],
+	},
+	importReview: {
+		title: 'Before you import',
+		summary: 'This is everything that will be added to your ledger: the transactions, and a balance assertion for each statement balance you gave.',
+		paragraphs: [
+			'Untick anything you don\'t want added. Rows that are already in your ledger start unticked. "Needs attention" collects rows that couldn\'t be read, look like duplicates, or still need an account.',
+			'Click a row to see the original line next to its transaction and change anything.',
+		],
+	},
+	importRemember: {
+		title: 'Remembering an alias',
+		summary: 'The plugin will remember this text for the account, so it\'s recognised automatically next time. Any other rows here with the same text are updated straight away.',
 	},
 } satisfies Record<string, HelpTopic>;
 

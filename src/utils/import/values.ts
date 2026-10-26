@@ -44,6 +44,53 @@ export function addDays(date: string, days: number): string {
 	return d.toISOString().slice(0, 10);
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const PATTERN_TOKEN = /YYYY|YY|MMMM|MMM|MM|M|DD|D/g;
+
+/** True for a real date written as Beancount writes them: YYYY-MM-DD. */
+export function isIsoDate(text: string): boolean {
+	return /^\d{4}-\d{2}-\d{2}$/.test(text) && parseDate(text, 'YMD') === text;
+}
+
+/**
+ * Writes a `YYYY-MM-DD` date with a pattern: YYYY, YY, MMMM (September),
+ * MMM (Sep), MM, M, DD, D; anything else is written as is.
+ */
+export function formatDatePattern(iso: string, pattern: string): string {
+	const [y, m, d] = iso.split('-').map(Number);
+	const parts: Record<string, string> = {
+		YYYY: String(y), YY: String(y).slice(-2),
+		MMMM: MONTH_NAMES[m - 1], MMM: MONTH_NAMES[m - 1].slice(0, 3), MM: String(m).padStart(2, '0'), M: String(m),
+		DD: String(d).padStart(2, '0'), D: String(d),
+	};
+	return pattern.replace(PATTERN_TOKEN, (token) => parts[token]);
+}
+
+/** Reads a date written with a pattern (see formatDatePattern) as `YYYY-MM-DD`, or null. Month names ignore case. */
+export function parseDatePattern(text: string, pattern: string): string | null {
+	const order: string[] = [];
+	const source = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(PATTERN_TOKEN, (token) => {
+		order.push(token);
+		return token === 'YYYY' ? '(\\d{4})' : token === 'MMMM' || token === 'MMM' ? '([A-Za-z]+)' : token.length === 2 ? '(\\d{2})' : '(\\d{1,2})';
+	});
+	const m = new RegExp(`^\\s*${source}\\s*$`, 'i').exec(text);
+	if (!m) return null;
+	let year = NaN;
+	let month = NaN;
+	let day = NaN;
+	order.forEach((token, i) => {
+		const v = m[i + 1];
+		if (token === 'YYYY') year = Number(v);
+		else if (token === 'YY') year = 2000 + Number(v);
+		else if (token === 'MMMM' || token === 'MMM') month = (parseMonth(v) ?? NaN);
+		else if (token.startsWith('M')) month = Number(v);
+		else day = Number(v);
+	});
+	if ([year, month, day].some(Number.isNaN)) return null;
+	const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+	return isIsoDate(iso) ? iso : null;
+}
+
 /** Whole days from `a` to `b`. */
 export function daysBetween(a: string, b: string): number {
 	return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
@@ -129,4 +176,33 @@ export function negateAmount(amount: string): string {
 export function amountsEqual(a: string, b: string): boolean {
 	const scale = Math.max(decimals(a), decimals(b));
 	return toUnits(a, scale) === toUnits(b, scale);
+}
+
+/** -1, 0 or 1 as `a` is less than, equal to or greater than `b`. */
+export function compareAmounts(a: string, b: string): number {
+	const scale = Math.max(decimals(a), decimals(b));
+	return Math.sign(toUnits(a, scale) - toUnits(b, scale));
+}
+
+/** Exact product of two decimal strings. */
+export function multiplyAmounts(a: string, b: string): string {
+	return fromUnits(toUnits(a, decimals(a)) * toUnits(b, decimals(b)), decimals(a) + decimals(b));
+}
+
+/**
+ * `a / b` rounded half away from zero to the larger of the inputs' decimal
+ * places (at least 2), or null when dividing by zero.
+ */
+export function divideAmounts(a: string, b: string): string | null {
+	if (compareAmounts(b, '0') === 0) return null;
+	return roundAmount(String(Number(a) / Number(b)), Math.max(decimals(a), decimals(b), 2));
+}
+
+/** Rounds half away from zero to `places` decimals (0 or more). */
+export function roundAmount(amount: string, places: number): string {
+	const n = Number(amount);
+	const factor = 10 ** places;
+	const rounded = Math.sign(n) * Math.round(Math.abs(n) * factor + 1e-9) / factor;
+	const s = rounded.toFixed(places);
+	return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;
 }
