@@ -32,6 +32,8 @@ const sidebars: SidebarsConfig = {
         'adding-data/editing-files',
         'adding-data/adding-account-commodity',
         'adding-data/adding-price-metadata',
+        'adding-data/importing-statements',
+        'adding-data/account-aliases',
       ],
     },
     {

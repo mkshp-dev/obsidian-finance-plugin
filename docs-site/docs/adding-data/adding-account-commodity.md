@@ -44,6 +44,16 @@ You don't have to write these directives manually. You can manage accounts direc
 3.  The plugin appends the appropriate directive to `accounts.beancount` in your structured layout folder.
 4.  The dashboard refreshes automatically, updating your account lists.
 
+### Account Aliases
+An account's `open` directive can carry `aliases` metadata: words from your bank statements that point to it, used when [importing statements](./importing-statements.md) to pick each row's account.
+
+```beancount
+2020-01-01 open Expenses:Transport
+  aliases: "Uber|Ola"
+```
+
+Run **"Manage account aliases"** from the Command Palette to see and edit every account's aliases in one place. See [Account Aliases](./account-aliases.md).
+
 ---
 
 ## 🪙 Declaring Commodities
