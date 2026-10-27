@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Import CSV statement** *(new, beta)* — A new **Import CSV statement** command turns a bank's CSV export from your vault into transactions in four steps: pick the file (and a saved profile for that bank), mark where the transaction table is and what each column holds (with optional balances before/after the statement), map columns to a transaction template using formulas (`IF … THEN … ELSE`, arithmetic, `SPLIT`, `FORMAT_DATE` and more, plus `ACCOUNT WHERE` / `ALIAS WHERE` lookups on account aliases), then review. Review flags rows already imported (by `import-ref`), possible duplicates, and unresolved rows (missing a date, valid accounts, an amount with its currency, or an import-ref), which have to be fixed in a full transaction form before they can be added. Statement balances become balance assertions, and the opening balance is checked against your ledger. Mappings are saved per bank and reused next time.
+
+- **Manage account aliases** *(new)* — A new command lists every open account with its `aliases` metadata, searchable, to add and remove aliases and save them to the accounts' open directives in one go. The import's mapping page shows the same aliases in an **Aliases** tab, with a button to open this window.
+
 - **In-app help icons** — Each Snapshot sidebar tab and dashboard section now has a small ⓘ icon. Hover to preview, or click to pin, a short guide to that section's workflow and buttons. You can hide the icons with **Settings → Show help icons**.
 
 - **Scheduled transactions: full posting support** — Schedules can now carry cost `{}`, price `@`/`@@`, posting flags, comments, and posting- or transaction-level metadata (the toggle buttons were previously shown but did nothing), so any transaction can be scheduled. Also fixed payees, narrations, metadata values, and cost labels containing `"` or `\` producing an invalid ledger.
