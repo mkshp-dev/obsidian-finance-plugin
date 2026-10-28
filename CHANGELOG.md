@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Import CSV statement** *(new, experimental)* — A new **Import CSV statement** command turns a bank's CSV export from your vault into transactions in four steps: pick the file (and a saved profile for that bank), mark where the transaction table is and what each column holds (with optional balances before/after the statement), map columns to a transaction template using formulas (`IF … THEN … ELSE`, arithmetic, `SPLIT`, `FORMAT_DATE` and more, plus `ACCOUNT WHERE` / `ALIAS WHERE` lookups on account aliases), then review. Review flags rows already imported (by `import-ref`), possible duplicates, and unresolved rows (missing a date, valid accounts, an amount with its currency, or an import-ref), which have to be fixed in a full transaction form before they can be added. Statement balances become balance assertions, and the opening balance is checked against your ledger. Mappings can be saved per bank and reused next time. Reads comma, semicolon, tab or pipe separated files in UTF-8, UTF-16 or Windows-1252, including files with no header row, and dates with day, month and year in any order.
+
+- **Manage account aliases** *(new)* — A new command lists every open account with its `aliases` metadata, searchable, to add and remove aliases and save them to the accounts' open directives in one go. The import's mapping page shows the same aliases in an **Aliases** tab, with a button to open this window.
+
+- **In-app help icons** — Each Snapshot sidebar tab and dashboard section now has a small ⓘ icon. Hover to preview, or click to pin, a short guide to that section's workflow and buttons. You can hide the icons with **Settings → Show help icons**.
+
+- **Scheduled transactions: full posting support** — Schedules can now carry cost `{}`, price `@`/`@@`, posting flags, comments, and posting- or transaction-level metadata (the toggle buttons were previously shown but did nothing), so any transaction can be scheduled. Also fixed payees, narrations, metadata values, and cost labels containing `"` or `\` producing an invalid ledger.
+
+- **Journal: Make recurring** — A new 🔁 button on transaction cards opens Add Scheduled Transaction pre-filled from that transaction exactly as written in your ledger, with the first occurrence one cycle after its date.
+
+- **Fixed: Editing a transaction lost data** — Saving an edit from the Journal replaced its metadata with a `raw:` line, dropped posting comments, flags, metadata and cost labels, and filled in the amount of the auto-balanced posting. The edit form now loads the transaction as written in your ledger file.
+
+- **Fixed: Balance assertions and notes editing or deleting the wrong entry** — With several assertions or notes on the same account and day (e.g. one per currency), editing or deleting one could change another; edits also dropped a balance's tolerance, a note's tags and links, and trailing comments, and deletes left metadata lines behind. Balance tolerances are now written in valid syntax (`100 ~ 0.01 USD`), quotes in notes are escaped, and the Journal's tag filter now finds tagged notes.
+
+## 2.4.3 - 2026-09-21
+
 - **Balances: Icicle chart** — Added a top-down icicle view as an alternative to the sunburst in the Accounts & Balances tab, with the same hover/drill-down behavior. Toggle between the two via the new chart-type dropdown.
 
 - **Account Details modal: Balance History tab** — Added a second tab (alongside the renamed **Metadata** tab) showing the account's balance trend as a line chart or table, with Monthly/Weekly and Chart/Table pill toggles.
+
 
 ## 2.4.2 - 2026-09-04
 

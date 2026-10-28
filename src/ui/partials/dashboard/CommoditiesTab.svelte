@@ -1,5 +1,6 @@
 <!-- src/components/tabs/CommoditiesTab.svelte -->
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { onMount, createEventDispatcher } from "svelte";
 	import type {
 		CommoditiesController,
@@ -109,7 +110,7 @@
 	<!-- Header with search and refresh -->
 	<div class="commodities-header">
 		<div class="header-left">
-			<h3>Commodities & Prices</h3>
+			<h3>Commodities & Prices <HelpTip topic="commodities" /></h3>
 			{#if $lastUpdatedStore}
 				<span class="last-updated"
 					>Last updated: {$lastUpdatedStore.toLocaleTimeString()}</span

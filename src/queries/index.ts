@@ -178,19 +178,27 @@ export function getTargetListQuery(): string {
 // --- Scheduled/Recurring Transactions Query ---
 
 /** Max postings a single schedule can carry — the SELECT enumerates this many
- * posting{N}Account/Amount/Currency meta columns unconditionally (most are
- * NULL for schedules with fewer postings), since BQL can't select a dynamic
- * number of columns in one query. */
+ * posting{N}* meta columns unconditionally (most are NULL for schedules with
+ * fewer postings), since BQL can't select a dynamic number of columns in one
+ * query. */
 export const MAX_SCHEDULE_POSTINGS = 8;
+
+/** Per-posting meta key suffixes written by buildDirectiveLines() — each is
+ * selected as `_p{N}{suffix.toLowerCase()}` and read by parseScheduleRow(). */
+const SCHEDULE_POSTING_FIELDS = [
+	'Account', 'Amount', 'Currency', 'Flag', 'Comment',
+	'CostNumber', 'CostCurrency', 'CostDate', 'CostLabel', 'CostTotal',
+	'PriceAmount', 'PriceCurrency', 'PriceTotal', 'Meta',
+];
 
 export function getScheduleListQuery(): string {
 	const postingCols: string[] = [];
 	for (let i = 1; i <= MAX_SCHEDULE_POSTINGS; i++) {
-		postingCols.push(`meta('posting${i}Account') AS _p${i}account`);
-		postingCols.push(`meta('posting${i}Amount') AS _p${i}amount`);
-		postingCols.push(`meta('posting${i}Currency') AS _p${i}currency`);
+		for (const field of SCHEDULE_POSTING_FIELDS) {
+			postingCols.push(`meta('posting${i}${field}') AS _p${i}${field.toLowerCase()}`);
+		}
 	}
-	return `SELECT date AS _startDateCol, description AS _name, meta('frequency') AS _frequency, meta('startDate') AS _startDate, meta('nextDate') AS _nextDate, meta('lastGenerated') AS _lastGenerated, bool(meta('active')) AS _active, meta('payee') AS _payee, meta('narration') AS _narration, meta('flag') AS _flag, meta('tags') AS _tags, meta('links') AS _links, meta('displayAmount') AS _displayAmount, meta('displayCurrency') AS _displayCurrency, meta('postingCount') AS _postingCount, ${postingCols.join(', ')}, meta('filename') AS _filename, meta('lineno') AS _lineno FROM events WHERE type='Recurring'`;
+	return `SELECT date AS _startDateCol, description AS _name, meta('frequency') AS _frequency, meta('startDate') AS _startDate, meta('nextDate') AS _nextDate, meta('lastGenerated') AS _lastGenerated, bool(meta('active')) AS _active, meta('payee') AS _payee, meta('narration') AS _narration, meta('flag') AS _flag, meta('tags') AS _tags, meta('links') AS _links, meta('txnMeta') AS _txnMeta, meta('displayAmount') AS _displayAmount, meta('displayCurrency') AS _displayCurrency, meta('postingCount') AS _postingCount, ${postingCols.join(', ')}, meta('filename') AS _filename, meta('lineno') AS _lineno FROM events WHERE type='Recurring'`;
 }
 
 /**
@@ -416,4 +424,32 @@ export function getAccountBalanceHistoryQuery(account: string, interval: 'month'
 		return `SELECT last(date_add(date_trunc('week', date), 6)) AS week_end, number(only('${currency}', convert(last(balance), '${currency}', last(date_add(date_trunc('week', date), 6))))) WHERE account = '${safeAccount}' GROUP BY date_trunc('week', date) ORDER BY week_end`;
 	}
 	return `SELECT year, month, number(only('${currency}', convert(last(balance), '${currency}', last(date_add(date(year + int(month/12), (month%12+1), 1), -1))))) WHERE account = '${safeAccount}' GROUP BY year, month ORDER BY year, month`;
+}
+
+// --- Import Queries ---
+
+/** Open accounts with `aliases` metadata on their open directive, for matching statement rows. */
+export function getAliasAccountsQuery(): string {
+	return `SELECT account, open.meta['aliases'] AS aliases FROM #accounts WHERE NOT bool(close) AND open.meta['aliases'] IS NOT NULL`;
+}
+
+/** Every open account with its `aliases` (empty when none) and where its open directive is, for editing aliases. */
+export function getAccountAliasLocationsQuery(): string {
+	return `SELECT account, open.meta['aliases'] AS aliases, open.meta['filename'] AS filename, open.meta['lineno'] AS lineno FROM #accounts WHERE NOT bool(close) ORDER BY account`;
+}
+
+/** `import-ref` values already in the ledger between two dates (inclusive). */
+export function getImportRefsQuery(from: string, to: string): string {
+	return `SELECT DISTINCT entry_meta('import-ref') AS ref FROM postings WHERE date >= ${from} AND date <= ${to} AND entry_meta('import-ref') IS NOT NULL`;
+}
+
+/** Postings on any of `accounts` between two dates (inclusive), to spot rows already entered. */
+export function getImportCandidatePostingsQuery(accounts: string[], from: string, to: string): string {
+	const anyAccount = accounts.map((a) => `account = '${escapeBqlString(a)}'`).join(' OR ');
+	return `SELECT account, date, number, currency, payee, narration, entry_meta('import-ref') AS ref, filename, lineno FROM postings WHERE (${anyAccount}) AND date >= ${from} AND date <= ${to}`;
+}
+
+/** The account's balance in one currency before `date`, to compare with a statement's opening balance. */
+export function getBalanceBeforeQuery(account: string, currency: string, date: string): string {
+	return `SELECT sum(number) AS balance FROM postings WHERE account = '${escapeBqlString(account)}' AND currency = '${escapeBqlString(currency)}' AND date < ${date}`;
 }

@@ -1,5 +1,6 @@
 <!-- src/ui/partials/dashboard/IndicatorsSection.svelte -->
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { parse as parseCsv } from 'csv-parse/sync';
 	import { runQuery, deleteIndicatorDirective, parsePeriodLabel } from '../../../utils';
@@ -464,7 +465,7 @@
 	<!-- Header -->
 	<div class="indicators-header">
 		<div class="title-row">
-			<h4>Financial Indicators</h4>
+			<h4>Financial Indicators <HelpTip topic="indicators" /></h4>
 			<button class="btn btn-primary" on:click={loadAll} disabled={isLoading}>Refresh</button>
 		</div>
 		<div class="controls-row">

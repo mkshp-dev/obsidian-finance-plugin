@@ -3,6 +3,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { nativeDatePicker } from '../actions/nativeDatePicker';
 	import type { ScheduledTransactionItem, DueOccurrence } from '../../models/schedule';
+	import type { PostingStub } from '../../utils/directives/types';
 
 	const dispatch = createEventDispatcher();
 
@@ -43,6 +44,18 @@
 	function formatAmount(amount: number, currency: string): string {
 		const decimals = plugin?.currencyPrecisionService?.getDecimals(currency) ?? 2;
 		return `${amount.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${currency}`;
+	}
+
+	/** Beancount-style cost/price suffix for a posting chip, e.g. " {250 USD} @ 251 USD". */
+	function costPriceSuffix(posting: PostingStub): string {
+		let suffix = '';
+		const { cost, price } = posting;
+		if (cost) {
+			const parts = [cost.number !== undefined ? `${cost.number} ${cost.currency ?? ''}`.trim() : '', cost.date ?? '', cost.label ? `"${cost.label}"` : ''].filter(Boolean);
+			suffix += cost.isTotal ? ` {{${parts.join(', ')}}}` : ` {${parts.join(', ')}}`;
+		}
+		if (price) suffix += ` ${price.isTotal ? '@@' : '@'} ${price.amount} ${price.currency ?? ''}`.trimEnd();
+		return suffix;
 	}
 
 	/** A Hold on an earlier occurrence blocks nextDate from advancing past it,
@@ -110,7 +123,7 @@
 				{/if}
 				<div class="postings-summary">
 					{#each group.schedule.postings as posting, i}
-						<span class="posting-chip">{posting.account}: {posting.amount !== undefined ? formatAmount(posting.amount, posting.currency || '') : 'auto-balance'}</span>
+						<span class="posting-chip">{posting.account}: {posting.amount !== undefined ? formatAmount(posting.amount, posting.currency || '') + costPriceSuffix(posting) : 'auto-balance'}</span>
 						{#if i < group.schedule.postings.length - 1}<span class="posting-sep">→</span>{/if}
 					{/each}
 				</div>

@@ -2,11 +2,12 @@
 
 import { App, Modal, Notice } from 'obsidian';
 import type BeancountPlugin from '../../main';
-import type { JournalTransaction, JournalEntry } from '../../models/journal';
+import type { JournalTransaction, JournalEntry, JournalBalance, JournalNote } from '../../models/journal';
 // Import the component statically to avoid dynamic import delay
 import TransactionEditModal from './TransactionEditModal.svelte';
 import { Logger } from '../../utils/logger';
-import { getOpenAccounts, getPayees, getTags, getCommodities, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote, updateBalance, deleteBalance, updateNote, deleteNote, createQueryDirective, type BalanceData, type NoteData } from '../../utils';
+import { parseTransactionText, toJournalTransaction } from '../../utils/transactionText';
+import { getOpenAccounts, getPayees, getTags, getCommodities, readTransactionText, createTransaction, updateTransaction, deleteTransaction, createBalanceAssertion, saveOpenDirective, saveCloseDirective, createNote, updateBalance, deleteBalance, updateNote, deleteNote, createQueryDirective, type BalanceData, type NoteData } from '../../utils';
 import { SvelteComponent } from 'svelte';
 
 export interface EntryDataPayload {
@@ -72,6 +73,19 @@ export class UnifiedTransactionModal extends Modal {
         // Set initial title (fallback, component will update it)
         this.setTitle(this.mode === 'edit' ? 'Edit Transaction' : 'Add Transaction');
 
+        // Saving rewrites the whole transaction block, so the form must start
+        // from the ledger text — the Journal's BQL copy would drop comments,
+        // posting flags/metadata, cost labels and the blank auto-balanced amount.
+        if (this.mode === 'edit' && this.transaction) {
+            const source = await this.loadSourceTransaction(this.transaction);
+            if (!source) {
+                this.close();
+                return;
+            }
+            this.transaction = source;
+            this.entry = source;
+        }
+
         // Initialize with empty data
         const accounts: string[] = [];
         const payees: string[] = [];
@@ -105,6 +119,29 @@ export class UnifiedTransactionModal extends Modal {
 
         // Fetch data in background
         void this.fetchData();
+    }
+
+    /** The transaction as written in the ledger, or null (after a Notice) when
+     * it can't be read reliably — editing is refused then rather than risk
+     * rewriting it from incomplete data. */
+    private async loadSourceTransaction(transaction: JournalTransaction): Promise<JournalTransaction | null> {
+        const { filename, lineno } = transaction.metadata;
+        if (typeof filename !== 'string' || typeof lineno !== 'number') {
+            new Notice("Couldn't find this transaction in your ledger files. Refresh and try again.");
+            return null;
+        }
+        const source = await readTransactionText(this.plugin, filename, lineno);
+        if (!source.success) {
+            new Notice(`Couldn't read the transaction: ${source.error}`);
+            return null;
+        }
+        const parsed = parseTransactionText(source.text);
+        if (parsed.date !== transaction.date || parsed.postings.length === 0) {
+            Logger.warn('[UnifiedTransactionModal] Ledger text does not match the Journal entry', { filename, lineno, text: source.text });
+            new Notice('This transaction has changed in your ledger since it was loaded. Refresh and try again.');
+            return null;
+        }
+        return toJournalTransaction(parsed, transaction.id);
     }
 
     async fetchData() {
@@ -349,7 +386,7 @@ export class UnifiedTransactionModal extends Modal {
                 }
             } else if (entryData.type === 'balance') {
                 // Use direct file writing for balance updates
-                const result = await updateBalance(this.plugin, entryId!, entryData as unknown as BalanceData);
+                const result = await updateBalance(this.plugin, this.entry as JournalBalance, entryData as unknown as BalanceData);
                 
                 if (result.success) {
                     new Notice('Balance updated successfully!');
@@ -372,7 +409,7 @@ export class UnifiedTransactionModal extends Modal {
                 }
             } else if (entryData.type === 'note') {
                 // Use direct file writing for note updates
-                const result = await updateNote(this.plugin, entryId!, entryData as unknown as NoteData);
+                const result = await updateNote(this.plugin, this.entry as JournalNote, entryData as unknown as NoteData);
                 
                 if (result.success) {
                     new Notice('Note updated successfully!');
@@ -436,7 +473,7 @@ export class UnifiedTransactionModal extends Modal {
                 }
             } else if (entryType === 'balance') {
                 // Use direct file deletion for balance
-                const result = await deleteBalance(this.plugin, entryId);
+                const result = await deleteBalance(this.plugin, this.entry as JournalBalance);
                 if (result.success) {
                     new Notice('Balance deleted successfully!');
                     
@@ -458,7 +495,7 @@ export class UnifiedTransactionModal extends Modal {
                 }
             } else if (entryType === 'note') {
                 // Use direct file deletion for note
-                const result = await deleteNote(this.plugin, entryId);
+                const result = await deleteNote(this.plugin, this.entry as JournalNote);
                 if (result.success) {
                     new Notice('Note deleted successfully!');
                     

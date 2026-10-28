@@ -4,6 +4,7 @@ import type BeancountPlugin from '../../main';
 import { getTargetFile } from '../structuredLayout';
 import { atomicFileWrite, createBackupFile, convertWslPathToWindows, getNewlineCharacter, readFileContent } from '../fileEditor';
 import { Logger } from '../logger';
+import { quote } from './directiveText';
 
 export async function saveOpenDirective(
 	plugin: BeancountPlugin,
@@ -140,6 +141,110 @@ export async function updateAccountReconcileMetadata(
 		Logger.error('[updateAccountReconcileMetadata] Error:', error);
 		return { success: false, error: error instanceof Error ? error.message : String(error) };
 	}
+}
+
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A trailing `; comment` after a metadata value, if any. */
+function trailingComment(raw: string): string {
+	const s = raw.trim();
+	const str = /^"(?:[^"\\]|\\.)*"/.exec(s);
+	const rest = str ? s.slice(str[0].length).trim() : s.slice(Math.max(0, s.indexOf(';')));
+	return rest.startsWith(';') ? rest : '';
+}
+
+/**
+ * Sets (or with `null`, removes) one metadata key on the open directive of
+ * `account` starting on `lineno` (1-based), keeping every other line as
+ * written, and a trailing comment on the key's own line. A new key goes
+ * after the directive's metadata. Returns null when that line doesn't hold
+ * the account's open directive (the file changed since it was read).
+ */
+export function setOpenDirectiveMetadata(
+	content: string,
+	account: string,
+	lineno: number,
+	key: string,
+	value: string | null,
+	newline: string
+): string | null {
+	const lines = content.split(/\r?\n/);
+	const index = lineno - 1;
+	const open = new RegExp(`^\\d{4}-\\d{2}-\\d{2}\\s+open\\s+${escapeRegExp(account)}(\\s|;|$)`);
+	if (index < 0 || index >= lines.length || !open.test(lines[index])) return null;
+
+	let end = index + 1;
+	while (end < lines.length && /^[ \t]+\S/.test(lines[end])) end++;
+	const keyPattern = new RegExp(`^([ \\t]+)${escapeRegExp(key)}\\s*:(.*)$`);
+	const at = lines.slice(index + 1, end).findIndex((l) => keyPattern.test(l));
+
+	if (value === null) {
+		if (at >= 0) lines.splice(index + 1 + at, 1);
+	} else if (at >= 0) {
+		const [, indent, raw] = keyPattern.exec(lines[index + 1 + at])!;
+		const comment = trailingComment(raw);
+		lines[index + 1 + at] = `${indent}${key}: ${quote(value)}${comment ? ` ${comment}` : ''}`;
+	} else {
+		const indent = lines.slice(index + 1, end).find((l) => /^[ \t]+[a-z][\w-]*\s*:/.test(l))?.match(/^[ \t]+/)?.[0] ?? '  ';
+		// After the last metadata line, before indented comments trailing the directive.
+		let insertAt = end;
+		while (insertAt > index + 1 && /^[ \t]+;/.test(lines[insertAt - 1])) insertAt--;
+		lines.splice(insertAt, 0, `${indent}${key}: ${quote(value)}`);
+	}
+	return lines.join(newline);
+}
+
+/** New `aliases` for an account whose open directive is at `filename`:`lineno` (as bean-query reports it). */
+export interface AccountAliasesChange {
+	account: string;
+	filename: string;
+	lineno: number;
+	/** Empty removes the `aliases` metadata. */
+	aliases: string[];
+}
+
+/**
+ * Writes accounts' `aliases` metadata to their open directives, one backup
+ * and write per file. Each file is edited bottom-up, so a line added for
+ * one directive doesn't move the ones above it. A directive no longer where
+ * it was reported (the file changed) is skipped and listed in `errors`.
+ */
+export async function updateAccountAliases(
+	plugin: BeancountPlugin,
+	changes: AccountAliasesChange[],
+	createBackup = plugin.settings.createBackups ?? true
+): Promise<{ saved: number; errors: string[] }> {
+	const errors: string[] = [];
+	let saved = 0;
+	const byFile = new Map<string, AccountAliasesChange[]>();
+	for (const c of changes) byFile.set(c.filename, [...(byFile.get(c.filename) ?? []), c]);
+
+	for (const [filename, fileChanges] of byFile) {
+		try {
+			const normalizedPath = convertWslPathToWindows(filename);
+			const content = await readFileContent(plugin, normalizedPath);
+			const newline = getNewlineCharacter(content);
+			let updated = content;
+			let count = 0;
+			for (const c of [...fileChanges].sort((x, y) => y.lineno - x.lineno)) {
+				const next = setOpenDirectiveMetadata(updated, c.account, c.lineno, 'aliases', c.aliases.length > 0 ? c.aliases.join('|') : null, newline);
+				if (next === null) errors.push(`${c.account}: its open directive has moved since the ledger was read`);
+				else { updated = next; count++; }
+			}
+			if (updated !== content) {
+				await createBackupFile(plugin, normalizedPath, createBackup, 'updateAccountAliases');
+				await atomicFileWrite(plugin, normalizedPath, updated);
+			}
+			saved += count;
+		} catch (error) {
+			Logger.error('[updateAccountAliases] Error:', error);
+			errors.push(`${fileChanges.map((c) => c.account).join(', ')}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	Logger.log(`[updateAccountAliases] Saved aliases for ${saved} account(s)`);
+	return { saved, errors };
 }
 
 export async function updateOperatingCurrency(

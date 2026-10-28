@@ -3,7 +3,7 @@
 import { App, Modal, Notice } from 'obsidian';
 import type BeancountPlugin from '../../main';
 import ConfirmDueSchedulesModalComponent from './ConfirmDueSchedulesModal.svelte';
-import { createTransaction, updateScheduleDirective, advanceScheduleDate, runQuery } from '../../utils';
+import { createTransaction, updateScheduleDirective, advanceScheduleDate, runQuery, scheduleToTransactionData } from '../../utils';
 import { getScheduledOccurrenceExistsQuery } from '../../queries';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { Logger } from '../../utils/logger';
@@ -101,16 +101,7 @@ export class ConfirmDueSchedulesModal extends Modal {
 					try {
 						const exists = await this.occurrenceAlreadyExists(schedule.name, occ.date);
 						if (!exists) {
-							const txResult = await createTransaction(this.plugin, {
-								date: occ.date,
-								flag: schedule.flag || '*',
-								payee: schedule.payee,
-								narration: schedule.narration,
-								tags: schedule.tags,
-								links: schedule.links,
-								metadata: { scheduled: schedule.name },
-								postings: schedule.postings.map((p) => ({ account: p.account, amount: p.amount, currency: p.currency })),
-							});
+							const txResult = await createTransaction(this.plugin, scheduleToTransactionData(schedule, occ.date));
 							if (!txResult.success) {
 								Logger.error(`[ConfirmDueSchedulesModal] Failed to materialize "${schedule.name}" on ${occ.date}: ${txResult.error}`);
 								break; // don't advance past a failed write
@@ -153,6 +144,7 @@ export class ConfirmDueSchedulesModal extends Modal {
 				flag: schedule.flag,
 				tags: schedule.tags,
 				links: schedule.links,
+				metadata: schedule.metadata,
 				postings: schedule.postings,
 				displayAmount: schedule.displayAmount,
 				displayCurrency: schedule.displayCurrency,

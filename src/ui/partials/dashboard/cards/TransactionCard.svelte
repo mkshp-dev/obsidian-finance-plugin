@@ -33,9 +33,12 @@
             <button class="btn-icon" on:click={() => dispatch('edit', entry)} title="Edit">
                 ✏️
             </button>
-            <button 
-                class="btn-icon" 
-                disabled={!enableUserSnippets} 
+            <button class="btn-icon" on:click={() => dispatch('make-recurring', entry)} title="Make recurring">
+                🔁
+            </button>
+            <button
+                class="btn-icon"
+                disabled={!enableUserSnippets}
                 on:click={() => dispatch('create-snippet', entry)} 
                 title={enableUserSnippets ? "Save as snippet" : "User-defined snippets disabled in settings"}
             >

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HelpTip from '../../common/HelpTip.svelte';
 	import { createEventDispatcher } from 'svelte';
 	import CardComponent from '../../common/CardComponent.svelte';
 	import IndicatorsSection from './IndicatorsSection.svelte';
@@ -122,7 +123,7 @@
 <div class="beancount-overview">
 	<div class="overview-header">
 		<div class="overview-title">
-			<h3>Financial Overview</h3>
+			<h3>Financial Overview <HelpTip topic="overview" /></h3>
 			<p>{state.periodLabel}</p>
 		</div>
 		<div class="overview-actions">

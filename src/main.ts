@@ -7,6 +7,8 @@ import { parseSnippetsFile } from './lang/beancount-snippets';
 import { BeancountView, BEANCOUNT_VIEW_TYPE } from './ui/views/sidebar/sidebar-view';
 import { BeancountFileView, BEANCOUNT_FILE_VIEW_TYPE } from './ui/views/beancount-file-view';
 import { UnifiedTransactionModal } from './ui/modals/UnifiedTransactionModal';
+import { ImportModal } from './ui/modals/ImportModal';
+import { AccountAliasesModal } from './ui/modals/AccountAliasesModal';
 import { runQuery, type BQLFormat } from './utils/index';
 import { createPluginApi, type BeancountPluginApi } from './api';
 import { UnifiedDashboardView, UNIFIED_DASHBOARD_VIEW_TYPE } from './ui/views/dashboard/unified-dashboard-view';
@@ -60,6 +62,10 @@ export default class BeancountPlugin extends Plugin {
 		// Initialize Logger
 		Logger.setDebugMode(this.settings.debugMode);
 		Logger.log('Plugin loading...');
+		this.applyHelpTipVisibility();
+		this.registerEvent(this.app.workspace.on('window-open', (_win, popout) => {
+			popout.document.body.toggleClass('beancount-hide-help', !this.settings.showHelpTips);
+		}));
 
 		// Load snippets if enabled
 		if (this.settings.enableUserSnippets) {
@@ -129,6 +135,16 @@ export default class BeancountPlugin extends Plugin {
 			id: 'add-beancount-transaction',
 			name: 'Add Beancount transaction',
 			callback: () => { new UnifiedTransactionModal(this.app, this, null, this.getDashboardRefreshCallback()).open(); }
+		});
+		this.addCommand({
+			id: 'import-csv-statement',
+			name: 'Import CSV statement (experimental)',
+			callback: () => { new ImportModal(this.app, this, this.getDashboardRefreshCallback()).open(); }
+		});
+		this.addCommand({
+			id: 'manage-account-aliases',
+			name: 'Manage account aliases',
+			callback: () => { new AccountAliasesModal(this.app, this).open(); }
 		});
 		// 'Insert BQL Query Block' command removed — use manual insertion or BQL templates instead
 		this.addCommand({
@@ -403,6 +419,7 @@ export default class BeancountPlugin extends Plugin {
 	 */
 	onunload() {
 		Logger.log('Plugin unloading...');
+		for (const doc of this.getOpenDocuments()) doc.body.removeClass('beancount-hide-help');
 		// Cleanup is handled automatically by registerInterval
 	}
 
@@ -443,6 +460,22 @@ export default class BeancountPlugin extends Plugin {
 			this.settings.onboardingCompleted = true;
 			await this.saveSettings();
 		}
+	}
+
+	/** Show/hide the "i" help icons on plugin surfaces (see HelpTip.svelte). */
+	applyHelpTipVisibility() {
+		for (const doc of this.getOpenDocuments()) {
+			doc.body.toggleClass('beancount-hide-help', !this.settings.showHelpTips);
+		}
+	}
+
+	/** Main window document plus any popout windows currently hosting a leaf. */
+	private getOpenDocuments(): Set<Document> {
+		const docs = new Set<Document>([this.app.workspace.containerEl.ownerDocument]);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			docs.add(leaf.view.containerEl.ownerDocument);
+		});
+		return docs;
 	}
 
 	async saveSettings() {

@@ -1,12 +1,12 @@
 // src/utils/directives/noteDirectives.ts
 
-import { parse as parseCsv } from 'csv-parse/sync';
 import type BeancountPlugin from '../../main';
-import type { NoteData, FileLineRow } from './types';
+import type { NoteData } from './types';
+import type { JournalNote } from '../../models/journal';
 import { getTargetFile } from '../structuredLayout';
 import { atomicFileWrite, createBackupFile, convertWslPathToWindows, getNewlineCharacter, readFileContent } from '../fileEditor';
-import { runQuery } from '../queryRunner';
 import { Logger } from '../logger';
+import { blockEndIndex, formatNoteHeader, loadDirective, locationFromMetadata, parseNoteHeader, type LoadedDirective, type NoteHeader } from './directiveText';
 
 export async function createNote(
 	plugin: BeancountPlugin,
@@ -22,14 +22,15 @@ export async function createNote(
 		if (!filePath) return { success: false, error: 'Beancount file path not set' };
 
 		const normalizedPath = convertWslPathToWindows(filePath);
-		const parts = [date, 'note', account, `"${comment}"`];
-		if (tags) for (const t of tags) { const c = t.replace(/^#/, ''); if (c) parts.push(`#${c}`); }
-		if (links) for (const l of links) parts.push(`^${l}`);
-		const directiveText = parts.join(' ');
-
-		await createBackupFile(plugin, normalizedPath, createBackup, 'createNote');
+		const extras: string[] = [];
+		if (tags) for (const t of tags) { const c = t.replace(/^#/, ''); if (c) extras.push(`#${c}`); }
+		if (links) for (const l of links) extras.push(`^${l}`);
 		const content = await readFileContent(plugin, normalizedPath);
 		const newline = getNewlineCharacter(content);
+		// A multi-line comment is a valid multi-line beancount string.
+		const directiveText = formatNoteHeader({ date, account, comment, rest: extras.map((e) => ` ${e}`).join('') }).split('\n').join(newline);
+
+		await createBackupFile(plugin, normalizedPath, createBackup, 'createNote');
 		const newContent = content.endsWith(newline) ? `${content}${directiveText}${newline}` : `${content}${newline}${directiveText}${newline}`;
 		await atomicFileWrite(plugin, normalizedPath, newContent);
 
@@ -41,50 +42,39 @@ export async function createNote(
 	}
 }
 
+/** Loads the note a Journal entry was read from, checking the line still holds it. */
+async function loadNote(
+	plugin: BeancountPlugin,
+	entry: Pick<JournalNote, 'date' | 'account' | 'metadata'>
+): Promise<{ directive: LoadedDirective; parsed: NoteHeader }> {
+	const location = locationFromMetadata(entry.metadata);
+	if (!location) throw new Error("Couldn't find this note in your ledger files. Refresh and try again.");
+	const directive = await loadDirective(plugin, location);
+	const parsed = parseNoteHeader(directive.header);
+	if (!parsed || parsed.date !== entry.date || parsed.account !== entry.account)
+		throw new Error('This note has changed in your ledger since it was loaded. Refresh and try again.');
+	return { directive, parsed };
+}
+
+/**
+ * Rewrites date/account/text in place. Tags, links, a trailing comment and
+ * metadata lines are kept as written (the edit form doesn't show them).
+ */
 export async function updateNote(
 	plugin: BeancountPlugin,
-	noteId: string,
-	noteData: NoteData
+	entry: Pick<JournalNote, 'date' | 'account' | 'metadata'>,
+	noteData: Pick<NoteData, 'date' | 'account' | 'comment'>
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		if (!plugin.settings.structuredFolderName)
-			return { success: false, error: 'Beancount folder not configured' };
+		const { directive, parsed } = await loadNote(plugin, entry);
+		const { path, lines, newline, start, headerEnd } = directive;
 
-		const parts = noteId.split('_');
-		if (parts.length < 3 || parts[0] !== 'note')
-			return { success: false, error: `Invalid note ID format: ${noteId}` };
+		const header = formatNoteHeader({ ...parsed, date: noteData.date, account: noteData.account, comment: noteData.comment });
 
-		const date = parts[1];
-		const account = parts.slice(2).join(':');
-
-		const csv = await runQuery(plugin, `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`);
-		const records = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as unknown as FileLineRow[];
-
-		if (records.length === 0)
-			return { success: false, error: `Note not found for ${account} on ${date}` };
-
-		const actualFilePath = records[0].filename;
-		const lineno = parseInt(records[0].lineno);
-		if (!actualFilePath) return { success: false, error: 'Filename not returned from query' };
-
-		const normalizedPath = convertWslPathToWindows(actualFilePath);
-		Logger.log(`[updateNote] ${actualFilePath} → ${normalizedPath}, line ${lineno}`);
-
-		await createBackupFile(plugin, normalizedPath, plugin.settings.createBackups ?? true, 'updateNote');
-		const _rawContent = await readFileContent(plugin, normalizedPath);
-		const newline = getNewlineCharacter(_rawContent);
-		const lines = _rawContent.split(/\r?\n/);
-
-		if (isNaN(lineno) || lineno < 1 || lineno > lines.length)
-			return { success: false, error: `Invalid line number ${lineno}` };
-
-		const noteParts = [noteData.date, 'note', noteData.account, `"${noteData.comment}"`];
-		if (noteData.tags) for (const t of noteData.tags) { const c = t.replace(/^#/, ''); if (c) noteParts.push(`#${c}`); }
-		if (noteData.links) for (const l of noteData.links) noteParts.push(`^${l}`);
-
-		lines[lineno - 1] = noteParts.join(' ');
-		await atomicFileWrite(plugin, normalizedPath, lines.join(newline));
-		Logger.log(`[updateNote] Updated ${noteId}`);
+		await createBackupFile(plugin, path, plugin.settings.createBackups ?? true, 'updateNote');
+		lines.splice(start, headerEnd - start + 1, ...header.split('\n'));
+		await atomicFileWrite(plugin, path, lines.join(newline));
+		Logger.log(`[updateNote] Updated ${path}:${start + 1}`);
 		return { success: true };
 	} catch (error) {
 		Logger.error('[updateNote] Error:', error);
@@ -92,45 +82,19 @@ export async function updateNote(
 	}
 }
 
+/** Removes the note together with its metadata lines. */
 export async function deleteNote(
 	plugin: BeancountPlugin,
-	noteId: string
+	entry: Pick<JournalNote, 'date' | 'account' | 'metadata'>
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		if (!plugin.settings.structuredFolderName)
-			return { success: false, error: 'Beancount folder not configured' };
+		const { directive } = await loadNote(plugin, entry);
+		const { path, lines, newline, start } = directive;
 
-		const parts = noteId.split('_');
-		if (parts.length < 3 || parts[0] !== 'note')
-			return { success: false, error: `Invalid note ID format: ${noteId}` };
-
-		const date = parts[1];
-		const account = parts.slice(2).join(':');
-
-		const csv = await runQuery(plugin, `SELECT filename, lineno FROM #entries WHERE type='note' AND date=${date} AND '${account}' IN accounts`);
-		const records = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as unknown as FileLineRow[];
-
-		if (records.length === 0)
-			return { success: false, error: `Note not found for ${account} on ${date}` };
-
-		const actualFilePath = records[0].filename;
-		const lineno = parseInt(records[0].lineno);
-		if (!actualFilePath) return { success: false, error: 'Filename not returned from query' };
-
-		const normalizedPath = convertWslPathToWindows(actualFilePath);
-		Logger.log(`[deleteNote] ${actualFilePath} → ${normalizedPath}, line ${lineno}`);
-
-		await createBackupFile(plugin, normalizedPath, plugin.settings.createBackups ?? true, 'deleteNote');
-		const _rawContent = await readFileContent(plugin, normalizedPath);
-		const newline = getNewlineCharacter(_rawContent);
-		const lines = _rawContent.split(/\r?\n/);
-
-		if (isNaN(lineno) || lineno < 1 || lineno > lines.length)
-			return { success: false, error: `Invalid line number ${lineno}` };
-
-		lines.splice(lineno - 1, 1);
-		await atomicFileWrite(plugin, normalizedPath, lines.join(newline));
-		Logger.log(`[deleteNote] Deleted ${noteId}`);
+		await createBackupFile(plugin, path, plugin.settings.createBackups ?? true, 'deleteNote');
+		lines.splice(start, blockEndIndex(lines, start) - start + 1);
+		await atomicFileWrite(plugin, path, lines.join(newline));
+		Logger.log(`[deleteNote] Deleted ${path}:${start + 1}`);
 		return { success: true };
 	} catch (error) {
 		Logger.error('[deleteNote] Error:', error);
