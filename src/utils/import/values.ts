@@ -14,18 +14,25 @@ function parseMonth(part: string): number | null {
 	return /^[A-Za-z]{3,9}$/.test(part) && idx >= 0 ? idx + 1 : null;
 }
 
-/** Returns the date as `YYYY-MM-DD`, or null if `value` isn't a valid date in `order`. */
+// "Mon, 22 Sep 2026" and "22nd Sep 2026".
+const WEEKDAY_PREFIX = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+/i;
+const ORDINAL_SUFFIX = /(\d)(st|nd|rd|th)\b/gi;
+
+/**
+ * Returns the date as `YYYY-MM-DD`, or null if `value` isn't a valid date in
+ * `order`. Also reads compact year-first dates like "20260922".
+ */
 export function parseDate(value: string, order: DateOrder): string | null {
-	const parts = value.trim().replace(TIME_SUFFIX, '').split(/[-/.\s,]+/).filter(Boolean);
+	const text = value.trim().replace(TIME_SUFFIX, '').replace(WEEKDAY_PREFIX, '').replace(ORDINAL_SUFFIX, '$1');
+	const compact = /^((?:19|20)\d{2})(\d{2})(\d{2})$/.exec(text);
+	const parts = compact && order === 'YMD' ? compact.slice(1) : text.split(/[-/.\s,]+/).filter(Boolean);
 	if (parts.length !== 3) return null;
 
-	const [yearPart, monthPart, dayPart] =
-		order === 'YMD' ? [parts[0], parts[1], parts[2]] :
-		order === 'DMY' ? [parts[2], parts[1], parts[0]] :
-		[parts[2], parts[0], parts[1]];
+	const at = (letter: 'Y' | 'M' | 'D') => parts[order.indexOf(letter)];
+	const [yearPart, monthPart, dayPart] = [at('Y'), at('M'), at('D')];
 
-	// Year-first needs a 4-digit year, or "01/09/26" would also read as 2001-09-26.
-	const yearPattern = order === 'YMD' ? /^\d{4}$/ : /^(\d{2}|\d{4})$/;
+	// A 2-digit year only when it comes last, or "01/09/26" would also read as 2001-09-26.
+	const yearPattern = order.endsWith('Y') ? /^(\d{2}|\d{4})$/ : /^\d{4}$/;
 	if (!yearPattern.test(yearPart) || !/^\d{1,2}$/.test(dayPart)) return null;
 	const month = parseMonth(monthPart);
 	if (month === null) return null;
@@ -96,7 +103,8 @@ export function daysBetween(a: string, b: string): number {
 	return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
 }
 
-const ORDERS: DateOrder[] = ['YMD', 'DMY', 'MDY'];
+/** Most common first: when several orders read a column, the first one is suggested. */
+const ORDERS: DateOrder[] = ['YMD', 'DMY', 'MDY', 'YDM', 'DYM', 'MYD'];
 
 export function isDateLike(value: string): boolean {
 	return ORDERS.some((o) => parseDate(value, o) !== null);

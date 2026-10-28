@@ -14,7 +14,24 @@ describe('parseDate', () => {
 		expect(parseDate('2026-09-22T11:54:00Z', 'YMD')).toBe('2026-09-22');
 	});
 
+	it('reads the less common orders, with a 4-digit year', () => {
+		expect(parseDate('10/2009/09', 'DYM')).toBe('2009-09-10');
+		expect(parseDate('09/2009/10', 'MYD')).toBe('2009-09-10');
+		expect(parseDate('2009/10/09', 'YDM')).toBe('2009-09-10');
+		expect(parseDate('10/09/09', 'DYM')).toBeNull();
+	});
+
+	it('reads compact dates, weekdays and ordinals', () => {
+		expect(parseDate('20260922', 'YMD')).toBe('2026-09-22');
+		expect(parseDate('20260922', 'DMY')).toBeNull();
+		expect(parseDate('Tue, 22 Sep 2026', 'DMY')).toBe('2026-09-22');
+		expect(parseDate('22nd Sep 2026', 'DMY')).toBe('2026-09-22');
+		expect(parseDate('September 1st, 2026', 'MDY')).toBe('2026-09-01');
+		expect(parseDate('2019.04.19.', 'YMD')).toBe('2019-04-19');
+	});
+
 	it('rejects impossible dates and non-dates', () => {
+		expect(parseDate('12345678', 'YMD')).toBeNull();
 		expect(parseDate('31-02-2026', 'DMY')).toBeNull();
 		expect(parseDate('22-09-2026', 'MDY')).toBeNull();
 		expect(parseDate('9,656.51', 'DMY')).toBeNull();
@@ -37,6 +54,10 @@ describe('detectDateOrder', () => {
 
 	it("doesn't read a 2-digit year first", () => {
 		expect(detectDateOrder(['01/09/26']).candidates).toEqual(['DMY', 'MDY']);
+	});
+
+	it('finds day-year-month', () => {
+		expect(detectDateOrder(['10/2009/09', '11/2009/09']).order).toBe('DYM');
 	});
 });
 

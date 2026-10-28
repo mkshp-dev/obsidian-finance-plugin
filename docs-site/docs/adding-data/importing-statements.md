@@ -2,20 +2,20 @@
 sidebar_position: 5
 ---
 
-# Importing Bank Statements (CSV)
+# Importing CSV Bank Statements (Experimental)
 
-:::info Beta
-Statement import is new and still in beta. Keep backups of your ledger (the plugin's **Create backups** setting is on by default) and check what it adds.
+:::warning Experimental
+Statement import is experimental: it may change, and its saved mapping profiles may need redoing after an update. Keep backups of your ledger (the plugin's **Create backups** setting is on by default) and check what it adds.
 :::
 
-The **Import CSV statement** command turns a statement downloaded from your bank or card provider into transactions in your ledger. You describe once how that bank's file is laid out and how its rows become transactions; the plugin saves this as a **mapping profile** and reuses it for that bank's next statement.
+The **Import CSV statement (experimental)** command turns a statement downloaded from your bank or card provider into transactions in your ledger. You describe once how that bank's file is laid out and how its rows become transactions; the plugin saves this as a **mapping profile** and reuses it for that bank's next statement.
 
 ---
 
 ## 🚀 Opening the Importer
 
 1.  Save the statement as a `.csv` file anywhere inside your vault.
-2.  Press `Ctrl/Cmd + P` and run **"Beancount Ledger: Import CSV statement"**.
+2.  Press `Ctrl/Cmd + P` and run **"Beancount Ledger: Import CSV statement (experimental)"**.
 
 The importer has four pages. The step bar at the top shows where you are, and you can go back at any time without losing what you've set up.
 
@@ -25,7 +25,7 @@ The importer has four pages. The step bar at the top shows where you are, and yo
 
 *   **Statement file**: Every CSV file in the vault, newest first. UTF-8, UTF-16 and Windows-1252 (common for Excel exports) files are all read correctly.
 *   **Separator**: What separates the columns: comma, semicolon (common where `,` is the decimal mark), tab or pipe. It's detected from the file; change it if the next page shows everything in one column.
-*   **Mapping profile**: If you've imported from this bank before, choose its profile and the next two pages come back filled in. For a new bank, leave it on **None**; a profile is saved when you apply the mapping on page 3.
+*   **Mapping profile**: If you've imported from this bank before, choose its profile and the next two pages come back filled in. For a new bank, leave it on **None**; a profile can be saved when you apply the mapping on page 3.
 
 A profile recognises a bank's files by their header row. If the chosen profile was saved for different columns, you're warned that its mapping may not fit.
 
@@ -41,7 +41,7 @@ The plugin finds the header row and the run of transaction rows under it. The he
 Some banks' files have no header row and start straight with transactions. The plugin notices when it can't find a header; you can also tick **The file has no header row** yourself, and use **Set as first row** if the transactions start lower down. Without a header, name the columns under **Column types** (e.g. `Date`, `Amount`) to use them in formulas as `{{Amount}}`; unnamed ones are `Column 1`, `Column 2`… The names are saved in the profile.
 
 ### Column types
-For each column, confirm what it holds: **Date** (with the order of day, month and year), **Date & time**, **Number**, **Text**, or **Ignore**. Next to each column you see how many of its values could be read as that type (✓), or how many couldn't, with an example (✗). Also choose how numbers are written: `1,234.56` or `1.234,56`.
+For each column, confirm what it holds: **Date** (with the order of day, month and year, in any of the six orders; compact dates like `20260922` are read as year-month-day), **Date & time**, **Number**, **Text**, or **Ignore**. Next to each column you see how many of its values could be read as that type (✓), or how many couldn't, with an example (✗). Also choose how numbers are written: `1,234.56` or `1.234,56`.
 
 Nothing is converted on this page. A date column is passed on exactly as written, and signs are worked out on the next page.
 
@@ -105,7 +105,7 @@ If your accounts have [aliases](./account-aliases.md), a formula can pick the ac
 ### Preview
 The preview shows one transaction at a time; use the ‹ › arrows to step through every row. It also says how many rows are **unresolved** and why (see below). The mapping doesn't have to be perfect: set up the pattern most rows follow, and fix individual rows on the next page.
 
-**Apply mapping** saves the profile under the name in **Save mapping as** and moves on to review.
+**Apply mapping** moves on to review. With **Save mapping as** ticked (the default), it also saves the profile under that name; untick it for a one-off file.
 
 ---
 

@@ -23,6 +23,7 @@
 	export let onManageAliases: () => void = () => {};
 	export let mapping: ImportMapping;
 	export let profileName = '';
+	export let saveMapping = true;
 	export let applying = false;
 	/** Told the account posting 1 now has when it's plain text, or '' for a formula: page 2 shows the same value. */
 	export let onStatementAccount: (account: string) => void = () => {};
@@ -483,8 +484,10 @@
 
 	<div class="import-footer">
 		<div class="import-field footer-profile">
-			<label for="import-profile">Save mapping as</label>
-			<input id="import-profile" type="text" bind:value={profileName} />
+			<label class="footer-save">
+				<input type="checkbox" bind:checked={saveMapping} /> Save mapping as
+			</label>
+			<input id="import-profile" type="text" aria-label="Mapping profile name" bind:value={profileName} disabled={!saveMapping} />
 		</div>
 		<button type="button" on:click={onBack}>Back</button>
 		<button type="button" class="mod-cta" disabled={!canApply || applying} on:click={onApply}>
@@ -823,5 +826,12 @@
 		margin-right: auto;
 		flex-direction: row;
 		align-items: center;
+	}
+
+	.footer-save {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-1);
+		white-space: nowrap;
 	}
 </style>

@@ -38,7 +38,7 @@ This plugin bridges the gap between powerful plain-text accounting and the conve
 *   **🔒 Privacy First**: Your financial data never leaves your local device. There are no cloud servers, no third-party APIs fetching your data, and no advertising trackers.
 *   **📊 Unified Dashboard**: A centralized, tabbed interface to visualize your financial health (Overview, Transactions, Journal, Accounts & Balances, Income Statement, and Commodities).
 *   **💸 Transaction Management**: A friendly entry modal that lets you add transactions, balance assertions, and notes in seconds without manually writing plain text.
-*   **🏦 Bank Statement Import** *(beta)*: Turn a bank's CSV export into transactions with a reusable mapping per bank, formulas, account aliases, duplicate detection, and a review step where every row can be checked and edited before it's added. See [Importing Bank Statements](./adding-data/importing-statements.md).
+*   **🏦 Bank Statement Import** *(experimental)*: Turn a bank's CSV export into transactions with a reusable mapping per bank, formulas, account aliases, duplicate detection, and a review step where every row can be checked and edited before it's added. See [Importing Bank Statements](./adding-data/importing-statements.md).
 *   **⚙️ Smart Connection**: Automatic detection of Python, Beancount, bean-query, and bean-price, including support for Windows Subsystem for Linux (WSL).
 *   **🔍 Live BQL Queries**: Run Beancount Query Language (BQL) statements directly in your markdown notes using custom code blocks or inline queries.
 *   **🪙 Bean Price Integration**: Automated market value updates for stocks, mutual funds, ETFs, and cryptocurrencies.

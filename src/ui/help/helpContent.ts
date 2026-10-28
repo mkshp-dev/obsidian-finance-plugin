@@ -151,7 +151,7 @@ export const HELP_TOPICS = {
 		title: 'Choosing a file',
 		summary: 'Pick the statement you downloaded from your bank or card provider. It needs to be a CSV file saved somewhere in this vault; the newest ones are at the top.',
 		paragraphs: [
-			'If you\'ve imported from the same place before, choose its mapping profile too. It brings back everything you set up last time, so you don\'t have to do it again. For a new source, leave it on None and a profile is saved for you at the end.',
+			'If you\'ve imported from the same place before, choose its mapping profile too. It brings back everything you set up last time, so you don\'t have to do it again. For a new source, leave it on None; you can save a profile at the end.',
 		],
 	},
 	importTable: {

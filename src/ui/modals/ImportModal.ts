@@ -21,7 +21,7 @@ export class ImportModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.setCssStyles({ maxWidth: '960px', width: '92vw' });
-		this.setTitle('Import CSV statement');
+		this.setTitle('Import CSV statement (experimental)');
 
 		this.component = new ImportModalComponent({
 			target: contentEl,

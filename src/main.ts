@@ -138,7 +138,7 @@ export default class BeancountPlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'import-csv-statement',
-			name: 'Import CSV statement',
+			name: 'Import CSV statement (experimental)',
 			callback: () => { new ImportModal(this.app, this, this.getDashboardRefreshCallback()).open(); }
 		});
 		this.addCommand({

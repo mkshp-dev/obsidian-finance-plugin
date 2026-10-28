@@ -17,7 +17,7 @@ A comprehensive Beancount integration for [Obsidian](https://obsidian.md) that t
 
 *   **📊 Unified Dashboard** — Overview, Transactions, Journal, Accounts & Balances, Income Statement, and Commodities tabs, all backed by live Beancount Query Language (BQL).
 *   **💸 Transaction Management** — Add transactions, balance assertions, and notes through a friendly modal instead of hand-writing plain text.
-*   **🏦 Bank Statement Import** *(beta)* — Import a bank's CSV export as transactions: map its columns once per bank with formulas and account aliases, then review every row (duplicates, missing pieces, statement balances) before anything is written. Manage the aliases with the **Manage account aliases** command.
+*   **🏦 Bank Statement Import** *(experimental)* — Import a bank's CSV export as transactions: map its columns once per bank with formulas and account aliases, then review every row (duplicates, missing pieces, statement balances) before anything is written. Manage the aliases with the **Manage account aliases** command.
 *   **📅 Scheduled & Recurring Transactions** — Define one-time or repeating transactions (rent, subscriptions, insurance) from the Snapshot sidebar. Click Refresh to see what's due — including every occurrence a schedule has fallen behind on — and Insert, Skip, or Hold each one individually.
 *   **✅ Reconciliation Tracking** — Assign a reconciliation interval to any account and get an at-a-glance overdue/up-to-date summary in the Snapshot sidebar.
 *   **🪙 Bean Price Integration** — Automated market value updates for stocks, mutual funds, ETFs, and cryptocurrencies.

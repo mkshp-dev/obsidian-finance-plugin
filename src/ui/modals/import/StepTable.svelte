@@ -37,7 +37,10 @@
 		text: 'Text',
 		ignore: 'Ignore',
 	};
-	const ORDER_LABELS: Record<DateOrder, string> = { DMY: 'Day-Month-Year', MDY: 'Month-Day-Year', YMD: 'Year-Month-Day' };
+	const ORDER_LABELS: Record<DateOrder, string> = {
+		DMY: 'Day-Month-Year', MDY: 'Month-Day-Year', YMD: 'Year-Month-Day',
+		YDM: 'Year-Day-Month', DYM: 'Day-Year-Month', MYD: 'Month-Year-Day',
+	};
 	const SAMPLE_COUNT = 2;
 	let selected: number | null = null;
 

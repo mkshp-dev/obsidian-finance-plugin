@@ -4,7 +4,7 @@
 import type { TransactionData } from '../utils/directives/types';
 
 /** Order of day, month and year in a date column. Separators and a trailing time are ignored. */
-export type DateOrder = 'DMY' | 'MDY' | 'YMD';
+export type DateOrder = 'DMY' | 'MDY' | 'YMD' | 'YDM' | 'DYM' | 'MYD';
 
 /**
  * What a column holds. Date columns carry their day/month/year order; times

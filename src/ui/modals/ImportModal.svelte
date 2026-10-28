@@ -220,6 +220,8 @@
 	/** The table and profile the current mapping was made for. */
 	let mappingSource = '';
 	let profileName = '';
+	/** Whether Apply mapping saves the mapping as a profile. */
+	let saveMapping = true;
 
 	/** A profile saved in the current format for a file with the same number of columns, and a header row only if this file has one. */
 	function usableProfile(p: ImportProfile | null): ImportProfile | null {
@@ -302,7 +304,7 @@
 		if (!mapping) return;
 		applying = true;
 		try {
-			await saveProfile(mapping);
+			if (saveMapping) await saveProfile(mapping);
 			result = buildDrafts(dataRows, labels, mapping, { aliases: aliasEntries, fileName: filePath });
 			statement = statementOf(mapping);
 			const statuses = await lookupDuplicates(plugin, result.drafts);
@@ -425,6 +427,7 @@
 			onManageAliases={manageAliases}
 			bind:mapping
 			bind:profileName
+			bind:saveMapping
 			{applying}
 			onBack={() => (step = 'table')}
 			onApply={applyMapping}
