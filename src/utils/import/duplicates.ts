@@ -4,8 +4,9 @@
 import type { ImportDraft } from '../../models/import';
 import { amountsEqual, daysBetween } from './values';
 
-/** A posting on the statement's account, as found in the ledger. */
+/** A posting on one of the statement's accounts, as found in the ledger. */
 export interface LedgerPosting {
+	account: string;
 	date: string;
 	amount: string;
 	currency: string;
@@ -20,7 +21,7 @@ export type DuplicateStatus =
 	| { kind: 'new' }
 	/** The row's `import-ref` is already in the ledger. */
 	| { kind: 'imported' }
-	/** Same account, amount and currency within a few days, e.g. entered by hand or imported from the other side of a transfer. */
+	/** Same account (the row's posting 1), amount and currency within a few days, e.g. entered by hand or imported from the other side of a transfer. */
 	| { kind: 'possible'; match: LedgerPosting };
 
 /**
@@ -48,7 +49,8 @@ export function findDuplicates(
 		let bestDistance = Infinity;
 		available.forEach((p, i) => {
 			const distance = Math.abs(daysBetween(draft.txn.date, p.date));
-			if (distance <= windowDays && distance < bestDistance && p.currency === own.currency && amountsEqual(p.amount, String(own.amount))) {
+			if (distance <= windowDays && distance < bestDistance && p.account === own.account
+				&& p.currency === own.currency && amountsEqual(p.amount, String(own.amount))) {
 				bestIndex = i;
 				bestDistance = distance;
 			}

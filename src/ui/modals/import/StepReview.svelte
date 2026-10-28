@@ -19,6 +19,8 @@
 	export let assertions: StatementAssertion[] = [];
 	/** closing − opening − the rows' amounts, when both balances were given. */
 	export let difference: string | null = null;
+	/** Balances were given, but posting 1 has no single currency to assert them in. */
+	export let balancesSkipped = false;
 	/** True while the import is being written. */
 	export let importing = false;
 	export let onBack: () => void;
@@ -28,18 +30,20 @@
 	/** Index into `rows` of the row open in detail, or null for the list. */
 	let selected: number | null = null;
 
-	$: visible = filterRows(rows, filter);
+	/** Rows using an account that isn't open can't be added. */
+	$: openAccounts = new Set(accounts);
+	$: visible = filterRows(rows, filter, openAccounts);
 	$: tabs = [
 		{ value: 'all', label: 'All', count: rows.length },
-		{ value: 'attention', label: 'Needs attention', count: filterRows(rows, 'attention').length, tone: 'warning' as const },
-		{ value: 'duplicates', label: 'Duplicates', count: filterRows(rows, 'duplicates').length },
+		{ value: 'attention', label: 'Needs attention', count: filterRows(rows, 'attention', openAccounts).length, tone: 'warning' as const },
+		{ value: 'duplicates', label: 'Duplicates', count: filterRows(rows, 'duplicates', openAccounts).length },
 	];
 	/** Which rows can be ticked. */
-	$: resolved = rows.map(isResolved);
+	$: resolved = rows.map((r) => isResolved(r, openAccounts));
 
 	/** After an edit in the detail view: a row that's become unresolved can't stay ticked. */
 	function changed() {
-		untickUnresolved(rows);
+		untickUnresolved(rows, openAccounts);
 		rows = rows;
 	}
 	$: includedCount = rows.filter((r, i) => r.include && resolved[i]).length;
@@ -51,7 +55,7 @@
 	$: position = selected === null ? -1 : visible.indexOf(selected);
 
 	function statusOf(row: ReviewRow): { label: string; tone: string } | null {
-		if (!isResolved(row)) return { label: 'unresolved', tone: 'bad' };
+		if (!isResolved(row, openAccounts)) return { label: 'unresolved', tone: 'bad' };
 		if (row.status.kind === 'imported') return { label: 'imported', tone: 'muted' };
 		if (row.status.kind === 'possible') return { label: 'possible duplicate', tone: 'warn' };
 		return null;
@@ -85,6 +89,12 @@
 			<div class="import-banner is-warning">
 				The balances before and after the statement don't match its transactions: they're {difference} {statement?.currency ?? ''} apart.
 				A row may be missing, or an amount's sign is wrong.
+			</div>
+		{/if}
+
+		{#if balancesSkipped}
+			<div class="import-banner is-warning">
+				The balances before and after the statement weren't checked and won't be added: posting 1 needs one currency typed in on the mapping page.
 			</div>
 		{/if}
 

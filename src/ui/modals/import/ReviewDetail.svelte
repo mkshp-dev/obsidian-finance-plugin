@@ -84,7 +84,7 @@
 	}
 
 	$: ledgerText = generateTransactionText(row.draft.txn);
-	$: problems = draftProblems(row.draft);
+	$: problems = draftProblems(row.draft, new Set(accounts));
 	$: resolved = problems.unresolved.length === 0;
 
 	// --- Postings, as in Add Transaction ---

@@ -16,7 +16,8 @@ export type ColumnType =
 
 /** Where the header row is and which rows hold transactions, as indexes into the parsed CSV rows. */
 export interface TableBounds {
-	headerRow: number;
+	/** Null for a file with no header row; its columns are then named in the Table step. */
+	headerRow: number | null;
 	/** First transaction row (inclusive). */
 	firstRow: number;
 	/** Last transaction row (inclusive). */
@@ -70,8 +71,12 @@ export interface ImportMapping {
 export interface ImportProfile {
 	id: string;
 	name: string;
-	/** See headerSignature(). */
+	/** See headerSignature(). Empty for a file with no header row. */
 	headerSignature: string;
+	/** The file has no header row: its table is found by its rows, and its columns go by `columnNames`. */
+	noHeader?: boolean;
+	/** The names given to a header-less file's columns, used in `{{…}}` templates. */
+	columnNames?: string[];
 	mapping: ImportMapping;
 }
 

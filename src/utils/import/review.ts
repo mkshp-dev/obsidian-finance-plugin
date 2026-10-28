@@ -34,11 +34,12 @@ function filled(value: string | number | null | undefined): boolean {
 
 /**
  * What a transaction still needs before it can go into the ledger: a date,
- * at least two postings each with a valid account, at least one amount
- * with a currency (and at most one posting left for Beancount to
- * balance), and an import-ref. Empty when it's resolved.
+ * at least two postings each with a valid account (one of `openAccounts`,
+ * when they're known), at least one amount with a currency (and at most one
+ * posting left for Beancount to balance), and an import-ref. Empty when
+ * it's resolved.
  */
-export function unresolvedReasons(txn: TransactionData): Unresolved[] {
+export function unresolvedReasons(txn: TransactionData, openAccounts?: ReadonlySet<string>): Unresolved[] {
 	const reasons: Unresolved[] = [];
 	if (!isIsoDate((txn.date ?? '').trim())) reasons.push({ field: 'Date', message: 'Date: needs a date (YYYY-MM-DD)' });
 
@@ -49,6 +50,9 @@ export function unresolvedReasons(txn: TransactionData): Unresolved[] {
 		const account = (p.account ?? '').trim();
 		if (!account) reasons.push({ field: `${what} account`, message: `${what} account: needs an account` });
 		else if (!isAccountName(account)) reasons.push({ field: `${what} account`, message: `${what} account: "${account}" isn't an account name` });
+		else if (openAccounts && openAccounts.size > 0 && !openAccounts.has(account)) {
+			reasons.push({ field: `${what} account`, message: `${what} account: "${account}" isn't open in the ledger. Open it first, or pick another account` });
+		}
 
 		if (!filled(p.amount)) return;
 		const currency = (p.currency ?? '').trim();
@@ -64,8 +68,8 @@ export function unresolvedReasons(txn: TransactionData): Unresolved[] {
 	return reasons;
 }
 
-export function isResolved(row: ReviewRow): boolean {
-	return unresolvedReasons(row.draft.txn).length === 0;
+export function isResolved(row: ReviewRow, openAccounts?: ReadonlySet<string>): boolean {
+	return unresolvedReasons(row.draft.txn, openAccounts).length === 0;
 }
 
 /**
@@ -73,8 +77,8 @@ export function isResolved(row: ReviewRow): boolean {
  * when it has one (it says what in the file couldn't be read), and the
  * mapping's other errors as notes about fields that aren't required.
  */
-export function draftProblems(draft: ImportDraft): { unresolved: string[]; notes: string[] } {
-	const reasons = unresolvedReasons(draft.txn);
+export function draftProblems(draft: ImportDraft, openAccounts?: ReadonlySet<string>): { unresolved: string[]; notes: string[] } {
+	const reasons = unresolvedReasons(draft.txn, openAccounts);
 	const errorFor = (field: string) => draft.errors.find((e) => e.startsWith(`${field}:`));
 	return {
 		unresolved: reasons.map((r) => errorFor(r.field) ?? r.message),
@@ -83,17 +87,17 @@ export function draftProblems(draft: ImportDraft): { unresolved: string[]; notes
 }
 
 /** Rows start included when they're resolved and not already in the ledger. */
-export function createReviewRows(drafts: ImportDraft[], statuses: DuplicateStatus[]): ReviewRow[] {
+export function createReviewRows(drafts: ImportDraft[], statuses: DuplicateStatus[], openAccounts?: ReadonlySet<string>): ReviewRow[] {
 	return drafts.map((draft, i) => ({
 		draft,
 		status: statuses[i] ?? { kind: 'new' },
-		include: unresolvedReasons(draft.txn).length === 0 && statuses[i]?.kind !== 'imported',
+		include: unresolvedReasons(draft.txn, openAccounts).length === 0 && statuses[i]?.kind !== 'imported',
 	}));
 }
 
 /** Unticks rows that have become unresolved, e.g. after an edit. */
-export function untickUnresolved(rows: ReviewRow[]): void {
-	for (const row of rows) if (row.include && !isResolved(row)) row.include = false;
+export function untickUnresolved(rows: ReviewRow[], openAccounts?: ReadonlySet<string>): void {
+	for (const row of rows) if (row.include && !isResolved(row, openAccounts)) row.include = false;
 }
 
 /** The account shown in the review list: the posting whose account came from an alias lookup, else the second. */
@@ -101,17 +105,17 @@ export function counterAccount(row: ReviewRow): string {
 	return row.draft.txn.postings?.[row.draft.match?.posting ?? 1]?.account ?? '';
 }
 
-export function needsAttention(row: ReviewRow): boolean {
-	return !isResolved(row) || row.status.kind === 'possible';
+export function needsAttention(row: ReviewRow, openAccounts?: ReadonlySet<string>): boolean {
+	return !isResolved(row, openAccounts) || row.status.kind === 'possible';
 }
 
 export function isDuplicate(row: ReviewRow): boolean {
 	return row.status.kind !== 'new';
 }
 
-export function filterRows(rows: ReviewRow[], filter: ReviewFilter): number[] {
+export function filterRows(rows: ReviewRow[], filter: ReviewFilter, openAccounts?: ReadonlySet<string>): number[] {
 	return rows.flatMap((row, i) =>
-		filter === 'all' || (filter === 'attention' ? needsAttention(row) : isDuplicate(row)) ? [i] : []);
+		filter === 'all' || (filter === 'attention' ? needsAttention(row, openAccounts) : isDuplicate(row)) ? [i] : []);
 }
 
 // --- Editing a transaction with the Add Transaction form's posting rows ---

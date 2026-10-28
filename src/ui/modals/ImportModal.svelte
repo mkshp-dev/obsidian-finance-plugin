@@ -8,7 +8,7 @@
 	import StepTable from './import/StepTable.svelte';
 	import StepMapping from './import/StepMapping.svelte';
 	import StepReview from './import/StepReview.svelte';
-	import { readCsvRows, detectTable, columnLabels, headerSignature, detectStatementBalance, findHeaderRow, tableFromHeader } from '../../utils/import/csvTable';
+	import { decodeText, detectDelimiter, readCsvRows, type Delimiter, detectTable, columnLabels, headerSignature, detectStatementBalance, detectHeaderlessTable, findHeaderRow, tableFromHeader, tableWidth } from '../../utils/import/csvTable';
 	import { detectColumnTypes, detectDecimalMark } from '../../utils/import/columns';
 	import { blankMapping, buildDrafts, impliedOpening, isPlainField, statementAssertions, statementDifference, type DraftResult, type StatementAssertion } from '../../utils/import/mapping';
 	import { isIsoDate, parseAmount } from '../../utils/import/values';
@@ -74,6 +74,9 @@
 		.sort((a, b) => b.stat.mtime - a.stat.mtime)
 		.map((f) => f.path);
 	let filePath = '';
+	/** The file as text, kept to read it again with another separator. */
+	let fileText = '';
+	let delimiter: Delimiter = ',';
 	let rows: string[][] = [];
 	let bounds: TableBounds | null = null;
 	let fileError = '';
@@ -85,13 +88,30 @@
 
 	async function selectFile(path: string) {
 		filePath = path;
+		fileText = '';
 		rows = [];
 		bounds = null;
 		fileError = '';
 		const file = plugin.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
 		try {
-			rows = readCsvRows(await plugin.app.vault.cachedRead(file));
+			fileText = decodeText(new Uint8Array(await plugin.app.vault.readBinary(file)));
+		} catch (e) {
+			fileError = `Couldn't read this file: ${e instanceof Error ? e.message : String(e)}`;
+			return;
+		}
+		readRows(detectDelimiter(fileText));
+	}
+
+	/** Splits the file into rows with `separator` and looks for the table again. */
+	function readRows(separator: Delimiter) {
+		delimiter = separator;
+		columnNames = [];
+		rows = [];
+		bounds = null;
+		fileError = '';
+		try {
+			rows = readCsvRows(fileText, separator);
 			locateTable();
 		} catch (e) {
 			fileError = `Couldn't read this file as CSV: ${e instanceof Error ? e.message : String(e)}`;
@@ -106,19 +126,28 @@
 	/** Whether the table was found, or has to be marked by hand in the Table step. */
 	let tableFound = true;
 
-	/** Uses the chosen profile's header when the file has it, else looks for a table. */
+	/** Uses the chosen profile's header when the file has it (or its rows, for a file with no header), else looks for a table. */
 	function locateTable() {
-		const profileHeader = chosenProfile ? findHeaderRow(rows, chosenProfile.headerSignature) : -1;
-		bounds = profileHeader >= 0 ? tableFromHeader(rows, profileHeader) : detectTable(rows);
+		if (chosenProfile?.noHeader) {
+			bounds = detectHeaderlessTable(rows);
+		} else {
+			const profileHeader = chosenProfile ? findHeaderRow(rows, chosenProfile.headerSignature) : -1;
+			bounds = profileHeader >= 0 ? tableFromHeader(rows, profileHeader) : detectTable(rows);
+		}
 		tableFound = bounds !== null;
 		if (!bounds) bounds = rows.length > 1 ? { headerRow: 0, firstRow: 1, lastRow: rows.length - 1 } : null;
 	}
 
-	$: header = bounds ? rows[bounds.headerRow] ?? [] : [];
-	$: labels = columnLabels(header);
+	$: headerless = bounds?.headerRow === null;
+	$: header = bounds && bounds.headerRow !== null ? rows[bounds.headerRow] ?? [] : [];
+	/** The names typed in for a header-less file's columns, in the Table step; blank ones are "Column N". */
+	let columnNames: string[] = [];
+	$: labels = columnLabels(bounds && headerless ? Array.from({ length: tableWidth(rows, bounds) }, (_, i) => columnNames[i] ?? '') : header);
 	$: dataRows = bounds ? rows.slice(bounds.firstRow, bounds.lastRow + 1) : [];
-	$: signature = headerSignature(header);
-	$: profileMismatch = !!chosenProfile && rows.length > 0 && findHeaderRow(rows, chosenProfile.headerSignature) < 0;
+	$: signature = headerless ? '' : headerSignature(header);
+	$: profileMismatch = !!chosenProfile && rows.length > 0 && (chosenProfile.noHeader
+		? !bounds || !headerless || tableWidth(rows, bounds) !== chosenProfile.mapping.columnTypes.length
+		: findHeaderRow(rows, chosenProfile.headerSignature) < 0);
 
 	// Step 2: column types. Re-guessed when the header or the profile changes; kept otherwise.
 	let columnTypes: ColumnType[] = [];
@@ -131,7 +160,9 @@
 	function prepareColumnTypes() {
 		const key = typesKey;
 		if (key === typesFor) return;
-		const saved = usableProfile(chosenProfile)?.mapping;
+		const profile = usableProfile(chosenProfile);
+		const saved = profile?.mapping;
+		if (profile?.noHeader) columnNames = [...(profile.columnNames ?? [])];
 		columnTypes = saved
 			? JSON.parse(JSON.stringify(saved.columnTypes)) as ColumnType[]
 			: detectColumnTypes(dataRows, labels.length);
@@ -190,9 +221,9 @@
 	let mappingSource = '';
 	let profileName = '';
 
-	/** A profile saved in the current format for a file with the same number of columns. */
+	/** A profile saved in the current format for a file with the same number of columns, and a header row only if this file has one. */
 	function usableProfile(p: ImportProfile | null): ImportProfile | null {
-		return p && p.mapping.version === MAPPING_VERSION && p.mapping.columnTypes?.length === labels.length ? p : null;
+		return p && p.mapping.version === MAPPING_VERSION && p.mapping.columnTypes?.length === labels.length && !!p.noHeader === headerless ? p : null;
 	}
 
 	function prepareMapping() {
@@ -227,10 +258,12 @@
 		else if (isPlainField(posting.account)) posting.account = '';
 	}
 
-	/** Posting 1's account and currency when they're typed in, not taken from a column. */
+	/** Posting 1's account and currency when both are typed in, not taken from a column or left blank. */
 	function statementOf(m: ImportMapping): { account: string; currency: string } | null {
 		const p = m.postings[0];
-		return p && isPlainField(p.account) && isPlainField(p.currency) && p.account.trim() ? { account: p.account.trim(), currency: p.currency.trim() } : null;
+		return p && isPlainField(p.account) && isPlainField(p.currency) && p.account.trim() && p.currency.trim()
+			? { account: p.account.trim(), currency: p.currency.trim() }
+			: null;
 	}
 
 	/** Updates the chosen profile, or saves a new one (replacing a profile with the same name). */
@@ -241,6 +274,7 @@
 			id: existing?.id ?? `${Date.now()}`,
 			name,
 			headerSignature: signature,
+			...(headerless ? { noHeader: true, columnNames: [...labels] } : {}),
 			mapping: JSON.parse(JSON.stringify(m)) as ImportMapping,
 		};
 		plugin.settings.importProfiles = [...plugin.settings.importProfiles.filter((p) => p.id !== saved.id), saved];
@@ -259,7 +293,10 @@
 	let assertions: StatementAssertion[] = [];
 	/** closing − opening − the rows' amounts, when both balances are given; not "0" means something's off. */
 	let difference: string | null = null;
+	/** Balances were given, but posting 1 has no single currency to assert them in. */
+	let balancesSkipped = false;
 	let applying = false;
+	$: openAccounts = new Set(accounts);
 
 	async function applyMapping() {
 		if (!mapping) return;
@@ -268,14 +305,15 @@
 			await saveProfile(mapping);
 			result = buildDrafts(dataRows, labels, mapping, { aliases: aliasEntries, fileName: filePath });
 			statement = statementOf(mapping);
-			const statuses = await lookupDuplicates(plugin, statement?.account ?? '', result.drafts);
-			reviewRows = createReviewRows(result.drafts, statuses);
+			const statuses = await lookupDuplicates(plugin, result.drafts);
+			reviewRows = createReviewRows(result.drafts, statuses, openAccounts);
 
 			// Statement balances only apply to a single statement account.
 			const before = statementAccount ? amountOf(openingBalance) : null;
 			const after = statementAccount ? amountOf(closingBalance) : null;
 			const firstDate = result.drafts.map((d) => d.txn.date).filter(isIsoDate).sort()[0];
 			assertions = statement ? statementAssertions(result.drafts, before, after) : [];
+			balancesSkipped = !statement && (before !== null || after !== null);
 			difference = before !== null && after !== null ? statementDifference(result.drafts, before, after) : null;
 			// The ledger should hold the balance before the statement: given, or implied by the one after.
 			const expected = before ?? (after === null ? null : impliedOpening(result.drafts, after));
@@ -297,7 +335,7 @@
 		if (importing) return;
 		importing = true;
 		try {
-			const transactions = reviewRows.filter((r) => r.include && isResolved(r)).map((r) => r.draft.txn);
+			const transactions = reviewRows.filter((r) => r.include && isResolved(r, openAccounts)).map((r) => r.draft.txn);
 			const balances = statement
 				? assertions.filter((a) => a.include).map((a) => ({ date: a.date, account: statement!.account, amount: a.amount, currency: statement!.currency }))
 				: [];
@@ -342,11 +380,14 @@
 			{files}
 			{filePath}
 			{fileError}
+			{delimiter}
+			fileRead={!!fileText}
 			{profiles}
 			{profileId}
 			{profileMismatch}
 			canContinue={bounds !== null}
 			onSelectFile={selectFile}
+			onSelectDelimiter={readRows}
 			onSelectProfile={selectProfile}
 			onCancel={close}
 			onNext={() => (step = 'table')}
@@ -359,6 +400,7 @@
 			{tableFound}
 			bind:bounds
 			{labels}
+			bind:columnNames
 			{dataRows}
 			bind:columnTypes
 			bind:decimalMark
@@ -399,6 +441,7 @@
 			{statement}
 			bind:assertions
 			{difference}
+			{balancesSkipped}
 			{importing}
 			onBack={() => (step = 'mapping')}
 			onSubmit={submit}

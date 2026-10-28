@@ -18,6 +18,7 @@ import { parseAliases, type AccountAliases } from '../utils/import/aliases';
 import { findDuplicates, type DuplicateStatus, type LedgerPosting } from '../utils/import/duplicates';
 import { addAmounts, addDays, amountsEqual, negateAmount } from '../utils/import/values';
 import { appendEntries } from '../utils/import/ledgerText';
+import { isAccountName } from '../utils/import/mapping';
 import { generateTransactionText } from '../utils/directives/transactionDirectives';
 import { formatBalanceHeader } from '../utils/directives/directiveText';
 import { ensureTransactionFile, getTargetFile } from '../utils/structuredLayout';
@@ -64,6 +65,7 @@ export async function loadAccountAliasEntries(plugin: BeancountPlugin): Promise<
 
 export function parseLedgerPostings(csv: string): LedgerPosting[] {
 	return readRows(csv).map((r) => ({
+		account: r.account ?? '',
 		date: r.date,
 		amount: r.number,
 		currency: r.currency,
@@ -77,12 +79,12 @@ export function parseLedgerPostings(csv: string): LedgerPosting[] {
 
 /**
  * Marks each draft as new, already imported (its `import-ref` is in the
- * ledger) or a possible duplicate of a posting on `account`. Returned in
- * the same order as `drafts`.
+ * ledger) or a possible duplicate of a ledger posting on its posting 1
+ * account, so a file with rows for several accounts is checked too.
+ * Returned in the same order as `drafts`.
  */
 export async function lookupDuplicates(
 	plugin: BeancountPlugin,
-	account: string,
 	drafts: ImportDraft[],
 	windowDays = 3,
 ): Promise<DuplicateStatus[]> {
@@ -92,9 +94,10 @@ export async function lookupDuplicates(
 	const from = assertDate(addDays(dates[0], -LOOKUP_MARGIN_DAYS));
 	const to = assertDate(addDays(dates[dates.length - 1], LOOKUP_MARGIN_DAYS));
 
+	const accounts = [...new Set(drafts.map((d) => d.txn?.postings?.[0]?.account?.trim() ?? ''))].filter(isAccountName);
 	const [refsCsv, postingsCsv] = await Promise.all([
 		runQuery(plugin, getImportRefsQuery(from, to)),
-		runQuery(plugin, getImportCandidatePostingsQuery(account, from, to)),
+		accounts.length > 0 ? runQuery(plugin, getImportCandidatePostingsQuery(accounts, from, to)) : Promise.resolve(''),
 	]);
 	const refs = new Set(readRows(refsCsv).map((r) => r.ref).filter(Boolean));
 	return findDuplicates(drafts, refs, parseLedgerPostings(postingsCsv), windowDays);

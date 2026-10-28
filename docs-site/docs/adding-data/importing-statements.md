@@ -23,7 +23,8 @@ The importer has four pages. The step bar at the top shows where you are, and yo
 
 ## 1. Select a File
 
-*   **Statement file**: Every CSV file in the vault, newest first.
+*   **Statement file**: Every CSV file in the vault, newest first. UTF-8, UTF-16 and Windows-1252 (common for Excel exports) files are all read correctly.
+*   **Separator**: What separates the columns: comma, semicolon (common where `,` is the decimal mark), tab or pipe. It's detected from the file; change it if the next page shows everything in one column.
 *   **Mapping profile**: If you've imported from this bank before, choose its profile and the next two pages come back filled in. For a new bank, leave it on **None**; a profile is saved when you apply the mapping on page 3.
 
 A profile recognises a bank's files by their header row. If the chosen profile was saved for different columns, you're warned that its mapping may not fit.
@@ -36,6 +37,8 @@ Bank exports often have account details above the transactions and totals or not
 
 ### Table rows
 The plugin finds the header row and the run of transaction rows under it. The header row is shaded, transactions are highlighted, and everything else is greyed out. If it got it wrong, click a row and choose **Set as header row** or **Set as last row**.
+
+Some banks' files have no header row and start straight with transactions. The plugin notices when it can't find a header; you can also tick **The file has no header row** yourself, and use **Set as first row** if the transactions start lower down. Without a header, name the columns under **Column types** (e.g. `Date`, `Amount`) to use them in formulas as `{{Amount}}`; unnamed ones are `Column 1`, `Column 2`… The names are saved in the profile.
 
 ### Column types
 For each column, confirm what it holds: **Date** (with the order of day, month and year), **Date & time**, **Number**, **Text**, or **Ignore**. Next to each column you see how many of its values could be read as that type (✓), or how many couldn't, with an example (✗). Also choose how numbers are written: `1,234.56` or `1.234,56`.
@@ -68,7 +71,7 @@ Next to each field's label, a count like **19/20** shows how many rows got a val
 
 ### Required pieces
 *   **Date**: It has to be a Beancount date (`2026-09-22`). If your file writes dates another way, use `=FORMAT_DATE({{Date}}, "YYYY-MM-DD")`.
-*   **`import-ref`** (in 📋 metadata): How the plugin recognises rows it has already imported. Point it at the bank's reference column if there is one, e.g. `={{Chq /Ref No.}}`. Left empty, or empty for a row, a reference is made up from the row's date, amount and narration.
+*   **`import-ref`** (in 📋 metadata): How the plugin recognises rows it has already imported. Point it at the bank's reference column if there is one, e.g. `={{Chq /Ref No.}}`. Left empty, or empty for a row, a reference is made up from the row's statement account, date, amount and narration.
 *   **Postings**: Posting 1 is the statement's own account. Leave one posting's amount empty and Beancount balances it.
 
 By default, every transaction is linked to the statement it came from with `^{{File name}}`.
@@ -149,6 +152,6 @@ If you gave balances on page 2:
 
 ## 💡 Tips
 
-*   **Bank references**: Prefer the bank's own reference column for `import-ref`. Made-up references depend on the date, amount and narration, so they change if those do.
+*   **Bank references**: Prefer the bank's own reference column for `import-ref`. Made-up references depend on the statement account, date, amount and narration, so they change if those do.
 *   **Start with aliases**: A few aliases for the payees you see most often save most of the categorising. Add them from page 3's **Aliases** tab without leaving the importer.
 *   **Several accounts in one file**: Leave the statement account empty and pick posting 1's account with a formula, e.g. from an account-name column.

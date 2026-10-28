@@ -10,6 +10,8 @@
 	export let tableFound = true;
 	export let bounds: TableBounds;
 	export let labels: string[] = [];
+	/** Names typed in for the columns of a file with no header row; blank ones are "Column N". */
+	export let columnNames: string[] = [];
 	export let dataRows: string[][] = [];
 	export let columnTypes: ColumnType[] = [];
 	export let decimalMark: '.' | ',' = '.';
@@ -41,10 +43,30 @@
 
 	$: width = Math.max(1, ...rows.map((r) => r.length));
 	$: count = bounds.lastRow - bounds.firstRow + 1;
+	$: headerless = bounds.headerRow === null;
 
 	function setHeader(i: number) {
 		bounds = { headerRow: i, firstRow: i + 1, lastRow: Math.max(bounds.lastRow, i + 1) };
 		selected = null;
+	}
+
+	function setFirst(i: number) {
+		bounds = { headerRow: null, firstRow: i, lastRow: Math.max(bounds.lastRow, i) };
+		selected = null;
+	}
+
+	/** Without a header row, the row that was the header becomes the first transaction; with one, the first transaction becomes the header. */
+	function setHeaderless(on: boolean) {
+		const first = bounds.headerRow ?? bounds.firstRow;
+		bounds = on
+			? { headerRow: null, firstRow: first, lastRow: bounds.lastRow }
+			: { headerRow: first, firstRow: first + 1, lastRow: Math.max(bounds.lastRow, first + 1) };
+		selected = null;
+	}
+
+	function setName(column: number, name: string) {
+		columnNames[column] = name;
+		columnNames = columnNames;
 	}
 
 	function setLast(i: number) {
@@ -53,7 +75,7 @@
 	}
 
 	function rowKind(i: number, b: TableBounds): string {
-		if (i === b.headerRow) return 'is-header';
+		if (b.headerRow !== null && i === b.headerRow) return 'is-header';
 		return i >= b.firstRow && i <= b.lastRow ? 'is-data' : 'is-outside';
 	}
 
@@ -111,12 +133,17 @@
 		<summary>
 			<span class="summary-title">Table rows <span class="help-in-summary" on:click|preventDefault role="presentation"><HelpTip topic="importTable" /></span></span>
 			<span class="import-hint">
-				Header row {bounds.headerRow + 1} · last row {bounds.lastRow + 1} · {count} transaction{count === 1 ? '' : 's'}
+				{bounds.headerRow === null ? `No header row · first row ${bounds.firstRow + 1}` : `Header row ${bounds.headerRow + 1}`} · last row {bounds.lastRow + 1} · {count} transaction{count === 1 ? '' : 's'}
 			</span>
 		</summary>
 		{#if !tableFound}
 			<div class="import-banner is-warning">Couldn't find the transactions in this file. Click the header row and the last transaction row to mark them.</div>
 		{/if}
+		<label class="radio no-header">
+			<input type="checkbox" checked={headerless} disabled={headerless && bounds.firstRow >= rows.length - 1}
+				on:change={(e) => setHeaderless(e.currentTarget.checked)} />
+			The file has no header row: the transactions start on the first row
+		</label>
 		<div class="import-table-wrap">
 			<table class="import-raw-table">
 				<tbody>
@@ -131,7 +158,10 @@
 							<tr class="row-actions">
 								<td colspan={width + 1}>
 									<button type="button" on:click={() => setHeader(i)} disabled={i >= rows.length - 1}>Set as header row</button>
-									<button type="button" on:click={() => setLast(i)} disabled={i <= bounds.headerRow}>Set as last row</button>
+									{#if headerless}
+										<button type="button" on:click={() => setFirst(i)}>Set as first row</button>
+									{/if}
+									<button type="button" on:click={() => setLast(i)} disabled={i < bounds.firstRow}>Set as last row</button>
 								</td>
 							</tr>
 						{/if}
@@ -153,6 +183,10 @@
 			<label class="radio"><input type="radio" bind:group={decimalMark} value="," /> 1.234,56</label>
 		</div>
 
+		{#if headerless}
+			<p class="import-hint">The file has no header row, so name its columns to use them in formulas, e.g. <code>{'{{Amount}}'}</code>. Unnamed ones are "Column 1", "Column 2"…</p>
+		{/if}
+
 		<div class="import-table-wrap">
 			<table class="types-table">
 				<thead>
@@ -165,7 +199,14 @@
 						{@const others = otherOrders(c, type, dataRows)}
 						{@const values = columnValues(c, dataRows)}
 						<tr class:is-ignored={type?.kind === 'ignore'}>
-							<td class="column-name">{label}</td>
+							<td class="column-name">
+								{#if headerless}
+									<input type="text" class="column-name-input" value={columnNames[c] ?? ''} placeholder="Column {c + 1}"
+										aria-label="Name of column {c + 1}" on:input={(e) => setName(c, e.currentTarget.value)} />
+								{:else}
+									{label}
+								{/if}
+							</td>
 							<td class="samples" title={values.slice(0, 5).join('\n')}>
 								{values.slice(0, SAMPLE_COUNT).join(' · ') || '(empty)'}
 							</td>
@@ -374,6 +415,14 @@
 		color: var(--text-muted);
 		font-family: var(--font-monospace);
 		font-size: var(--font-ui-smaller);
+	}
+
+	.no-header {
+		margin-bottom: var(--size-4-2);
+	}
+
+	.column-name-input {
+		width: 140px;
 	}
 
 	.is-ignored .column-name, .is-ignored .samples {

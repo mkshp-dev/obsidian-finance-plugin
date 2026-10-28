@@ -1,8 +1,13 @@
 <script lang="ts">
 	import HelpTip from '../../common/HelpTip.svelte';
+	import type { Delimiter } from '../../../utils/import/csvTable';
 	export let files: string[] = [];
 	export let filePath = '';
 	export let fileError = '';
+	/** The separator the file is split with, guessed when it's chosen. */
+	export let delimiter: Delimiter = ',';
+	/** The chosen file could be read, so its separator can be changed. */
+	export let fileRead = false;
 	export let profiles: { id: string; name: string }[] = [];
 	/** '' for a new mapping. */
 	export let profileId = '';
@@ -12,6 +17,18 @@
 	export let canContinue = false;
 	export let onSelectFile: (path: string) => void;
 	export let onSelectProfile: (id: string) => void;
+	export let onSelectDelimiter: (delimiter: Delimiter) => void;
+
+	const SEPARATORS: { value: Delimiter; label: string }[] = [
+		{ value: ',', label: 'Comma ( , )' },
+		{ value: ';', label: 'Semicolon ( ; )' },
+		{ value: '\t', label: 'Tab' },
+		{ value: '|', label: 'Pipe ( | )' },
+	];
+
+	function selectDelimiter(e: Event) {
+		onSelectDelimiter((e.currentTarget as HTMLSelectElement).value as Delimiter);
+	}
 	export let onCancel: () => void;
 	export let onNext: () => void;
 
@@ -34,6 +51,17 @@
 				{/each}
 			</select>
 		</div>
+
+		{#if fileRead}
+			<div class="import-field">
+				<label for="import-separator">Separator</label>
+				<select id="import-separator" class="dropdown" value={delimiter} on:change={selectDelimiter}>
+					{#each SEPARATORS as s (s.value)}
+						<option value={s.value}>{s.label}</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
 
 		<div class="import-field">
 			<label for="import-profile-choice">Mapping profile</label>

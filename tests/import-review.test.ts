@@ -39,6 +39,15 @@ describe('unresolved transactions', () => {
 		expect(messages(txn({ metadata: { 'import-ref': ' ' } }))).toEqual(['import-ref: needs a reference']);
 	});
 
+	it('needs accounts that are open in the ledger, when the open accounts are known', () => {
+		expect(unresolvedReasons(txn(), new Set(['Assets:Bank', 'Expenses:Food']))).toEqual([]);
+		expect(unresolvedReasons(txn(), new Set(['Assets:Bank'])).map((r) => r.message)).toEqual([
+			'Posting 2 account: "Expenses:Food" isn\'t open in the ledger. Open it first, or pick another account',
+		]);
+		// Accounts that couldn't be loaded don't block anything.
+		expect(unresolvedReasons(txn(), new Set())).toEqual([]);
+	});
+
 	it("explains a missing field with the mapping's error, and keeps other errors as notes", () => {
 		const d = draft(txn({ date: '' }), ['Date: can\'t read the date "40/13/2026"', 'Payee: There\'s no column "Nope"']);
 		expect(draftProblems(d)).toEqual({
@@ -62,7 +71,7 @@ describe('review rows', () => {
 	it('ticks only resolved rows that aren\'t already in the ledger', () => {
 		const r = rows();
 		expect(r.map((row) => row.include)).toEqual([true, false, false, true]);
-		expect(r.map(isResolved)).toEqual([true, false, true, true]);
+		expect(r.map((row) => isResolved(row))).toEqual([true, false, true, true]);
 	});
 
 	it('filters unresolved rows and possible duplicates as needing attention', () => {

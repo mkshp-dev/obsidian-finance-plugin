@@ -14,7 +14,7 @@ const KOTAK = readFileSync(path.join(__dirname, 'fixtures/kotak-statement.csv'),
 function loadKotak(text = KOTAK) {
 	const rows = readCsvRows(text);
 	const bounds = detectTable(rows)!;
-	const labels = columnLabels(rows[bounds.headerRow]);
+	const labels = columnLabels(rows[bounds.headerRow!]);
 	const data = rows.slice(bounds.firstRow, bounds.lastRow + 1);
 	return { rows, bounds, labels, data };
 }
@@ -42,7 +42,7 @@ function kotakMapping(): ImportMapping {
 describe('finding the table', () => {
 	it('skips the account details above and the closing balance and notes below', () => {
 		const { rows, bounds, data } = loadKotak();
-		expect(rows[bounds.headerRow][0]).toBe('Sl. No.');
+		expect(rows[bounds.headerRow!][0]).toBe('Sl. No.');
 		expect(data).toHaveLength(10);
 		expect(data[0][0]).toBe('1');
 		expect(data[9][0]).toBe('10');
@@ -212,6 +212,12 @@ describe('buildDrafts on the Kotak statement', () => {
 		expect(charge.importRef).toMatch(/^gen-[0-9a-z]+$/);
 		expect(buildDrafts(data, labels, kotakMapping()).drafts[9].importRef).toBe(charge.importRef);
 		expect(charge.errors).toEqual([]);
+	});
+
+	it("makes a different ref for the same row on another account's statement", () => {
+		const other = kotakMapping();
+		other.postings[0].account = 'Liabilities:CreditCard';
+		expect(buildDrafts(data, labels, other).drafts[9].importRef).not.toBe(result.drafts[9].importRef);
 	});
 
 	it('uses a plain column as the account name, without looking up aliases', () => {
@@ -426,5 +432,20 @@ describe('starting blank', () => {
 			metadata: { 'import-ref': '' },
 			postings: [{ account: '', amount: '', currency: '' }, { account: '', amount: '', currency: '' }],
 		});
+	});
+});
+
+describe('ordering rows', () => {
+	function dates(cells: string[]) {
+		const m = blankMapping([{ kind: 'date', order: 'YMD' }, { kind: 'text' }]);
+		m.date = '={{Date}}';
+		m.narration = '={{Description}}';
+		return buildDrafts(cells.map((d, i) => [d, `row ${i}`]), ['Date', 'Description'], m).drafts.map((d) => d.txn.narration);
+	}
+
+	it('keeps a row without a date next to its neighbours', () => {
+		expect(dates(['2026-09-03', '', '2026-09-01'])).toEqual(['row 2', 'row 1', 'row 0']);
+		expect(dates(['', '2026-09-03', '2026-09-01'])).toEqual(['row 2', 'row 1', 'row 0']);
+		expect(dates(['2026-09-01', '', '2026-09-02', '2026-09-01'])).toEqual(['row 0', 'row 1', 'row 3', 'row 2']);
 	});
 });

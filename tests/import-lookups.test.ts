@@ -16,10 +16,12 @@ vi.mock('../src/utils/queryRunner', () => ({
 			return Promise.resolve('ref\nUPI-4\n');
 		}
 		if (query.includes('filename, lineno')) {
+			expect(query).toContain("(account = 'Assets:Bank:Kotak' OR account = 'Liabilities:CreditCard')");
 			return Promise.resolve([
-				'date,number,currency,payee,narration,ref,filename,lineno',
-				'2026-09-02,   -10.00,INR,CAMPUS CANTEEN,UPI/CAMPUS CANTEEN/...,UPI-4,/v/2026.beancount,15',
-				'2026-09-14,-53615.76,INR,Card bill,manual entry,,/v/2026.beancount,19',
+				'account,date,number,currency,payee,narration,ref,filename,lineno',
+				'Assets:Bank:Kotak,2026-09-02,   -10.00,INR,CAMPUS CANTEEN,UPI/CAMPUS CANTEEN/...,UPI-4,/v/2026.beancount,15',
+				'Assets:Bank:Kotak,2026-09-14,-53615.76,INR,Card bill,manual entry,,/v/2026.beancount,19',
+				'Liabilities:CreditCard,2026-09-15,-10994.04,INR,Card,manual entry,,/v/2026.beancount,25',
 			].join('\n'));
 		}
 		if (query.includes('sum(number)')) {
@@ -31,15 +33,15 @@ vi.mock('../src/utils/queryRunner', () => ({
 
 const plugin = {} as BeancountPlugin;
 
-function draft(date: string, amount: string, importRef: string): ImportDraft {
+function draft(date: string, amount: string, importRef: string, account = 'Assets:Bank:Kotak'): ImportDraft {
 	return {
 		sourceIndex: 0, cells: [], importRef, errors: [],
-		txn: { date, postings: [{ account: 'Assets:Bank:Kotak', amount, currency: 'INR' }, { account: 'Expenses:Uncategorized' }] },
+		txn: { date, postings: [{ account, amount, currency: 'INR' }, { account: 'Expenses:Uncategorized' }] },
 	};
 }
 
-function posting(date: string, amount: string, importRef = ''): LedgerPosting {
-	return { date, amount, currency: 'INR', payee: '', narration: '', importRef, filename: 'f', lineno: 1 };
+function posting(date: string, amount: string, importRef = '', account = 'Assets:Bank:Kotak'): LedgerPosting {
+	return { account, date, amount, currency: 'INR', payee: '', narration: '', importRef, filename: 'f', lineno: 1 };
 }
 
 describe('aliases', () => {
@@ -104,6 +106,15 @@ describe('findDuplicates', () => {
 		expect(statuses.map((s) => s.kind)).toEqual(['possible', 'new']);
 	});
 
+	it("only matches postings on the row's own account", () => {
+		const statuses = findDuplicates(
+			[draft('2026-09-02', '-10.00', 'a', 'Liabilities:CreditCard')],
+			new Set(),
+			[posting('2026-09-02', '-10.00')],
+		);
+		expect(statuses).toEqual([{ kind: 'new' }]);
+	});
+
 	it("doesn't offer a posting already claimed by a ref match", () => {
 		const statuses = findDuplicates(
 			[draft('2026-09-02', '-10.00', 'UPI-3'), draft('2026-09-02', '-10.00', 'UPI-4')],
@@ -116,13 +127,14 @@ describe('findDuplicates', () => {
 
 describe('ledger lookups', () => {
 	it('checks the statement against the ledger around its dates', async () => {
-		const statuses = await lookupDuplicates(plugin, 'Assets:Bank:Kotak', [
+		const statuses = await lookupDuplicates(plugin, [
 			draft('2026-09-02', '-10.00', 'UPI-3'),
 			draft('2026-09-02', '-10.00', 'UPI-4'),
 			draft('2026-09-13', '-53615.76', 'UPI-6'),
 			draft('2026-09-15', '-10994.04', 'UPI-8'),
+			draft('2026-09-15', '-10994.04', 'CC-1', 'Liabilities:CreditCard'),
 		]);
-		expect(statuses.map((s) => s.kind)).toEqual(['new', 'imported', 'possible', 'new']);
+		expect(statuses.map((s) => s.kind)).toEqual(['new', 'imported', 'possible', 'new', 'possible']);
 		expect(statuses[2]).toMatchObject({ match: { payee: 'Card bill', filename: '/v/2026.beancount', lineno: 19 } });
 	});
 

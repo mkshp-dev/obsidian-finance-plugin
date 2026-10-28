@@ -159,6 +159,7 @@ export const HELP_TOPICS = {
 		summary: 'Statements often have account details above the transactions and notes or totals below them. The header row is shaded, the transactions are highlighted, and everything else is greyed out.',
 		paragraphs: [
 			'If that doesn\'t look right, click a row and mark it as the header or as the last transaction.',
+			'Some banks leave out the header row and start straight with transactions. Tick "The file has no header row", then name the columns in the next section so you can use them in formulas.',
 		],
 	},
 	importColumns: {

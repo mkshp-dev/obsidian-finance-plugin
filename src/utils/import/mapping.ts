@@ -293,9 +293,10 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 		for (const [key, value] of Object.entries(mapping.metadata)) {
 			if (key !== IMPORT_REF_KEY && key.trim()) metadata[key.trim()] = text(value, `Metadata "${key}"`);
 		}
-		// Made up from the row when the mapping leaves it blank or gives nothing for this row.
+		// Made up from the row when the mapping leaves it blank or gives nothing for this row. The
+		// statement's account is part of it, so the same payment on two cards gets two refs.
 		const importRef = text(mapping.metadata[IMPORT_REF_KEY] ?? '', IMPORT_REF_KEY)
-			|| generateImportRef([date ?? '', amount ?? '', narration], seenRefs);
+			|| generateImportRef([postings[0]?.account ?? '', date ?? '', amount ?? '', narration], seenRefs);
 
 		const tags = mapping.tags.map((t) => slug(text(t, 'Tag'))).filter(Boolean);
 		const links = mapping.links.map((l) => slug(text(l, 'Link'))).filter(Boolean);
@@ -316,8 +317,13 @@ export function buildDrafts(rows: string[][], labels: string[], mapping: ImportM
 	});
 
 	// Oldest first: a newest-first file is turned around, keeping same-day rows in the bank's order.
-	const ordered = drafts.length > 1 && drafts[0].date > drafts[drafts.length - 1].date ? [...drafts].reverse() : [...drafts];
-	ordered.sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : 0));
+	// A row without a date sorts with the row before it, so it stays next to its neighbours.
+	const dated = drafts.filter((d) => d.date);
+	const newestFirst = dated.length > 1 && dated[0].date > dated[dated.length - 1].date;
+	const ordered = newestFirst ? [...drafts].reverse() : [...drafts];
+	let previous = '';
+	const sortKey = new Map(ordered.map((d) => [d, (previous = d.date || previous)]));
+	ordered.sort((a, b) => sortKey.get(a)!.localeCompare(sortKey.get(b)!));
 
 	return { drafts: ordered.map(({ date: _date, ...d }) => d) };
 }

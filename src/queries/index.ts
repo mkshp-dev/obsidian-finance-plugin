@@ -443,10 +443,10 @@ export function getImportRefsQuery(from: string, to: string): string {
 	return `SELECT DISTINCT entry_meta('import-ref') AS ref FROM postings WHERE date >= ${from} AND date <= ${to} AND entry_meta('import-ref') IS NOT NULL`;
 }
 
-/** Postings on one account between two dates (inclusive), to spot rows already entered. */
-export function getImportCandidatePostingsQuery(account: string, from: string, to: string): string {
-	const safeAccount = escapeBqlString(account);
-	return `SELECT date, number, currency, payee, narration, entry_meta('import-ref') AS ref, filename, lineno FROM postings WHERE account = '${safeAccount}' AND date >= ${from} AND date <= ${to}`;
+/** Postings on any of `accounts` between two dates (inclusive), to spot rows already entered. */
+export function getImportCandidatePostingsQuery(accounts: string[], from: string, to: string): string {
+	const anyAccount = accounts.map((a) => `account = '${escapeBqlString(a)}'`).join(' OR ');
+	return `SELECT account, date, number, currency, payee, narration, entry_meta('import-ref') AS ref, filename, lineno FROM postings WHERE (${anyAccount}) AND date >= ${from} AND date <= ${to}`;
 }
 
 /** The account's balance in one currency before `date`, to compare with a statement's opening balance. */

@@ -6,10 +6,36 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import type { TableBounds } from '../../models/import';
 import { isAmountLike, isDateLike, parseAmount } from './values';
 
-/** Parses CSV text into trimmed rows, dropping blank lines. Rows may differ in length. */
-export function readCsvRows(text: string): string[][] {
+/** Field separators a statement may use: `;` is common where `,` is the decimal mark. */
+export const DELIMITERS = [',', ';', '\t', '|'] as const;
+export type Delimiter = (typeof DELIMITERS)[number];
+
+/**
+ * Decodes a file's bytes: by its byte order mark when it has one, else as
+ * UTF-16 when every other byte is zero, else as UTF-8, falling back to
+ * Windows-1252 (what Excel and many banks write) when it isn't valid UTF-8.
+ */
+export function decodeText(bytes: Uint8Array): string {
+	if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
+	if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes);
+	const sample = bytes.subarray(0, 512);
+	const zeros = (offset: number) => sample.filter((b, i) => i % 2 === offset && b === 0).length;
+	if (sample.length >= 4) {
+		const half = Math.floor(sample.length / 2);
+		if (zeros(1) >= half * 0.9) return new TextDecoder('utf-16le').decode(bytes);
+		if (zeros(0) >= half * 0.9) return new TextDecoder('utf-16be').decode(bytes);
+	}
+	try {
+		return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+	} catch {
+		return new TextDecoder('windows-1252').decode(bytes);
+	}
+}
+
+function parseRows(text: string, delimiter: Delimiter): string[][] {
 	const rows: string[][] = parseCsv(text, {
 		bom: true,
+		delimiter,
 		columns: false,
 		skip_empty_lines: true,
 		relax_column_count: true,
@@ -18,6 +44,37 @@ export function readCsvRows(text: string): string[][] {
 	return rows
 		.map((row) => row.map((cell) => cell.trim()))
 		.filter((row) => row.some(Boolean));
+}
+
+/**
+ * Guesses the field separator: the one that splits the most rows into the
+ * same number of cells, weighted by that number, so "1,50" in a `;` file
+ * doesn't make it look comma-separated. Comma wins ties.
+ */
+export function detectDelimiter(text: string): Delimiter {
+	let best: Delimiter = ',';
+	let bestScore = 0;
+	for (const d of DELIMITERS) {
+		let rows: string[][];
+		try {
+			rows = parseRows(text, d);
+		} catch {
+			continue; // Quotes that don't fit this separator.
+		}
+		const widths = new Map<number, number>();
+		for (const row of rows) if (row.length > 1) widths.set(row.length, (widths.get(row.length) ?? 0) + 1);
+		const score = Math.max(0, ...[...widths].map(([width, count]) => width * count));
+		if (score > bestScore) {
+			best = d;
+			bestScore = score;
+		}
+	}
+	return best;
+}
+
+/** Parses CSV text into trimmed rows, dropping blank lines. Rows may differ in length. */
+export function readCsvRows(text: string, delimiter: Delimiter = detectDelimiter(text)): string[][] {
+	return parseRows(text, delimiter);
 }
 
 function filledCount(row: string[]): number {
@@ -41,10 +98,26 @@ export function tableFromHeader(rows: string[][], headerRow: number): TableBound
 }
 
 /**
+ * A table with no header row: the longest run of transaction-like rows,
+ * the first one wins a tie. Returns null if no row looks like a transaction.
+ */
+export function detectHeaderlessTable(rows: string[][]): TableBounds | null {
+	let best: TableBounds | null = null;
+	for (let first = 0; first < rows.length; first++) {
+		if (!isDataRow(rows[first]) || (first > 0 && isDataRow(rows[first - 1]))) continue;
+		let last = first;
+		while (last + 1 < rows.length && isDataRow(rows[last + 1])) last++;
+		if (!best || last - first > best.lastRow - best.firstRow) best = { headerRow: null, firstRow: first, lastRow: last };
+	}
+	return best;
+}
+
+/**
  * Suggests where the table is: the header row followed by the longest run
  * of transaction-like rows. The run ends at the first row that isn't one
- * (e.g. Kotak's "Closing Balance" line). Returns null if nothing looks like
- * a table.
+ * (e.g. Kotak's "Closing Balance" line). Without a header row, it's the
+ * longest run of transaction-like rows on its own (see
+ * detectHeaderlessTable). Returns null if nothing looks like a table.
  */
 export function detectTable(rows: string[][]): TableBounds | null {
 	let best: TableBounds | null = null;
@@ -52,9 +125,15 @@ export function detectTable(rows: string[][]): TableBounds | null {
 	for (let h = 0; h < rows.length - 1; h++) {
 		if (!isHeaderRow(rows[h]) || !isDataRow(rows[h + 1])) continue;
 		const table = tableFromHeader(rows, h);
-		if (!best || table.lastRow - table.headerRow > best.lastRow - best.headerRow) best = table;
+		if (!best || table.lastRow - table.firstRow > best.lastRow - best.firstRow) best = table;
 	}
-	return best;
+	return best ?? detectHeaderlessTable(rows);
+}
+
+/** How many columns a table's rows have: its header's, or without one, its widest row's. */
+export function tableWidth(rows: string[][], bounds: TableBounds): number {
+	if (bounds.headerRow !== null) return rows[bounds.headerRow]?.length ?? 0;
+	return Math.max(0, ...rows.slice(bounds.firstRow, bounds.lastRow + 1).map((r) => r.length));
 }
 
 /** The row whose header matches `signature` (see headerSignature()), or -1. */
@@ -106,7 +185,8 @@ export function detectStatementBalance(
 	decimalMark: '.' | ',',
 	which: 'opening' | 'closing',
 ): { amount: string; row: number } | null {
-	const above = rows.map((_, i) => i).filter((i) => i < bounds.headerRow).reverse();
+	const top = bounds.headerRow ?? bounds.firstRow;
+	const above = rows.map((_, i) => i).filter((i) => i < top).reverse();
 	const below = rows.map((_, i) => i).filter((i) => i > bounds.lastRow);
 	// "Opening balance as on …" also reads like a closing label, so the closing balance skips opening labels.
 	const label = BALANCE_LABELS[which];

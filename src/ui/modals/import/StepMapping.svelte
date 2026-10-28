@@ -238,7 +238,8 @@
 	// --- Live preview ---
 	$: result = buildDrafts(dataRows, labels, mapping, { aliases, fileName });
 	/** What each row still needs (or couldn't read), as review will show it. */
-	$: problemsByDraft = new Map(result.drafts.map((d) => [d, draftProblems(d)]));
+	$: openAccounts = new Set(accounts);
+	$: problemsByDraft = new Map(result.drafts.map((d) => [d, draftProblems(d, openAccounts)]));
 	$: unresolved = result.drafts.filter((d) => problemsByDraft.get(d)!.unresolved.length > 0);
 
 	/** The draft shown in the preview, stepped through with the arrows. Kept in range as the mapping changes. */
