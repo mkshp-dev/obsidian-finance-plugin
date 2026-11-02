@@ -1,6 +1,7 @@
 import { sep } from 'path';
 import { homedir, platform, arch, type, release } from 'os';
 import { execSafe } from './execSafe';
+import { checkBeancountVersion } from './beancountVersion';
 
 /**
  * Interface representing system information detected by the SystemDetector.
@@ -520,12 +521,15 @@ export class SystemDetector {
         command: string | null;
         version: string | null;
         isValid: boolean;
+        /** True when the working command is backed by Beancount 2 (Issue #289). */
+        isBeancountV2: boolean;
         errors: string[];
     }> {
         const result = {
             command: null as string | null,
             version: null as string | null,
             isValid: false,
+            isBeancountV2: false,
             errors: [] as string[]
         };
 
@@ -575,6 +579,7 @@ export class SystemDetector {
                     result.command = beanQueryCmd;
                     result.version = 'unknown (help available)';
                     result.isValid = true;
+                    result.isBeancountV2 = checkBeancountVersion(beanQueryCmd, helpResult.output).isBeancountV2;
                     break;
                 }
 
@@ -608,6 +613,10 @@ export class SystemDetector {
                 result.command = beanQueryCmd;
                 result.version = version;
                 result.isValid = true;
+                result.isBeancountV2 = checkBeancountVersion(
+                    beanQueryCmd,
+                    `${versionResult.output ?? ''}\n${versionResult.error ?? ''}`
+                ).isBeancountV2;
                 break;
 
             } catch (error) {

@@ -21,6 +21,15 @@ This guide addresses common issues with connectivity, queries, and data display.
         *   WSL: `wsl bean-query`
     4.  Click **Verify** next to the command field to confirm it works.
 
+### Beancount 2 is installed {#beancount-v2}
+*   **Symptom**: The plugin shows *"Beancount 3 required"* at startup or in the setup wizard, or queries fail with confusing errors.
+*   **Cause**: Beancount 2 is still installed. The plugin needs **Beancount 3** and the separate `beanquery` package; Beancount 2's bundled `bean-query` is not compatible.
+*   **Solution**:
+    1.  Upgrade both packages: `pip install -U beancount beanquery` (use the same Python/pip, venv, or WSL environment that provides your `bean-query`).
+    2.  Check with `bean-query --version` — it should report the `beanquery` version, not `Beancount 2.x`.
+    3.  If you used `python -m beancount.query`, change the command in **Settings → Connection** to `bean-query` (or `python -m beanquery`).
+    4.  Restart Obsidian or click **Re-detect** in the setup wizard.
+
 ### "File not found" errors
 *   **Cause**: The Beancount file path in settings is incorrect or the file doesn't exist.
 *   **Solution**: Verify your **Beancount File Path** in **Settings → Connection**:

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Warning for Beancount 2** — At startup and in the setup wizard, the plugin now detects when the installed Beancount is version 2 and explains that Beancount 3 and `beanquery` are needed, with the upgrade command (`pip install -U beancount beanquery`) and a link to the docs.
+
 ## 2.5.0 - 2026-10-28
 
 - **Import CSV statement** *(new, experimental)* — A new **Import CSV statement** command turns a bank's CSV export from your vault into transactions in four steps: pick the file (and a saved profile for that bank), mark where the transaction table is and what each column holds (with optional balances before/after the statement), map columns to a transaction template using formulas (`IF … THEN … ELSE`, arithmetic, `SPLIT`, `FORMAT_DATE` and more, plus `ACCOUNT WHERE` / `ALIAS WHERE` lookups on account aliases), then review. Review flags rows already imported (by `import-ref`), possible duplicates, and unresolved rows (missing a date, valid accounts, an amount with its currency, or an import-ref), which have to be fixed in a full transaction form before they can be added. Statement balances become balance assertions, and the opening balance is checked against your ledger. Mappings can be saved per bank and reused next time. Reads comma, semicolon, tab or pipe separated files in UTF-8, UTF-16 or Windows-1252, including files with no header row, and dates with day, month and year in any order.
