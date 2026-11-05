@@ -21,7 +21,7 @@ export class CommodityDetailModal extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        this.modalEl.setCssStyles({ maxWidth: '800px', width: '85vw' });
+        this.modalEl.addClass('beancount-modal-commodity-detail');
 
         console.debug('[CommodityDetailModal] onOpen:', { symbol: this.symbol });
 

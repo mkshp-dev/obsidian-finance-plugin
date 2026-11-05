@@ -76,14 +76,12 @@ export class BQLCodeBlockProcessor {
 		}
 		
 		// Create header with query and controls (only if tools or query should be shown)
-		let header: HTMLElement | null = null;
-		let controls: HTMLElement | null = null;
 		let refreshBtn: HTMLButtonElement | null = null;
 		let copyBtn: HTMLButtonElement | null = null;
 		let exportBtn: HTMLButtonElement | null = null;
 		
 		if (showTools || showQuery) {
-			header = container.createDiv({ cls: 'bql-query-header' });
+			const header = container.createDiv({ cls: 'bql-query-header' });
 			
 			if (showQuery) {
 				const queryLabel = header.createDiv({ cls: 'bql-query-label' });
@@ -91,7 +89,7 @@ export class BQLCodeBlockProcessor {
 			}
 			
 			if (showTools) {
-				controls = header.createDiv({ cls: 'bql-query-controls' });
+				const controls = header.createDiv({ cls: 'bql-query-controls' });
 
 				// Format selector
 				const formatSelect = controls.createEl('select', { cls: 'bql-format-select', title: 'Output format' });
@@ -131,9 +129,8 @@ export class BQLCodeBlockProcessor {
 		}
 		
 		// Create query display (collapsible) - only if showQuery is enabled
-		let queryDisplay: HTMLDetailsElement | null = null;
 		if (showQuery) {
-			queryDisplay = container.createEl('details', { cls: 'bql-query-details' });
+			const queryDisplay = container.createEl('details', { cls: 'bql-query-details' });
 			queryDisplay.createEl('summary', { text: 'View query', cls: 'bql-query-summary' });
 			const queryCode = queryDisplay.createEl('pre', { cls: 'bql-query-code' });
 			queryCode.createEl('code', { text: query });
@@ -267,18 +264,16 @@ export class BQLCodeBlockProcessor {
 		
 		// Create collapsible details
 		const details = errorContainer.createDiv({ cls: 'bql-error-details' });
-		details.setCssStyles({ display: 'none' });
+		details.hide();
 		
 		const fullErrorEl = details.createEl('pre', { cls: 'bql-error-full' });
 		fullErrorEl.textContent = fullError;
 		
 		// Toggle functionality
 		let isExpanded = false;
-		summaryLine.setCssStyles({ cursor: 'pointer' });
-		
 		summaryLine.addEventListener('click', () => {
 			isExpanded = !isExpanded;
-			details.style.display = isExpanded ? 'block' : 'none';
+			details.toggle(isExpanded);
 			toggleIcon.textContent = isExpanded ? '▼' : '▶';
 		});
 	}
@@ -365,12 +360,12 @@ export class BQLCodeBlockProcessor {
 		if ('download' in HTMLAnchorElement.prototype) {
 			const url = URL.createObjectURL(blob);
 			const link = activeDocument.body.createEl('a', {
+				cls: 'bql-download-link',
 				attr: {
 					href: url,
 					download: filename
 				}
 			});
-			link.setCssStyles({ visibility: 'hidden' });
 			link.click();
 			link.detach();
 		}

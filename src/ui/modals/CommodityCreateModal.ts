@@ -26,7 +26,7 @@ export class CommodityCreateModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        this.modalEl.setCssStyles({ maxWidth: '600px', width: '90vw' });
+        this.modalEl.addClass('beancount-modal-commodity-create');
 
         Logger.log('[CommodityCreateModal] Opening modal');
 

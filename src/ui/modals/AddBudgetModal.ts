@@ -31,7 +31,7 @@ export class AddBudgetModal extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        this.modalEl.setCssStyles({ maxWidth: '560px', width: '90vw' });
+        this.modalEl.addClass('beancount-modal-add-budget');
         this.setTitle(this.editingIndicator ? 'Edit Budget' : 'Add Budget');
 
         const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';

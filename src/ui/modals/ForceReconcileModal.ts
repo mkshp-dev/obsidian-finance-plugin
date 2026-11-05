@@ -82,13 +82,7 @@ export class ForceReconcileModal extends Modal {
 				});
 			});
 
-		const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
-		buttonContainer.setCssStyles({
-			display: 'flex',
-			justifyContent: 'flex-end',
-			gap: '8px',
-			marginTop: '20px',
-		});
+		const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container beancount-modal-buttons' });
 
 		const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
 		cancelButton.addEventListener('click', () => this.close());

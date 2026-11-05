@@ -46,7 +46,7 @@ export async function getOpenAccounts(plugin: BeancountPlugin): Promise<string[]
         return records.map((row) => row.account).filter((acc) => acc);
     } catch (error) {
         console.error('[getOpenAccounts] Error:', error);
-        throw new Error(`Failed to fetch open accounts: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to fetch open accounts: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
 }
 

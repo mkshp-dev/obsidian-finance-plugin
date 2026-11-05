@@ -35,7 +35,7 @@ export class AccountDetailModal extends Modal {
 	async onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		this.modalEl.setCssStyles({ maxWidth: '600px', width: '85vw' });
+		this.modalEl.addClass('beancount-modal-account-detail');
 		this.setTitle('Account details');
 
 		let detail;

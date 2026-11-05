@@ -56,7 +56,7 @@ async function fetchAccountsSorted(plugin: BeancountPlugin): Promise<string[]> {
     const cached = accountCacheMap.get(plugin);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.accounts;
 
-    let accounts: string[] = [];
+    let accounts: string[];
     try {
         const open = await getOpenAccounts(plugin);
         const openSet = new Set(open);
@@ -113,7 +113,7 @@ async function fetchLinks(plugin: BeancountPlugin): Promise<string[]> {
     const cached = linkCacheMap.get(plugin);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.links;
 
-    let links: string[] = [];
+    let links: string[];
     try {
         const csv = await runQuery(plugin, `SELECT DISTINCT joinstr(links) FROM entries WHERE links IS NOT NULL`);
         const records = parseCsv(csv, { columns: true, skip_empty_lines: true, trim: true }) as unknown as Record<string, string>[];
@@ -235,7 +235,7 @@ function beancountCompletionSource(plugin: BeancountPlugin) {
             const lastQuote = lineUpToCursor.lastIndexOf('"');
             const typed = lineUpToCursor.slice(lastQuote + 1);
 
-            let narrations: string[] = [];
+            let narrations: string[];
             try {
                 const whereClause = payeeValue
                     ? `WHERE payee = "${payeeValue.replace(/"/g, '\\"')}"`

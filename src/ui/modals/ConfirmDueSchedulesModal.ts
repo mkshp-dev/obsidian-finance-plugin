@@ -36,7 +36,7 @@ export class ConfirmDueSchedulesModal extends Modal {
 	async onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		this.modalEl.setCssStyles({ maxWidth: '640px', width: '90vw' });
+		this.modalEl.addClass('beancount-modal-confirm-due-schedules');
 		this.setTitle('Transactions due');
 
 		this.component = new (ConfirmDueSchedulesModalComponent)({

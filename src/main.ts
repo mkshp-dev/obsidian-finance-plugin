@@ -367,7 +367,7 @@ export default class BeancountPlugin extends Plugin {
 	private showBeancountV2Notice(version: string | null): void {
 		const frag = createFragment((f) => {
 			f.createEl('strong', { text: 'Beancount 3 required' });
-			f.createEl('div', { text: beancountV2Message(version) });
+			f.createDiv({ text: beancountV2Message(version) });
 			f.createEl('a', { text: 'How to upgrade', href: BEANCOUNT_UPGRADE_DOCS_URL });
 		});
 		new Notice(frag, 0);

@@ -22,7 +22,7 @@ export class AccountAliasesModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		this.modalEl.setCssStyles({ maxWidth: '760px', width: '90vw' });
+		this.modalEl.addClass('beancount-modal-account-aliases');
 		this.setTitle('Account aliases');
 
 		this.component = new AccountAliasesComponent({
