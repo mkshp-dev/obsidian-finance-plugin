@@ -68,7 +68,7 @@ export class UnifiedTransactionModal extends Modal {
         contentEl.empty();
         
         // Set modal container to be wider
-        this.modalEl.setCssStyles({ maxWidth: '1200px', width: '95vw' });
+        this.modalEl.addClass('beancount-modal-unified-transaction');
 
         // Set initial title (fallback, component will update it)
         this.setTitle(this.mode === 'edit' ? 'Edit Transaction' : 'Add Transaction');

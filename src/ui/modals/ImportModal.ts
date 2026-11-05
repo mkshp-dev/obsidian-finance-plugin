@@ -20,7 +20,7 @@ export class ImportModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		this.modalEl.setCssStyles({ maxWidth: '960px', width: '92vw' });
+		this.modalEl.addClass('beancount-modal-import');
 		this.setTitle('Import CSV statement (experimental)');
 
 		this.component = new ImportModalComponent({

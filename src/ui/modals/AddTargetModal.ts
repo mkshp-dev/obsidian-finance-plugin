@@ -31,7 +31,7 @@ export class AddTargetModal extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        this.modalEl.setCssStyles({ maxWidth: '560px', width: '90vw' });
+        this.modalEl.addClass('beancount-modal-add-target');
         this.setTitle(this.editingIndicator ? 'Edit Target' : 'Add Target');
 
         const operatingCurrency = this.plugin.settings.operatingCurrency || 'USD';

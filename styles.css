@@ -1000,3 +1000,121 @@
 	padding-top: var(--size-4-3);
 	border-top: 1px solid var(--background-modifier-border);
 }
+
+/* Modal sizes (moved from inline styles for obsidianmd/no-static-styles-assignment) */
+
+.modal.beancount-modal-account-aliases {
+	max-width: 760px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-account-detail {
+	max-width: 600px;
+	width: 85vw;
+}
+
+.modal.beancount-modal-add-budget {
+	max-width: 560px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-add-schedule {
+	max-width: 800px;
+	width: 92vw;
+}
+
+.modal.beancount-modal-add-target {
+	max-width: 560px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-commodity-create {
+	max-width: 600px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-commodity-detail {
+	max-width: 800px;
+	width: 85vw;
+}
+
+.modal.beancount-modal-confirm-due-schedules {
+	max-width: 640px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-import {
+	max-width: 960px;
+	width: 92vw;
+}
+
+.modal.beancount-modal-onboarding {
+	max-width: 720px;
+	width: 90vw;
+}
+
+.modal.beancount-modal-unified-transaction {
+	max-width: 1200px;
+	width: 95vw;
+}
+
+.modal-button-container.beancount-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 20px;
+}
+
+.bql-error-summary {
+	cursor: pointer;
+}
+
+.bql-download-link {
+	visibility: hidden;
+}
+
+.bql-inline-error {
+	color: var(--text-error);
+}
+
+/* Settings tab (moved from inline styles; shared by the declarative and legacy UIs) */
+.setting-item.beancount-setting-block {
+	display: block;
+}
+
+.beancount-layout-files {
+	margin-top: 8px;
+	margin-bottom: 0;
+}
+
+.beancount-layout-files li {
+	margin-bottom: 4px;
+}
+
+.beancount-settings-note {
+	margin-top: 8px;
+	font-size: 0.9em;
+	opacity: 0.7;
+}
+
+.beancount-settings-intro {
+	margin-bottom: 1em;
+}
+
+.structured-layout-info {
+	padding: 10px;
+	margin-top: 10px;
+	background-color: var(--background-secondary);
+	border-radius: 5px;
+}
+
+.current-path-display {
+	margin-top: 15px;
+	padding: 10px;
+	background-color: var(--background-modifier-border);
+	border-radius: 5px;
+}
+
+.beancount-mono {
+	font-family: var(--font-monospace);
+}

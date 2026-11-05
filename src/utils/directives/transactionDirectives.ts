@@ -17,7 +17,7 @@ export function generateTransactionText(transactionData: TransactionData, newlin
 	const tags: string[] = transactionData.tags || [];
 	const links: string[] = transactionData.links || [];
 
-	let payeeNarration = '';
+	let payeeNarration: string;
 	if (payee && narration) payeeNarration = `${quote(payee)} ${quote(narration)}`;
 	else if (payee) payeeNarration = `${quote(payee)} ""`;
 	else if (narration) payeeNarration = quote(narration);
@@ -113,8 +113,8 @@ function findTransactionBlock(lines: string[], lineIndex: number): { startIndex:
 			let foundNonEmpty = false;
 			for (let j = i + 1; j < lines.length; j++) {
 				if (lines[j].trim() !== '') {
-					if (lines[j].startsWith(' ') || lines[j].startsWith('\t')) { endIndex = j; }
-					else { foundNonEmpty = true; }
+					// An indented line continues the entry; the outer loop reaches it.
+					if (!lines[j].startsWith(' ') && !lines[j].startsWith('\t')) foundNonEmpty = true;
 					break;
 				}
 			}

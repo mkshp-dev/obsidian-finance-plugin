@@ -56,7 +56,8 @@ export class PriceService {
 		// @ts-ignore adapter has getBasePath
 		const vaultRoot = this.plugin.app.vault.adapter.getBasePath();
 		const ledgerRel = path.relative(vaultRoot, ledgerPath).replace(/\\/g, '/');
-		const ledgerFile = this.plugin.app.vault.getAbstractFileByPath(ledgerRel) as TFile | null;
+		const ledgerAbstract = this.plugin.app.vault.getAbstractFileByPath(ledgerRel);
+		const ledgerFile = ledgerAbstract instanceof TFile ? ledgerAbstract : null;
 		if (!ledgerFile) {
 			return this.failResult(`Ledger file not found in vault: ${ledgerRel}`);
 		}
@@ -71,8 +72,8 @@ export class PriceService {
 		const args = [ledgerPath];
 		Logger.log(`[PriceService] Executing (safe): ${beanPriceCommand} ${args.join(' ')}`);
 
-		let stdout = '';
-		let stderr = '';
+		let stdout: string;
+		let stderr: string;
 		try {
 			const result = await Promise.race([
 				execSafe(beanPriceCommand, args, { maxBuffer: 20 * 1024 * 1024 }),
@@ -111,7 +112,8 @@ export class PriceService {
 		// 6. Deduplicate: skip any directive that is already in prices.beancount
 		// Convert prices file path to vault-relative path and read via vault API
 		const pricesRel = path.relative(vaultRoot, pricesFilePath).replace(/\\/g, '/');
-		const pricesFile = this.plugin.app.vault.getAbstractFileByPath(pricesRel) as TFile | null;
+		const pricesAbstract = this.plugin.app.vault.getAbstractFileByPath(pricesRel);
+		const pricesFile = pricesAbstract instanceof TFile ? pricesAbstract : null;
 		const existingContent = pricesFile ? await this.plugin.app.vault.read(pricesFile) : '';
 
 		const toAppend = newDirectives.filter(line => !existingContent.includes(line));
