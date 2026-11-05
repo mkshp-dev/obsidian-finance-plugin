@@ -7,14 +7,21 @@
 	let tagInputValue = "";
 	let linkInputValue = "";
 
+	// Text still in the box is committed on blur too — otherwise a tag typed
+	// (or picked from the datalist) without pressing Enter is silently lost
+	// when the user clicks Save.
+	function commitTag() {
+		const value = tagInputValue.trim().replace(/^#/, "");
+		if (value && !selectedTags.includes(value)) {
+			selectedTags = [...selectedTags, value];
+		}
+		if (!value || selectedTags.includes(value)) tagInputValue = "";
+	}
+
 	function handleTagInput(e: KeyboardEvent) {
 		if (e.key === "Enter" || e.key === ",") {
 			e.preventDefault();
-			const value = tagInputValue.trim().replace(/^#/, "");
-			if (value && !selectedTags.includes(value)) {
-				selectedTags = [...selectedTags, value];
-				tagInputValue = "";
-			}
+			commitTag();
 		}
 	}
 
@@ -22,14 +29,18 @@
 		selectedTags = selectedTags.filter((t) => t !== tagToRemove);
 	}
 
+	function commitLink() {
+		const value = linkInputValue.trim().replace(/^\^/, "");
+		if (value && !selectedLinks.includes(value)) {
+			selectedLinks = [...selectedLinks, value];
+		}
+		if (!value || selectedLinks.includes(value)) linkInputValue = "";
+	}
+
 	function handleLinkInput(e: KeyboardEvent) {
 		if (e.key === "Enter" || e.key === ",") {
 			e.preventDefault();
-			const value = linkInputValue.trim().replace(/^\^/, "");
-			if (value && !selectedLinks.includes(value)) {
-				selectedLinks = [...selectedLinks, value];
-				linkInputValue = "";
-			}
+			commitLink();
 		}
 	}
 
@@ -47,6 +58,7 @@
 				id="tags"
 				bind:value={tagInputValue}
 				on:keydown={handleTagInput}
+				on:blur={commitTag}
 				list="tags-list"
 				placeholder="Tag + Enter"
 			/>
@@ -73,6 +85,7 @@
 				id="links"
 				bind:value={linkInputValue}
 				on:keydown={handleLinkInput}
+				on:blur={commitLink}
 				placeholder="Link + Enter"
 			/>
 			{#if selectedLinks.length > 0}

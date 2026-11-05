@@ -7,6 +7,7 @@
 	import { Logger } from '../../utils/logger';
 	import { migrateToStructuredLayout } from '../../utils/structuredLayout';
 	import { SystemDetector } from '../../utils/SystemDetector';
+	import { checkBeancountVersion } from '../../utils/beancountVersion';
 	import { UNIFIED_DASHBOARD_VIEW_TYPE } from '../views/dashboard/unified-dashboard-view';
 
 	import StepConnect from './onboarding/StepConnect.svelte';
@@ -26,6 +27,8 @@
 	let beanQueryValid = false;
 	let beanQueryCommand: string | null = null;
 	let beanQueryVersion: string | null = null;
+	/** True when the detected bean-query comes from Beancount 2 (Issue #289). */
+	let beanQueryIsV2 = false;
 	let beanPriceValid = false;
 	let beanPriceCommand: string | null = null;
 	let beanPriceVersion: string | null = null;
@@ -108,6 +111,10 @@
 						command: plugin.settings.beancountCommand,
 						version: versionMatch ? versionMatch[1] : 'unknown',
 						isValid: true,
+						isBeancountV2: checkBeancountVersion(
+							plugin.settings.beancountCommand,
+							`${testResult.output ?? ''}\n${testResult.error ?? ''}`
+						).isBeancountV2,
 						errors: []
 					};
 				}
@@ -116,6 +123,7 @@
 			beanQueryValid = bqResult.isValid;
 			beanQueryCommand = bqResult.command;
 			beanQueryVersion = bqResult.version;
+			beanQueryIsV2 = bqResult.isValid && bqResult.isBeancountV2;
 
 			if (beanQueryValid && beanQueryCommand) {
 				plugin.settings.beancountCommand = beanQueryCommand;
@@ -166,6 +174,7 @@
 				beanQueryValid = true;
 				beanQueryCommand = cmd;
 				beanQueryVersion = versionMatch ? versionMatch[1] : 'unknown';
+				beanQueryIsV2 = checkBeancountVersion(cmd, `${result.output ?? ''}\n${result.error ?? ''}`).isBeancountV2;
 				verifyResult = 'success';
 				verifyMessage = `Verified! ${beanQueryVersion !== 'unknown' ? `v${beanQueryVersion}` : ''}`;
 
@@ -361,6 +370,7 @@
 				{beanQueryValid}
 				{beanQueryCommand}
 				{beanQueryVersion}
+				{beanQueryIsV2}
 				{beanPriceValid}
 				{beanPriceCommand}
 				{beanPriceVersion}

@@ -1,11 +1,13 @@
 <!-- src/ui/modals/onboarding/StepConnect.svelte -->
 <script lang="ts">
 	import InstallationHelp from './InstallationHelp.svelte';
+	import { BEANCOUNT_UPGRADE_COMMAND, BEANCOUNT_UPGRADE_DOCS_URL } from '../../../utils/beancountVersion';
 
 	export let isDetecting = false;
 	export let beanQueryValid = false;
 	export let beanQueryCommand: string | null = null;
 	export let beanQueryVersion: string | null = null;
+	export let beanQueryIsV2 = false;
 	export let beanPriceValid = false;
 	export let beanPriceCommand: string | null = null;
 	export let beanPriceVersion: string | null = null;
@@ -93,6 +95,21 @@
 		{/if}
 	</div>
 
+	{#if beanQueryValid && beanQueryIsV2}
+		<div class="v2-warning" role="alert">
+			<strong>⚠ Beancount 2 detected — Beancount 3 is required</strong>
+			<p>
+				This plugin needs Beancount 3 and the separate <code>beanquery</code> package.
+				With Beancount 2, queries fail with confusing errors. Upgrade by running:
+			</p>
+			<code class="v2-upgrade-cmd">{BEANCOUNT_UPGRADE_COMMAND}</code>
+			<p>
+				Then click <strong>Re-detect</strong>.
+				<a href={BEANCOUNT_UPGRADE_DOCS_URL} target="_blank" rel="noopener">How to upgrade</a>
+			</p>
+		</div>
+	{/if}
+
 	<!-- ── bean-price ── -->
 	<div class="optional-dep">
 		<div class="optional-dep-header">
@@ -139,6 +156,29 @@
 </div>
 
 <style>
+	.v2-warning {
+		border: 1px solid var(--text-warning);
+		border-radius: var(--radius-m);
+		background: rgba(var(--color-orange-rgb), 0.1);
+		padding: var(--size-4-3);
+		margin: 0 0 var(--size-4-4) 0;
+		font-size: var(--font-ui-small);
+	}
+
+	.v2-warning strong:first-child {
+		color: var(--text-warning);
+	}
+
+	.v2-warning p {
+		margin: var(--size-4-2) 0;
+	}
+
+	.v2-upgrade-cmd {
+		display: block;
+		user-select: all;
+		padding: var(--size-4-2);
+	}
+
 	.step-description {
 		color: var(--text-muted);
 		font-size: var(--font-ui-small);

@@ -11,15 +11,21 @@
 
 	const dispatch = createEventDispatcher();
 
-	let reconcileInput = "";
+	// bind:value on a number input yields a number (or null when empty).
+	let reconcileInput: string | number | null = "";
 	let errorMessage = "";
 	let activeTab: "details" | "balance-history" = "details";
 	let balanceHistoryView: "chart" | "table" = "chart";
 	let balanceHistoryInterval: "month" | "week" = "month";
 
-	// Re-sync local edit state whenever a fresh `detail` arrives (initial load,
-	// or after this modal's own save/balance/force-reconcile actions refresh it).
-	$: {
+	// Re-sync local edit state only when a *new* `detail` object arrives (initial
+	// load, or after this modal's own save/balance/force-reconcile refresh).
+	// The identity check matters: the input is bound inside a block that reads
+	// `detail`, so Svelte invalidates `detail` on every keystroke — without it,
+	// this block would reset the field and make it impossible to type in.
+	let syncedDetail: AccountDetail | null = null;
+	$: if (detail !== syncedDetail) {
+		syncedDetail = detail;
 		reconcileInput = detail.reconcileDays != null ? String(detail.reconcileDays) : "";
 		errorMessage = "";
 	}
@@ -30,7 +36,7 @@
 	}
 
 	function handleSave() {
-		const trimmed = reconcileInput.trim();
+		const trimmed = String(reconcileInput ?? "").trim();
 		if (trimmed === "") {
 			errorMessage = "";
 			dispatch("save-reconcile", { reconcileDays: null });
@@ -343,9 +349,13 @@
 		gap: 12px;
 	}
 
+	/* The filter creates a stacking context that caps the dropdown menu's own
+	   z-index, so lift the whole group above the table's sticky header. */
 	.pill-dropdown-group {
 		display: inline-flex;
 		align-items: center;
+		position: relative;
+		z-index: 2;
 		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
 	}
 

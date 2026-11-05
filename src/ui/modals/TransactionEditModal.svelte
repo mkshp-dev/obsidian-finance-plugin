@@ -555,9 +555,9 @@
 						`Tag "${tag}" contains spaces (not allowed in Beancount)`,
 					);
 				}
-				if (!/^[a-zA-Z0-9_-]+$/.test(tag)) {
+				if (!/^[a-zA-Z0-9_/.-]+$/.test(tag)) {
 					errors.push(
-						`Tag "${tag}" contains invalid characters (use only letters, numbers, hyphens, underscores)`,
+						`Tag "${tag}" contains invalid characters (use only letters, numbers, hyphens, underscores, slashes, dots)`,
 					);
 				}
 			}
@@ -569,9 +569,9 @@
 						`Link "${link}" contains spaces (not allowed in Beancount)`,
 					);
 				}
-				if (!/^[a-zA-Z0-9_-]+$/.test(link)) {
+				if (!/^[a-zA-Z0-9_/.-]+$/.test(link)) {
 					errors.push(
-						`Link "${link}" contains invalid characters (use only letters, numbers, hyphens, underscores)`,
+						`Link "${link}" contains invalid characters (use only letters, numbers, hyphens, underscores, slashes, dots)`,
 					);
 				}
 			}

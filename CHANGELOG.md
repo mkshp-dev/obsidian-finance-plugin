@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Fixed: Plugin failed to load on Obsidian 1.15** — The settings tab's `getSettingDefinitions()` method clashed with a new built-in Obsidian method of the same name, which made enabling the plugin fail with `TypeError: n is not iterable`; it is now `getSettingMetadata()` ([#293](../../issues/293)).
+
+- **Fixed: Small editing glitches** — The reconcile-days field in account details no longer resets as you type, and its dropdown is no longer hidden behind the table header. Tags and links now accept `/` and `.`, and a tag or link typed without pressing Enter is kept when you save.
+
+- **Warning for Beancount 2** — At startup and in the setup wizard, the plugin now detects when the installed Beancount is version 2 and explains that Beancount 3 and `beanquery` are needed, with the upgrade command (`pip install -U beancount beanquery`) and a link to the docs.
+
+## 2.5.0 - 2026-10-28
+
 - **Import CSV statement** *(new, experimental)* — A new **Import CSV statement** command turns a bank's CSV export from your vault into transactions in four steps: pick the file (and a saved profile for that bank), mark where the transaction table is and what each column holds (with optional balances before/after the statement), map columns to a transaction template using formulas (`IF … THEN … ELSE`, arithmetic, `SPLIT`, `FORMAT_DATE` and more, plus `ACCOUNT WHERE` / `ALIAS WHERE` lookups on account aliases), then review. Review flags rows already imported (by `import-ref`), possible duplicates, and unresolved rows (missing a date, valid accounts, an amount with its currency, or an import-ref), which have to be fixed in a full transaction form before they can be added. Statement balances become balance assertions, and the opening balance is checked against your ledger. Mappings can be saved per bank and reused next time. Reads comma, semicolon, tab or pipe separated files in UTF-8, UTF-16 or Windows-1252, including files with no header row, and dates with day, month and year in any order.
 
 - **Manage account aliases** *(new)* — A new command lists every open account with its `aliases` metadata, searchable, to add and remove aliases and save them to the accounts' open directives in one go. The import's mapping page shows the same aliases in an **Aliases** tab, with a button to open this window.
@@ -20,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed: Editing a transaction lost data** — Saving an edit from the Journal replaced its metadata with a `raw:` line, dropped posting comments, flags, metadata and cost labels, and filled in the amount of the auto-balanced posting. The edit form now loads the transaction as written in your ledger file.
 
 - **Fixed: Balance assertions and notes editing or deleting the wrong entry** — With several assertions or notes on the same account and day (e.g. one per currency), editing or deleting one could change another; edits also dropped a balance's tolerance, a note's tags and links, and trailing comments, and deletes left metadata lines behind. Balance tolerances are now written in valid syntax (`100 ~ 0.01 USD`), quotes in notes are escaped, and the Journal's tag filter now finds tagged notes.
+
 
 ## 2.4.3 - 2026-09-21
 

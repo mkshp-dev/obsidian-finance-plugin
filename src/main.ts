@@ -25,6 +25,7 @@ import { CurrencyPrecisionService } from './services/currency-precision.service'
 import { createJournalStore } from './stores/journal.store';
 import { Logger } from './utils/logger';
 import { SystemDetector } from './utils/SystemDetector';
+import { checkBeancountVersion, beancountV2Message, BEANCOUNT_UPGRADE_DOCS_URL } from './utils/beancountVersion';
 
 // --------------------------------------------------
 
@@ -343,10 +344,33 @@ export default class BeancountPlugin extends Plugin {
 			}
 			this.isConnectionReady = result.success;
 			Logger.log(`[Main] Connection probe: ${result.success ? 'ready' : 'not reachable'}`);
+			if (result.success) {
+				const check = checkBeancountVersion(
+					this.settings.beancountCommand,
+					`${result.output ?? ''}\n${result.error ?? ''}`
+				);
+				if (check.isBeancountV2) {
+					Logger.warn('[Main] Beancount 2 detected; Beancount 3 + beanquery required.');
+					this.showBeancountV2Notice(check.beancountVersion);
+				}
+			}
 		} catch {
 			this.isConnectionReady = false;
 			Logger.log('[Main] Connection probe: failed (exception)');
 		}
+	}
+
+	/**
+	 * Shows a persistent notice explaining that Beancount 3 is required,
+	 * with the upgrade command and a link to the docs (Issue #289).
+	 */
+	private showBeancountV2Notice(version: string | null): void {
+		const frag = createFragment((f) => {
+			f.createEl('strong', { text: 'Beancount 3 required' });
+			f.createEl('div', { text: beancountV2Message(version) });
+			f.createEl('a', { text: 'How to upgrade', href: BEANCOUNT_UPGRADE_DOCS_URL });
+		});
+		new Notice(frag, 0);
 	}
 
 	/**
