@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+- **Settings in Obsidian's search** — On Obsidian 1.13 and later, the plugin's settings are built with Obsidian's settings API, so each one shows up in the settings search, and the six sections open as pages. Older Obsidian versions keep the tabbed layout.
+
 ## 2.5.1 - 2026-11-05
 
 - **Fixed: Plugin failed to load on Obsidian 1.15** — The settings tab's `getSettingDefinitions()` method clashed with a new built-in Obsidian method of the same name, which made enabling the plugin fail with `TypeError: n is not iterable`; it is now `getSettingMetadata()` ([#293](../../issues/293)).

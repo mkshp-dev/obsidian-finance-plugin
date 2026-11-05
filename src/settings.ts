@@ -1,6 +1,6 @@
 // src/settings.ts
 
-import { App, PluginSettingTab, Setting, Notice, TFolder } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, TFolder, requireApiVersion, type SettingDefinitionItem } from 'obsidian';
 import type BeancountPlugin from './main';
 import ConnectionSettings from './ui/partials/settings/ConnectionSettings.svelte';
 import { updateOperatingCurrency } from './utils/index';
@@ -101,11 +101,74 @@ export const DEFAULT_SETTINGS: BeancountPluginSettings = {
     importProfiles: [],
 }
 
+/** Names and descriptions shared by the declarative and the legacy settings UI. */
+const TEXT = {
+    operatingCurrency: ['Operating currency', 'The currency to use for transaction defaults and for consolidating totals (e.g., USD, INR).'],
+    dashboardDefaultPeriod: ['Default dashboard period', 'Choose the period shown by dashboard summaries when the dashboard first loads.'],
+    showHelpTips: ['Show help icons', 'Show the ⓘ icon on sidebar and dashboard sections. Hover or click it to see how that section works.'],
+    debugMode: ['Debug mode', 'Enable debug logging to the console.'],
+    autoPriceFetch: ['Enable automatic price fetching', 'Automatically fetch commodity prices at scheduled intervals using bean-price.'],
+    priceFetchIntervalHours: ['Fetch interval (hours)', 'How often to automatically fetch prices for all commodities with configured price sources.'],
+    connectionIntro: ['Connection configuration', 'Configure your Beancount file path and connection settings. The plugin will automatically detect your Python environment and test the connection.'],
+    filesIntro: ['File organization', 'Your finances are organized using a structured folder layout with separate files for accounts, transactions, prices, and more.'],
+    structuredFolderName: ['Folder name', 'Name of the folder containing your structured Beancount files.'],
+    fileOrganization: ['Transaction file organization', 'How transactions should be split into multiple files inside the transactions/ folder.'],
+    accountAutocomplete: ['Editor autocomplete', 'Show context-aware completions in .beancount files: account names, payees, narrations, currencies/commodities, tags (#), and links (^). Reopen the file to apply changes.'],
+    enableUserSnippets: ['User-defined snippets', 'Enable user-defined transaction snippets loaded from snippets.beancount. Start typing at the start of a line to autocomplete.'],
+    formatOnSave: ['Format on save', 'Automatically format the Beancount file when saving: normalises indentation to 2 spaces, right-aligns amounts, and fixes @ price annotation spacing. Off by default.'],
+    lintMode: ['Inline lint mode', 'Show Beancount validation errors as inline squiggly underlines using the existing bean-query connection. Reopen the file to apply changes.'],
+    bqlShowTools: ['Show query tools', 'Display refresh, copy, and download buttons above BQL query results.'],
+    bqlShowQuery: ['Show query text', 'Display the BQL query text above the results in a collapsible section.'],
+    maxTransactionResults: ['Max transaction results', 'Maximum number of transactions to load at once (to prevent memory issues with large datasets).'],
+    maxJournalResults: ['Max journal results', 'Maximum number of journal entries to load at once.'],
+    createBackups: ['Create backups', 'Create a backup file (<filename>.bak) before modifying your Beancount file. Highly recommended for data safety.'],
+} as const;
+
+const DASHBOARD_PERIOD_OPTIONS: Record<DashboardDefaultPeriod, string> = {
+    'this-month': 'This month',
+    'last-month': 'Last month',
+    'this-year': 'This year',
+    'last-year': 'Last year',
+};
+
+const FILE_ORGANIZATION_OPTIONS: Record<FileOrganization, string> = {
+    yearly: 'Yearly (e.g. Transactions/2025.beancount)',
+    monthly: 'Monthly (e.g. Transactions/2025/2025-01.beancount)',
+};
+
+const LINT_MODE_OPTIONS: Record<LintMode, string> = {
+    'off': 'Off',
+    'on-save': 'On save (recommended)',
+    'on-change': 'On change (2 s debounce)',
+};
+
+const LAYOUT_FILES = [
+    '📄 ledger.beancount - Main file with include statements',
+    '📄 accounts.beancount - Account open/close directives',
+    '📄 commodities.beancount - Commodity definitions',
+    '📄 prices.beancount - Price directives',
+    '📄 pads.beancount - Pad directives',
+    '📄 balances.beancount - Balance assertions',
+    '📄 queries.beancount - Named query directives',
+    '📄 notes.beancount - Note directives',
+    '📄 events.beancount - Event directives (+ holds financial indicator details)',
+    '📁 transactions/ - Folder with transaction files organized by year or month'
+];
+
+/** Rejects fractional values for settings stored as whole numbers. */
+const wholeNumber = (value: number): string | void => {
+    if (!Number.isInteger(value)) return 'Enter a whole number.';
+};
+
 /**
  * BeancountSettingTab
  *
  * The settings tab for the plugin in Obsidian's settings modal.
- * Provides UI for configuring connection, currencies, limits, and templates.
+ *
+ * On Obsidian 1.13+ the tab is built from `getSettingDefinitions()`, so every
+ * setting appears in Obsidian's settings search; each of the six sections is
+ * a page. Older versions don't call that method and render `display()`
+ * instead, which keeps the previous tabbed layout.
  */
 export class BeancountSettingTab extends PluginSettingTab {
     plugin: BeancountPlugin;
@@ -118,25 +181,393 @@ export class BeancountSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    // Not `getSettingDefinitions`: Obsidian 1.15+ defines that on SettingTab and expects an iterable (#293).
-    getSettingMetadata(): Record<string, { name: string; description: string }> {
-        return {
-            operatingCurrency: { name: 'Operating currency', description: 'The currency to use for transaction defaults and for consolidating totals.' },
-            dashboardDefaultPeriod: { name: 'Default dashboard period', description: 'Choose the period shown by dashboard summaries when the dashboard first loads.' },
-            showHelpTips: { name: 'Show help icons', description: 'Show the ⓘ icon on sidebar and dashboard sections. Hover or click it to see how that section works.' },
-            structuredFolderName: { name: 'Base folder name', description: 'The name of the root folder in your vault where Beancount files will be stored.' },
-            fileOrganization: { name: 'File organization', description: 'How transactions should be split into separate files.' },
-            accountAutocomplete: { name: 'Editor autocomplete', description: 'Show context-aware completions in .beancount files.' },
-            enableUserSnippets: { name: 'User-defined snippets', description: 'Enable user-defined transaction snippets loaded from snippets.beancount.' },
-            formatOnSave: { name: 'Format on save', description: 'Automatically format the Beancount file when saving.' },
-            lintMode: { name: 'Inline lint mode', description: 'Show Beancount validation errors as inline squiggly underlines.' },
-            bqlShowTools: { name: 'Show query tools', description: 'Display refresh, copy, and download buttons above BQL query results.' },
-            bqlShowQuery: { name: 'Show query text', description: 'Display the BQL query text above the results in a collapsible section.' },
-            maxTransactionResults: { name: 'Max transaction results', description: 'Maximum number of transactions to load at once.' },
-            maxJournalResults: { name: 'Max journal results', description: 'Maximum number of journal entries to load at once.' },
-            createBackups: { name: 'Create backups', description: 'Create a backup file before modifying your Beancount file.' }
-        };
+    // ── Declarative settings (Obsidian 1.13+) ────────────────────────────────
+
+    getSettingDefinitions(): SettingDefinitionItem[] {
+        const settings = this.plugin.settings;
+        return [
+            {
+                type: 'page',
+                name: 'General',
+                desc: 'Operating currency, dashboard, help icons and automatic price fetching.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: 'Basic preferences',
+                        items: [
+                            {
+                                name: TEXT.operatingCurrency[0],
+                                desc: TEXT.operatingCurrency[1],
+                                aliases: ['currency', 'operating_currency'],
+                                render: (setting) => this.renderOperatingCurrency(setting),
+                            },
+                            {
+                                name: TEXT.dashboardDefaultPeriod[0],
+                                desc: TEXT.dashboardDefaultPeriod[1],
+                                control: { type: 'dropdown', key: 'dashboardDefaultPeriod', defaultValue: 'this-month', options: DASHBOARD_PERIOD_OPTIONS },
+                            },
+                            {
+                                name: TEXT.showHelpTips[0],
+                                desc: TEXT.showHelpTips[1],
+                                control: { type: 'toggle', key: 'showHelpTips', defaultValue: true },
+                            },
+                            {
+                                name: TEXT.debugMode[0],
+                                desc: TEXT.debugMode[1],
+                                aliases: ['logging'],
+                                control: { type: 'toggle', key: 'debugMode', defaultValue: false },
+                            },
+                        ],
+                    },
+                    {
+                        type: 'group',
+                        heading: 'Automatic price fetching',
+                        items: [
+                            {
+                                name: TEXT.autoPriceFetch[0],
+                                desc: TEXT.autoPriceFetch[1],
+                                aliases: ['bean-price', 'prices'],
+                                control: { type: 'toggle', key: 'autoPriceFetch', defaultValue: false },
+                            },
+                            {
+                                name: TEXT.priceFetchIntervalHours[0],
+                                desc: TEXT.priceFetchIntervalHours[1],
+                                visible: () => this.plugin.settings.autoPriceFetch,
+                                control: { type: 'number', key: 'priceFetchIntervalHours', defaultValue: 24, min: 1, step: 1, placeholder: '24', validate: wholeNumber },
+                            },
+                            {
+                                name: 'Last automatic fetch',
+                                desc: this.lastFetchText(),
+                                searchable: false,
+                                visible: () => this.plugin.settings.autoPriceFetch && this.plugin.settings.lastAutoPriceFetch > 0,
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                type: 'page',
+                name: 'Connection',
+                desc: 'Ledger file, Python environment and bean-query connection.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: TEXT.connectionIntro[0],
+                        items: [
+                            {
+                                name: 'Beancount connection',
+                                desc: TEXT.connectionIntro[1],
+                                aliases: ['bean-query', 'python', 'ledger file', 'beancount command', 'connection test'],
+                                render: (setting) => this.renderConnection(setting),
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                type: 'page',
+                name: TEXT.filesIntro[0],
+                desc: 'Folder name and how transaction files are split.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: TEXT.filesIntro[0],
+                        items: [
+                            {
+                                name: TEXT.structuredFolderName[0],
+                                desc: TEXT.structuredFolderName[1],
+                                aliases: ['base folder', 'structured folder'],
+                                render: (setting) => this.renderFolderName(setting),
+                            },
+                            {
+                                name: TEXT.fileOrganization[0],
+                                desc: TEXT.fileOrganization[1],
+                                aliases: ['yearly', 'monthly'],
+                                control: { type: 'dropdown', key: 'fileOrganization', defaultValue: 'yearly', options: FILE_ORGANIZATION_OPTIONS },
+                            },
+                            {
+                                name: 'Structured layout files',
+                                desc: createFragment((f) => {
+                                    f.appendText(TEXT.filesIntro[1]);
+                                    this.appendLayoutFileList(f);
+                                }),
+                            },
+                            {
+                                name: 'Main ledger file path',
+                                desc: createFragment((f) => {
+                                    f.createEl('code', { text: `${settings.structuredFolderName}/ledger.beancount` });
+                                }),
+                                visible: () => !!this.plugin.settings.structuredFolderName,
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                type: 'page',
+                name: 'Editor',
+                desc: 'Autocomplete, snippets, formatting and inline lint in .beancount files.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: 'Editor configuration',
+                        items: [
+                            {
+                                name: TEXT.accountAutocomplete[0],
+                                desc: TEXT.accountAutocomplete[1],
+                                control: { type: 'toggle', key: 'accountAutocomplete', defaultValue: true },
+                            },
+                            {
+                                name: TEXT.enableUserSnippets[0],
+                                desc: TEXT.enableUserSnippets[1],
+                                control: { type: 'toggle', key: 'enableUserSnippets', defaultValue: false },
+                            },
+                            {
+                                name: TEXT.formatOnSave[0],
+                                desc: TEXT.formatOnSave[1],
+                                control: { type: 'toggle', key: 'formatOnSave', defaultValue: false },
+                            },
+                            {
+                                name: TEXT.lintMode[0],
+                                desc: TEXT.lintMode[1],
+                                aliases: ['bean-check', 'validation'],
+                                control: { type: 'dropdown', key: 'lintMode', defaultValue: 'on-save', options: LINT_MODE_OPTIONS },
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                type: 'page',
+                name: 'BQL',
+                desc: 'How BQL query code blocks are displayed.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: 'BQL code blocks',
+                        items: [
+                            {
+                                name: TEXT.bqlShowTools[0],
+                                desc: TEXT.bqlShowTools[1],
+                                control: { type: 'toggle', key: 'bqlShowTools', defaultValue: true },
+                            },
+                            {
+                                name: TEXT.bqlShowQuery[0],
+                                desc: TEXT.bqlShowQuery[1],
+                                control: { type: 'toggle', key: 'bqlShowQuery', defaultValue: false },
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                type: 'page',
+                name: 'Performance',
+                desc: 'Result limits and backups.',
+                items: [
+                    {
+                        type: 'group',
+                        heading: 'Performance',
+                        items: [
+                            {
+                                name: TEXT.maxTransactionResults[0],
+                                desc: TEXT.maxTransactionResults[1],
+                                control: { type: 'number', key: 'maxTransactionResults', defaultValue: 2000, min: 1, max: 10000, step: 1, placeholder: '2000', validate: wholeNumber },
+                            },
+                            {
+                                name: TEXT.maxJournalResults[0],
+                                desc: TEXT.maxJournalResults[1],
+                                control: { type: 'number', key: 'maxJournalResults', defaultValue: 1000, min: 1, max: 5000, step: 1, placeholder: '1000', validate: wholeNumber },
+                            },
+                        ],
+                    },
+                    {
+                        type: 'group',
+                        heading: 'Backups',
+                        items: [
+                            {
+                                name: TEXT.createBackups[0],
+                                desc: TEXT.createBackups[1],
+                                aliases: ['.bak'],
+                                control: { type: 'toggle', key: 'createBackups', defaultValue: true },
+                            },
+                        ],
+                    },
+                ],
+            },
+        ];
     }
+
+    /**
+     * Persists a control's value through the plugin's own `saveSettings()`
+     * (which also refreshes BQL blocks) and applies settings that take effect
+     * immediately. Obsidian's default would only call `saveData()`.
+     */
+    async setControlValue(key: string, value: unknown): Promise<void> {
+        (this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+        await this.plugin.saveSettings();
+
+        switch (key) {
+            case 'showHelpTips':
+                this.plugin.applyHelpTipVisibility();
+                break;
+            case 'autoPriceFetch':
+                // Start the interval right away — no restart needed.
+                if (value) this.plugin.setupAutomaticPriceFetching();
+                break;
+            case 'enableUserSnippets':
+                if (value) await this.plugin.loadSnippets();
+                else this.plugin.snippetCompletions = [];
+                break;
+        }
+    }
+
+    // ── Shared rows (used by both UIs) ───────────────────────────────────────
+
+    /** Text input with validation and a "Save to ledger" button. */
+    private renderOperatingCurrency(setting: Setting): void {
+        const validationEl = setting.descEl.createDiv({ cls: 'beancount-validation-message' });
+
+        setting.addText(text => {
+            text
+                .setPlaceholder('USD')
+                .setValue(this.plugin.settings.operatingCurrency)
+                .onChange(async (value) => {
+                    this.plugin.settings.operatingCurrency = value.toUpperCase();
+                    await this.plugin.saveSettings();
+
+                    if (value.trim()) {
+                        this.updateValidationDisplay(validationEl, this.validateCurrency(value));
+                    } else {
+                        validationEl.textContent = '';
+                    }
+
+                    text.setValue(this.plugin.settings.operatingCurrency);
+                });
+
+            if (this.plugin.settings.operatingCurrency) {
+                this.updateValidationDisplay(validationEl, this.validateCurrency(this.plugin.settings.operatingCurrency));
+            }
+            return text;
+        });
+
+        setting.addButton(button => button
+            .setButtonText('Save to ledger')
+            .setTooltip('Update the operating_currency option in your ledger.beancount file')
+            .onClick(async () => {
+                const currency = this.plugin.settings.operatingCurrency;
+                if (!currency) {
+                    new Notice('Operating currency is not set.');
+                    return;
+                }
+                button.setButtonText('Saving…');
+                button.setDisabled(true);
+                const result = await updateOperatingCurrency(
+                    this.plugin,
+                    currency,
+                    this.plugin.settings.createBackups
+                );
+                button.setDisabled(false);
+                button.setButtonText('Save to ledger');
+                if (result.success) {
+                    new Notice(`Operating currency updated to ${currency} in ledger file.`);
+                } else {
+                    new Notice(`Failed to update ledger: ${result.error}`);
+                }
+            })
+        );
+    }
+
+    /** Read-only folder name with Edit, or an input with Save / Cancel while renaming. */
+    private renderFolderName(setting: Setting): void {
+        if (this.isEditingFolderName) {
+            setting.addText(text => {
+                text.setValue(this.tempFolderName)
+                    .setPlaceholder('Finances')
+                    .onChange(value => {
+                        this.tempFolderName = value.trim();
+                    });
+
+                // Enter saves, Escape cancels
+                text.inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void this.saveFolderNameRename();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        this.isEditingFolderName = false;
+                        this.refresh();
+                    }
+                });
+
+                window.setTimeout(() => text.inputEl.focus(), 50);
+                return text;
+            });
+
+            setting.addButton(btn => btn
+                .setButtonText('Save')
+                .setCta()
+                .onClick(async () => {
+                    await this.saveFolderNameRename();
+                }));
+
+            setting.addButton(btn => btn
+                .setButtonText('Cancel')
+                .onClick(() => {
+                    this.isEditingFolderName = false;
+                    this.refresh();
+                }));
+        } else {
+            setting.addText(text => text
+                .setValue(this.plugin.settings.structuredFolderName)
+                .setDisabled(true));
+
+            setting.addButton(btn => btn
+                .setButtonText('Edit')
+                .onClick(() => {
+                    this.isEditingFolderName = true;
+                    this.tempFolderName = this.plugin.settings.structuredFolderName;
+                    this.refresh();
+                }));
+        }
+    }
+
+    /** Mounts the connection panel in place of the row; returns its cleanup. */
+    private renderConnection(setting: Setting): () => void {
+        setting.settingEl.empty();
+        setting.settingEl.addClass('beancount-setting-block');
+        const settingsContainer = setting.settingEl.createDiv({ cls: 'beancount-connection-settings-container' });
+        const component = new ConnectionSettings({
+            target: settingsContainer,
+            props: {
+                plugin: this.plugin,
+                settings: this.plugin.settings,
+                app: this.app
+            }
+        });
+        return () => component.$destroy();
+    }
+
+    private appendLayoutFileList(parent: DocumentFragment | HTMLElement): void {
+        const fileList = parent.createEl('ul', { cls: 'beancount-layout-files' });
+        for (const file of LAYOUT_FILES) fileList.createEl('li', { text: file });
+    }
+
+    private lastFetchText(): string {
+        const last = this.plugin.settings.lastAutoPriceFetch;
+        if (!(last > 0)) return '';
+        const lastFetchDate = new Date(last);
+        return `${this.formatTimeSince(lastFetchDate)} (${lastFetchDate.toLocaleString()})`;
+    }
+
+    /** Re-renders whichever UI is active after local state changes. */
+    private refresh(): void {
+        // Obsidian 1.13+ builds the tab from getSettingDefinitions(); older versions use display().
+        if (requireApiVersion('1.13.0') && this.settingItems.length > 0) this.update();
+        else this.displayTab();
+    }
+
+    // ── Legacy tabbed UI (Obsidian < 1.13) ───────────────────────────────────
 
     display(): void {
         this.displayTab();
@@ -196,97 +627,35 @@ export class BeancountSettingTab extends PluginSettingTab {
                 this.renderPerformanceTab(tabsContent);
                 break;
         }
+    }
 
-
+    /** A legacy-UI row with the shared name and description. */
+    private legacySetting(containerEl: HTMLElement, text: readonly [string, string]): Setting {
+        return new Setting(containerEl).setName(text[0]).setDesc(text[1]);
     }
 
     private renderGeneralTab(containerEl: HTMLElement): void {
         new Setting(containerEl).setName('Basic preferences').setHeading();
 
-        new Setting(containerEl)
-            .setName('Operating currency')
-            .setDesc('The currency to use for transaction defaults and for consolidating totals (e.g., USD, INR).')
-            .addText(text => {
-                const validationEl = this.createValidationElement(containerEl);
+        this.renderOperatingCurrency(this.legacySetting(containerEl, TEXT.operatingCurrency));
 
-                text
-                    .setPlaceholder('USD')
-                    .setValue(this.plugin.settings.operatingCurrency)
-                    .onChange(async (value) => {
-                        this.plugin.settings.operatingCurrency = value.toUpperCase();
-                        await this.plugin.saveSettings();
-
-                        if (value.trim()) {
-                            const validation = this.validateCurrency(value);
-                            this.updateValidationDisplay(validationEl, validation);
-                        } else {
-                            validationEl.textContent = '';
-                        }
-
-                        text.setValue(this.plugin.settings.operatingCurrency);
-                    });
-
-                if (this.plugin.settings.operatingCurrency) {
-                    const validation = this.validateCurrency(this.plugin.settings.operatingCurrency);
-                    this.updateValidationDisplay(validationEl, validation);
-                }
-
-                return text;
-            })
-            .addButton(button => button
-                .setButtonText('Save to ledger')
-                .setTooltip('Update the operating_currency option in your ledger.beancount file')
-                .onClick(async () => {
-                    const currency = this.plugin.settings.operatingCurrency;
-                    if (!currency) {
-                        new Notice('Operating currency is not set.');
-                        return;
-                    }
-                    button.setButtonText('Saving…');
-                    button.setDisabled(true);
-                    const result = await updateOperatingCurrency(
-                        this.plugin,
-                        currency,
-                        this.plugin.settings.createBackups
-                    );
-                    button.setDisabled(false);
-                    button.setButtonText('Save to ledger');
-                    if (result.success) {
-                        new Notice(`Operating currency updated to ${currency} in ledger file.`);
-                    } else {
-                        new Notice(`Failed to update ledger: ${result.error}`);
-                    }
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Default dashboard period')
-            .setDesc('Choose the period shown by dashboard summaries when the dashboard first loads.')
+        this.legacySetting(containerEl, TEXT.dashboardDefaultPeriod)
             .addDropdown(dropdown => dropdown
-                .addOption('this-month', 'This month')
-                .addOption('last-month', 'Last month')
-                .addOption('this-year', 'This year')
-                .addOption('last-year', 'Last year')
+                .addOptions(DASHBOARD_PERIOD_OPTIONS)
                 .setValue(this.plugin.settings.dashboardDefaultPeriod || 'this-month')
                 .onChange(async (value) => {
                     this.plugin.settings.dashboardDefaultPeriod = value as DashboardDefaultPeriod;
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('Show help icons')
-            .setDesc('Show the ⓘ icon on sidebar and dashboard sections. Hover or click it to see how that section works.')
+        this.legacySetting(containerEl, TEXT.showHelpTips)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.showHelpTips)
                 .onChange(async (value) => {
-                    this.plugin.settings.showHelpTips = value;
-                    await this.plugin.saveSettings();
-                    this.plugin.applyHelpTipVisibility();
+                    await this.setControlValue('showHelpTips', value);
                 }));
 
-        new Setting(containerEl)
-            .setName('Debug mode')
-            .setDesc('Enable debug logging to the console.')
+        this.legacySetting(containerEl, TEXT.debugMode)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.debugMode)
                 .onChange(async (value) => {
@@ -297,26 +666,17 @@ export class BeancountSettingTab extends PluginSettingTab {
         // Price Fetching Settings Section
         new Setting(containerEl).setName('Automatic price fetching').setHeading();
 
-        new Setting(containerEl)
-            .setName('Enable automatic price fetching')
-            .setDesc('Automatically fetch commodity prices at scheduled intervals using bean-price.')
+        this.legacySetting(containerEl, TEXT.autoPriceFetch)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.autoPriceFetch)
                 .onChange(async (value) => {
-                    this.plugin.settings.autoPriceFetch = value;
-                    await this.plugin.saveSettings();
-                    // If enabled at runtime, start the interval immediately — no restart needed
-                    if (value) {
-                        this.plugin.setupAutomaticPriceFetching();
-                    }
-                    // Trigger re-render to show/hide interval setting
+                    await this.setControlValue('autoPriceFetch', value);
+                    // Re-render to show/hide the interval setting
                     this.displayTab();
                 }));
 
         if (this.plugin.settings.autoPriceFetch) {
-            new Setting(containerEl)
-                .setName('Fetch interval (hours)')
-                .setDesc('How often to automatically fetch prices for all commodities with configured price sources.')
+            this.legacySetting(containerEl, TEXT.priceFetchIntervalHours)
                 .addText(text => text
                     .setPlaceholder('24')
                     .setValue(String(this.plugin.settings.priceFetchIntervalHours))
@@ -330,16 +690,10 @@ export class BeancountSettingTab extends PluginSettingTab {
 
             // Display last fetch time if available
             if (this.plugin.settings.lastAutoPriceFetch > 0) {
-                const lastFetchDate = new Date(this.plugin.settings.lastAutoPriceFetch);
-                const timeSince = this.formatTimeSince(lastFetchDate);
-
-                const infoEl = containerEl.createDiv({ cls: 'setting-item-description' });
-                infoEl.setCssStyles({
-                    marginTop: '8px',
-                    fontSize: '0.9em',
-                    opacity: '0.7'
+                containerEl.createDiv({
+                    cls: 'setting-item-description beancount-settings-note',
+                    text: `Last automatic fetch: ${this.lastFetchText()}`,
                 });
-                infoEl.textContent = `Last automatic fetch: ${timeSince} (${lastFetchDate.toLocaleString()})`;
             }
         }
     }
@@ -363,15 +717,29 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     private renderConnectionTab(containerEl: HTMLElement): void {
-        this.createConnectionSection(containerEl);
+        new Setting(containerEl).setName(TEXT.connectionIntro[0]).setHeading();
+
+        containerEl.createDiv({
+            cls: 'setting-item-description beancount-settings-intro',
+            text: TEXT.connectionIntro[1],
+        });
+
+        const settingsContainer = containerEl.createDiv({ cls: 'beancount-connection-settings-container' });
+
+        new ConnectionSettings({
+            target: settingsContainer,
+            props: {
+                plugin: this.plugin,
+                settings: this.plugin.settings,
+                app: this.app
+            }
+        });
     }
 
     private renderBQLTab(containerEl: HTMLElement): void {
         new Setting(containerEl).setName('BQL code blocks').setHeading();
 
-        new Setting(containerEl)
-            .setName('Show query tools')
-            .setDesc('Display refresh, copy, and download buttons above BQL query results.')
+        this.legacySetting(containerEl, TEXT.bqlShowTools)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.bqlShowTools)
                 .onChange(async (value) => {
@@ -379,9 +747,7 @@ export class BeancountSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('Show query text')
-            .setDesc('Display the BQL query text above the results in a collapsible section.')
+        this.legacySetting(containerEl, TEXT.bqlShowQuery)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.bqlShowQuery)
                 .onChange(async (value) => {
@@ -393,9 +759,7 @@ export class BeancountSettingTab extends PluginSettingTab {
     private renderEditorTab(containerEl: HTMLElement): void {
         new Setting(containerEl).setName('Editor configuration').setHeading();
 
-        new Setting(containerEl)
-            .setName('Editor autocomplete')
-            .setDesc('Show context-aware completions in .beancount files: account names, payees, narrations, currencies/commodities, tags (#), and links (^). Reopen the file to apply changes.')
+        this.legacySetting(containerEl, TEXT.accountAutocomplete)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.accountAutocomplete)
                 .onChange(async (value) => {
@@ -403,24 +767,14 @@ export class BeancountSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('User-defined snippets')
-            .setDesc('Enable user-defined transaction snippets loaded from snippets.beancount. Start typing at the start of a line to autocomplete.')
+        this.legacySetting(containerEl, TEXT.enableUserSnippets)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.enableUserSnippets)
                 .onChange(async (value) => {
-                    this.plugin.settings.enableUserSnippets = value;
-                    await this.plugin.saveSettings();
-                    if (value) {
-                        await this.plugin.loadSnippets();
-                    } else {
-                        this.plugin.snippetCompletions = [];
-                    }
+                    await this.setControlValue('enableUserSnippets', value);
                 }));
 
-        new Setting(containerEl)
-            .setName('Format on save')
-            .setDesc('Automatically format the Beancount file when saving: normalises indentation to 2 spaces, right-aligns amounts, and fixes @ price annotation spacing. Off by default.')
+        this.legacySetting(containerEl, TEXT.formatOnSave)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.formatOnSave)
                 .onChange(async (value) => {
@@ -428,13 +782,9 @@ export class BeancountSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('Inline lint mode')
-            .setDesc('Show Beancount validation errors as inline squiggly underlines using the existing bean-query connection. Reopen the file to apply changes.')
+        this.legacySetting(containerEl, TEXT.lintMode)
             .addDropdown(drop => drop
-                .addOption('off', 'Off')
-                .addOption('on-save', 'On save (recommended)')
-                .addOption('on-change', 'On change (2 s debounce)')
+                .addOptions(LINT_MODE_OPTIONS)
                 .setValue(this.plugin.settings.lintMode)
                 .onChange(async (value) => {
                     this.plugin.settings.lintMode = value as LintMode;
@@ -445,9 +795,7 @@ export class BeancountSettingTab extends PluginSettingTab {
     private renderPerformanceTab(containerEl: HTMLElement): void {
         new Setting(containerEl).setName('Performance').setHeading();
 
-        new Setting(containerEl)
-            .setName('Max transaction results')
-            .setDesc('Maximum number of transactions to load at once (to prevent memory issues with large datasets).')
+        this.legacySetting(containerEl, TEXT.maxTransactionResults)
             .addText(text => text
                 .setPlaceholder('2000')
                 .setValue(this.plugin.settings.maxTransactionResults.toString())
@@ -459,9 +807,7 @@ export class BeancountSettingTab extends PluginSettingTab {
                     }
                 }));
 
-        new Setting(containerEl)
-            .setName('Max journal results')
-            .setDesc('Maximum number of journal entries to load at once.')
+        this.legacySetting(containerEl, TEXT.maxJournalResults)
             .addText(text => text
                 .setPlaceholder('1000')
                 .setValue(this.plugin.settings.maxJournalResults.toString())
@@ -475,9 +821,7 @@ export class BeancountSettingTab extends PluginSettingTab {
 
         new Setting(containerEl).setName('Backups').setHeading();
 
-        new Setting(containerEl)
-            .setName('Create backups')
-            .setDesc('Create a backup file (<filename>.bak) before modifying your Beancount file. Highly recommended for data safety.')
+        this.legacySetting(containerEl, TEXT.createBackups)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.createBackups)
                 .onChange(async (value) => {
@@ -487,145 +831,45 @@ export class BeancountSettingTab extends PluginSettingTab {
     }
 
     private renderFilesTab(containerEl: HTMLElement): void {
-        new Setting(containerEl).setName('File organization').setHeading();
+        new Setting(containerEl).setName(TEXT.filesIntro[0]).setHeading();
 
         containerEl.createEl('p', {
-            text: 'Your finances are organized using a structured folder layout with separate files for accounts, transactions, prices, and more.',
+            text: TEXT.filesIntro[1],
             cls: 'setting-item-description'
         });
 
-        // Folder name setting
-        const folderNameSetting = new Setting(containerEl)
-            .setName('Folder name')
-            .setDesc('Name of the folder containing your structured Beancount files.');
+        this.renderFolderName(this.legacySetting(containerEl, TEXT.structuredFolderName));
 
-        if (this.isEditingFolderName) {
-            folderNameSetting.addText(text => {
-                text.setValue(this.tempFolderName)
-                    .setPlaceholder('Finances')
-                    .onChange(value => {
-                        this.tempFolderName = value.trim();
-                    });
-
-                // Add keydown listener to support Enter to Save, Escape to Cancel
-                text.inputEl.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void this.saveFolderNameRename();
-                    } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        this.isEditingFolderName = false;
-                        this.displayTab();
-                    }
-                });
-
-                window.setTimeout(() => text.inputEl.focus(), 50);
-                return text;
-            });
-
-            folderNameSetting.addButton(btn => {
-                btn.setButtonText('Save')
-                   .setCta()
-                   .onClick(async () => {
-                       await this.saveFolderNameRename();
-                   });
-            });
-
-            folderNameSetting.addButton(btn => {
-                btn.setButtonText('Cancel')
-                   .onClick(() => {
-                       this.isEditingFolderName = false;
-                       this.displayTab();
-                   });
-            });
-        } else {
-            folderNameSetting.addText(text => {
-                text.setValue(this.plugin.settings.structuredFolderName)
-                    .setDisabled(true);
-                return text;
-            });
-
-            folderNameSetting.addButton(btn => {
-                btn.setButtonText('Edit')
-                   .onClick(() => {
-                       this.isEditingFolderName = true;
-                       this.tempFolderName = this.plugin.settings.structuredFolderName;
-                       this.displayTab();
-                   });
-            });
-        }
-
-        // File organization setting
-        new Setting(containerEl)
-            .setName('Transaction file organization')
-            .setDesc('How transactions should be split into multiple files inside the transactions/ folder.')
+        this.legacySetting(containerEl, TEXT.fileOrganization)
             .addDropdown(dropdown => dropdown
-                .addOption('yearly', 'Yearly (e.g. Transactions/2025.beancount)')
-                .addOption('monthly', 'Monthly (e.g. Transactions/2025/2025-01.beancount)')
+                .addOptions(FILE_ORGANIZATION_OPTIONS)
                 .setValue(this.plugin.settings.fileOrganization)
                 .onChange(async (value) => {
                     this.plugin.settings.fileOrganization = value as FileOrganization;
                     await this.plugin.saveSettings();
                 }));
 
-        // Display file structure info
+        // File structure info
         const infoDiv = containerEl.createDiv({ cls: 'structured-layout-info' });
-        infoDiv.setCssStyles({
-            padding: '10px',
-            marginTop: '10px',
-            backgroundColor: 'var(--background-secondary)',
-            borderRadius: '5px'
-        });
-
         infoDiv.createEl('strong', { text: 'Structured layout file organization:' });
-        const fileList = infoDiv.createEl('ul');
-        fileList.setCssStyles({
-            marginTop: '8px',
-            marginBottom: '0'
-        });
+        this.appendLayoutFileList(infoDiv);
 
-        const files = [
-            '📄 ledger.beancount - Main file with include statements',
-            '📄 accounts.beancount - Account open/close directives',
-            '📄 commodities.beancount - Commodity definitions',
-            '📄 prices.beancount - Price directives',
-            '📄 pads.beancount - Pad directives',
-            '📄 balances.beancount - Balance assertions',
-            '📄 queries.beancount - Named query directives',
-            '📄 notes.beancount - Note directives',
-            '📄 events.beancount - Event directives (+ holds financial indicator details)',
-            '📁 transactions/ - Folder with transaction files organized by year or month'
-        ];
-
-        files.forEach(file => {
-            const li = fileList.createEl('li');
-            li.setCssStyles({ marginBottom: '4px' });
-            li.textContent = file;
-        });
-
-        // Show current (derived) ledger path
+        // Current (derived) ledger path
         const folderName = this.plugin.settings.structuredFolderName;
         if (folderName) {
             const pathDiv = containerEl.createDiv({ cls: 'current-path-display' });
-            pathDiv.setCssStyles({
-                marginTop: '15px',
-                padding: '10px',
-                backgroundColor: 'var(--background-modifier-border)',
-                borderRadius: '5px'
-            });
-
             pathDiv.createDiv({
                 text: 'Main ledger file path:',
                 cls: 'setting-item-name'
             });
-            const descEl = pathDiv.createDiv({
+            pathDiv.createDiv({
                 text: `${folderName}/ledger.beancount`,
-                cls: 'setting-item-description'
+                cls: 'setting-item-description beancount-mono'
             });
-            descEl.setCssStyles({ fontFamily: 'monospace' });
         }
     }
 
+    // ── Validation and folder rename ─────────────────────────────────────────
 
     private validateCurrency(currency: string): { isValid: boolean; message: string } {
         if (!currency.trim()) {
@@ -642,36 +886,10 @@ export class BeancountSettingTab extends PluginSettingTab {
         return { isValid: true, message: '✅ Valid currency code' };
     }
 
-    private createValidationElement(container: HTMLElement): HTMLElement {
-        const validationEl = container.createDiv({
-            cls: 'beancount-validation-message'
-        });
-        return validationEl;
-    }
-
     private updateValidationDisplay(element: HTMLElement, result: { isValid: boolean; message: string }) {
         element.textContent = result.message;
         element.classList.remove('beancount-validation-success', 'beancount-validation-error', 'beancount-validation-neutral');
         element.classList.add(result.isValid ? 'beancount-validation-success' : 'beancount-validation-error');
-    }
-
-    private createConnectionSection(containerEl: HTMLElement) {
-        new Setting(containerEl).setName('Connection configuration').setHeading();
-
-        const desc = containerEl.createDiv({ cls: 'setting-item-description' });
-        desc.setCssStyles({ marginBottom: '1em' });
-        desc.textContent = 'Configure your Beancount file path and connection settings. The plugin will automatically detect your Python environment and test the connection.';
-
-        const settingsContainer = containerEl.createDiv({ cls: 'beancount-connection-settings-container' });
-
-        new ConnectionSettings({
-            target: settingsContainer,
-            props: {
-                plugin: this.plugin,
-                settings: this.plugin.settings,
-                app: this.app
-            }
-        });
     }
 
     private async saveFolderNameRename(): Promise<void> {
@@ -683,7 +901,7 @@ export class BeancountSettingTab extends PluginSettingTab {
         const oldFolderName = this.plugin.settings.structuredFolderName;
         if (this.tempFolderName === oldFolderName) {
             this.isEditingFolderName = false;
-            this.displayTab();
+            this.refresh();
             return;
         }
 
@@ -745,8 +963,6 @@ export class BeancountSettingTab extends PluginSettingTab {
         }
 
         this.isEditingFolderName = false;
-        this.displayTab();
+        this.refresh();
     }
-
-
 }
