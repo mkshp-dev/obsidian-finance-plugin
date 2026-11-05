@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+## 2.5.1 - 2026-11-05
+
 - **Fixed: Plugin failed to load on Obsidian 1.15** — The settings tab's `getSettingDefinitions()` method clashed with a new built-in Obsidian method of the same name, which made enabling the plugin fail with `TypeError: n is not iterable`; it is now `getSettingMetadata()` ([#293](../../issues/293)).
 
 - **Fixed: Small editing glitches** — The reconcile-days field in account details no longer resets as you type, and its dropdown is no longer hidden behind the table header. Tags and links now accept `/` and `.`, and a tag or link typed without pressing Enter is kept when you save.
 
 - **Warning for Beancount 2** — At startup and in the setup wizard, the plugin now detects when the installed Beancount is version 2 and explains that Beancount 3 and `beanquery` are needed, with the upgrade command (`pip install -U beancount beanquery`) and a link to the docs.
+
 
 ## 2.5.0 - 2026-10-28
 
