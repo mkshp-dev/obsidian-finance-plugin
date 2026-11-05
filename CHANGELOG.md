@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## In-progress
 
+## 2.6.0 - 2026-11-05
+
 - **Settings in Obsidian's search** — On Obsidian 1.13 and later, the plugin's settings are built with Obsidian's settings API, so each one shows up in the settings search, and the six sections open as pages. Older Obsidian versions keep the tabbed layout.
+
 
 ## 2.5.1 - 2026-11-05
 
