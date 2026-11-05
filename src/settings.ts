@@ -118,7 +118,8 @@ export class BeancountSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    getSettingDefinitions(): Record<string, { name: string; description: string }> {
+    // Not `getSettingDefinitions`: Obsidian 1.15+ defines that on SettingTab and expects an iterable (#293).
+    getSettingMetadata(): Record<string, { name: string; description: string }> {
         return {
             operatingCurrency: { name: 'Operating currency', description: 'The currency to use for transaction defaults and for consolidating totals.' },
             dashboardDefaultPeriod: { name: 'Default dashboard period', description: 'Choose the period shown by dashboard summaries when the dashboard first loads.' },
