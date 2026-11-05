@@ -443,6 +443,13 @@
 		overflow: hidden;
 	}
 
+	/* A right-hand pill usually sits at its container's right edge; open its
+	   menu leftwards so it isn't clipped. */
+	.custom-select-wrapper.position-right .custom-select-menu {
+		left: auto;
+		right: 0;
+	}
+
 	@keyframes fadeIn {
 		from {
 			opacity: 0;
